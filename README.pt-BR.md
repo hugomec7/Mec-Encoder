@@ -7,6 +7,8 @@ Feito em **Rust** (Tauri 2) com **FFmpeg** e encode por **NVIDIA NVENC**.
 
 ![Mec Encoder convertendo um vídeo do iPhone](docs/screenshots/main.png)
 
+![Renderizando uma fila de 13 vídeos com NVENC](docs/screenshots/rendering.png)
+
 <p>
   <img src="docs/screenshots/empty-queue.png" width="49%" alt="Fila vazia, editando um preset">
   <img src="docs/screenshots/settings.png" width="49%" alt="Configurações">

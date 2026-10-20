@@ -7,6 +7,8 @@ Built with **Rust** (Tauri 2) and **FFmpeg**, encoding with **NVIDIA NVENC**.
 
 ![Mec Encoder converting an iPhone video](docs/screenshots/main.png)
 
+![Rendering a queue of 13 videos with NVENC](docs/screenshots/rendering.png)
+
 <p>
   <img src="docs/screenshots/empty-queue.png" width="49%" alt="Empty queue, editing a preset">
   <img src="docs/screenshots/settings.png" width="49%" alt="Settings">
