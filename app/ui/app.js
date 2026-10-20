@@ -18,6 +18,7 @@
     teal: 'var(--teal)', yellow: 'var(--yellow)', pink: 'var(--pink)', indigo: 'var(--indigo)', red: 'var(--red)' };
   const PALETTE = Object.keys(COLORS);
   const ICONS = {
+    clock: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="6"/><path d="M8 4.8V8l2.2 1.4"/></svg>',
     phone: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="6.5" y="2.5" width="11" height="19" rx="3"/><path d="M10.5 18.5h3"/></svg>',
     hdr: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor"/></svg>',
     proxy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><rect x="7.5" y="10.5" width="6" height="6" rx="1.5" fill="currentColor"/></svg>',
@@ -246,9 +247,42 @@
   /* ---------- fila ---------- */
   const qList = $('#qList');
   const runTxt = (q) => Math.round((q.p || 0) * 100) + '%' + (q.speed > 0 ? ` · ${num(q.speed, 1)}×` : '');
+  // tempo: 75 → "1:15", 3725 → "1:02:05"
+  const fmtDur = (t) => { t = Math.max(0, Math.round(t)); const h = Math.floor(t / 3600); const m = Math.floor(t / 60) % 60; const x = String(t % 60).padStart(2, '0');
+    return h ? `${h}:${String(m).padStart(2, '0')}:${x}` : `${m}:${x}`; };
+  const elapsedOf = (q) => (q.t0 ? (Date.now() - q.t0) / 1000 : 0);
+  // quanto falta neste vídeo: velocidade do FFmpeg ou, sem ela, pelo andamento
+  const etaOf = (q) => (q.eta != null ? q.eta : q.p > 0.02 ? elapsedOf(q) * (1 - q.p) / q.p : null);
+  const timeLine = (q) => `<span class="timing">${ICONS.clock}${fmtDur(elapsedOf(q))}${etaOf(q) != null ? ` · ${L.left(fmtDur(etaOf(q)))}` : ''}</span>`;
+  // quanto falta na fila: o que está rodando + o resto, pelo ritmo medido (segundos de render por segundo de vídeo)
+  function queueEta() {
+    const J = S.job; if (!J) return null;
+    const meas = S.queue.filter((q) => q.jobId === J.id && (q.status === 'done' || (q.status === 'running' && q.p > 0.05)));
+    const work = meas.reduce((a, q) => a + (q.status === 'done' ? q.took : elapsedOf(q)), 0);
+    const media = meas.reduce((a, q) => a + durOf(q) * (q.status === 'done' ? 1 : q.p), 0);
+    if (!media) return null;
+    const rate = work / media;
+    const running = S.queue.filter((q) => q.status === 'running');
+    const waiting = J.mode === 'queue' ? S.queue.filter((q) => q.status === 'ready') : (J.list || []).map(itemOf).filter((q) => q && q.status === 'ready');
+    const n = Math.max(1, Math.min(J.parallel || 1, running.length + waiting.length));
+    return (running.reduce((a, q) => a + (etaOf(q) || 0), 0) + waiting.reduce((a, q) => a + durOf(q) * rate, 0)) / n;
+  }
+  function renderFoot() {
+    const J = S.job; const el = $('#tTotal');
+    if (J) { const e = queueEta(); el.innerHTML = L.jobTime(fmtDur((Date.now() - J.t0) / 1000), e != null ? fmtDur(e) : null); return; }
+    const pend = pending();
+    el.innerHTML = pend.length ? L.toRender(pend.length, fmtMB(pend.reduce((a, q) => a + estMB(q), 0)))
+      : S.lastRun ? L.lastRun(fmtDur(S.lastRun.took), S.lastRun.n) : '';
+  }
+  // atualiza os relógios uma vez por segundo sem redesenhar a fila
+  setInterval(() => {
+    if (!S.job) return;
+    S.queue.forEach((q) => { if (q.status !== 'running') return; const t = $(`.item[data-id="${q.id}"] .timing`); if (t) t.outerHTML = timeLine(q); });
+    renderFoot();
+  }, 1000);
   function itemHtml(q, enterIds) {
     const p = presetOf(q.preset) || S.presets[0]; const c = COLORS[p.color] || COLORS.blue; const w = warnings(q);
-    const st = q.status === 'done' ? `<span class="state done">${ICONS.check}${L.ready}</span>`
+    const st = q.status === 'done' ? `<span class="state done">${ICONS.check}${L.ready}${q.took ? ` · ${fmtDur(q.took)}` : ''}</span>`
       : q.status === 'running' ? `<span class="state tnum">${runTxt(q)}</span>`
       : q.status === 'err' ? `<span class="state err" title="${esc(q.error || '')}">${L.error}</span>`
       : q.queued ? `<span class="state">${L.busy}</span>`
@@ -261,7 +295,7 @@
         <div class="thumb">${thumbHtml(q)}${q.src.hdr ? '<span class="hdr">HDR</span>' : ''}</div>
         <div class="meta">
           <div class="name" title="${esc(q.path || q.file)}">${esc(q.file)}</div>
-          <div class="spec">${dir}${q.src.w}×${q.src.h} · ${q.src.codec} · ${fpsTxt(q.src.fps)} fps${q.src.vfr ? ' VFR' : ''}</div>
+          <div class="spec">${q.status === 'running' ? timeLine(q) : `${dir}${q.src.w}×${q.src.h} · ${q.src.codec} · ${fpsTxt(q.src.fps)} fps${q.src.vfr ? ' VFR' : ''}`}</div>
           <div class="row2"><span class="badge" style="--c:${c}"><i></i>${esc(p.name)}${same(q.cfg, p) ? '' : '*'}</span>
             ${w.length ? `<span class="warn" title="${esc(w.join('\n'))}">${ICONS.warn}</span>` : ''}${st}</div>
         </div>
@@ -275,7 +309,7 @@
     $('#qCount').textContent = S.queue.length ? L.videos(S.queue.length) : '';
     $('#bClearDone').style.visibility = S.queue.some((q) => q.status === 'done') ? '' : 'hidden';
     const pend = pending();
-    $('#tTotal').innerHTML = pend.length ? L.toRender(pend.length, fmtMB(pend.reduce((a, q) => a + estMB(q), 0))) : '';
+    renderFoot();
     $('#tEta').textContent = S.engine.status === 'nvenc' ? 'NVENC' : S.engine.status === 'cpu' ? 'CPU' : '';
     $('#bRender').disabled = !S.queue.some((q) => q.status === 'ready' || q.status === 'err') && !S.job;
   }
@@ -1100,8 +1134,9 @@
     $('#renderTxt').textContent = S.job ? L.stop : L.render;
     if (!S.job) $('#renderFill').style.setProperty('--p', 0);
   }
-  function startJob(job) { S.job = job; renderRenderBtn(); renderQueue(); if (REAL) runLoop(); else { clearInterval(timer); timer = setInterval(tick, 120); } }
+  function startJob(job) { S.job = Object.assign(job, { t0: Date.now(), id: Date.now(), parallel: REAL ? clamp(+S.set.parallel || 1, 1, 3) : 1, done: 0 }); renderRenderBtn(); renderQueue(); if (REAL) runLoop(); else { clearInterval(timer); timer = setInterval(tick, 120); } }
   function stopJob() {
+    if (S.job && S.job.done) S.lastRun = { took: (Date.now() - S.job.t0) / 1000, n: S.job.done };
     if (REAL) { S.stopping = true; inv('stop').catch(() => {}); }
     clearInterval(timer); timer = null;
     S.queue.forEach((q) => { if (q.status === 'running') { q.status = 'ready'; q.p = 0; } q.queued = false; });
@@ -1133,12 +1168,12 @@
       while (S.job === J) {
         const q = nextItem(J);
         if (!q) break;
-        q.status = 'running'; q.queued = false; q.p = 0; q.speed = 0; q.error = null; renderQueue(); updateFill();
+        q.status = 'running'; q.queued = false; q.p = 0; q.speed = 0; q.eta = null; q.error = null; q.t0 = Date.now(); q.jobId = J.id; q.took = 0; renderQueue(); updateFill();
         try {
           const r = await inv('render', { id: q.id, cfg: q.cfg });
-          q.status = 'done'; q.p = 1; q.out = r.output; q.outMb = r.size / 1e6;
+          q.status = 'done'; q.p = 1; q.out = r.output; q.outMb = r.size / 1e6; q.took = elapsedOf(q); J.done++;
           if (r.deleted) toast(L.deletedOrig);
-          if (J.mode === 'single') notify(L.rendered(q.file));
+          if (J.mode === 'single') notify(L.rendered(q.file) + ' · ' + fmtDur(q.took));
         } catch (e) {
           if (S.stopping || S.job !== J) { q.status = 'ready'; q.p = 0; break; }
           q.status = 'err'; q.error = String(e === 'source-missing' ? L.sourceMissing : e); failed++;
@@ -1159,16 +1194,17 @@
   function tick() {
     const J = S.job; if (!J) return;
     let cur = S.queue.find((q) => q.status === 'running');
-    if (!cur) { cur = nextItem(J); if (!cur) { finishJob(0); return; } cur.status = 'running'; cur.queued = false; cur.p = 0; renderQueue(); }
+    if (!cur) { cur = nextItem(J); if (!cur) { finishJob(0); return; } cur.status = 'running'; cur.queued = false; cur.p = 0; cur.t0 = Date.now(); cur.jobId = J.id; renderQueue(); }
     cur.p = Math.min(1, cur.p + .035);
-    if (cur.p >= 1) { cur.status = 'done'; renderQueue(); renderInspector(); if (J.mode === 'single') notify(L.rendered(cur.file)); }
+    if (cur.p >= 1) { cur.status = 'done'; cur.took = elapsedOf(cur); J.done++; renderQueue(); renderInspector(); if (J.mode === 'single') notify(L.rendered(cur.file)); }
     else { const it = $(`.item[data-id="${cur.id}"]`); if (it) { it.querySelector('.prog').style.setProperty('--p', cur.p); it.querySelector('.state').textContent = Math.round(cur.p * 100) + '%'; } }
     updateFill();
   }
   function finishJob(failed) {
     const J = S.job; clearInterval(timer); timer = null; S.job = null; renderRenderBtn();
+    if (J && J.done) S.lastRun = { took: (Date.now() - J.t0) / 1000, n: J.done };
     if (J && J.mode === 'queue') {
-      notify(L.queueDone);
+      notify(J.done ? L.queueTook(fmtDur(S.lastRun.took), J.done) : L.queueDone);
       if (S.set.clearWhenDone && !failed) setTimeout(() => clearDone(false), 1600);
     }
     renderQueue();
@@ -1241,7 +1277,7 @@
     });
     on('render-progress', (p) => {
       const q = itemOf(p.id); if (!q || q.status !== 'running') return;
-      q.p = p.p; q.speed = p.speed; q.mode = p.mode; const it = $(`.item[data-id="${q.id}"]`);
+      q.p = p.p; q.speed = p.speed; q.mode = p.mode; q.eta = p.eta; const it = $(`.item[data-id="${q.id}"]`);
       if (it) { it.querySelector('.prog').style.setProperty('--p', q.p); const st = it.querySelector('.state'); if (st) { st.textContent = runTxt(q); st.title = p.mode === 'cpu' ? L.cpuDecode : ''; } }
       updateFill();
     });

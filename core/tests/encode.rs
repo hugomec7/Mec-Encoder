@@ -101,3 +101,30 @@ fn hlg_to_rec709() {
     assert_eq!((ov.width, ov.height), (360, 640));
     let _ = std::fs::remove_dir_all(&d);
 }
+
+/// Parecido com a Sony FX30: H.264 4:2:2 10-bit, 59,94 constante, gravado em pé (rotação 270).
+#[test]
+fn fx30_422_10bit_rotated() {
+    let (Some(ff), Some(fp)) = (tool("ffmpeg"), tool("ffprobe")) else { eprintln!("sem ffmpeg, pulando"); return };
+    let d = dir("fx30");
+    let base = d.join("base.mp4");
+    let ok = Command::new(&ff).args(["-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=s=640x360:r=60000/1001", "-t", "2",
+        "-pix_fmt", "yuv422p10le", "-c:v", "libx264", "-profile:v", "high422", "-preset", "ultrafast"]).arg(&base).status().unwrap().success();
+    if !ok { eprintln!("libx264 sem 4:2:2 10-bit, pulando"); return; }
+    let src = d.join("C0001.MP4");
+    assert!(Command::new(&ff).args(["-v", "error", "-y", "-display_rotation", "90", "-i"]).arg(&base)
+        .args(["-c", "copy"]).arg(&src).status().unwrap().success());
+    let info = probe(&fp, &src).unwrap();
+    let v = info.video.as_ref().unwrap();
+    assert_eq!((v.width, v.height, v.rotation, v.pix_fmt.as_str()), (360, 640, 270, "yuv422p10le"));
+    assert!(!mec_core::command::nvdec_supported(v));
+    let mut p = Preset::defaults().into_iter().find(|p| p.id == "iphone-4k60").unwrap();
+    p.codec = "h265".into(); p.bits = 10;
+    let out = d.join("fx30_out.mp4");
+    run(&ff, &build(&info, &p, &Encoder::Cpu { preset: "ultrafast".into() }, &out).args);
+    let o = probe(&fp, &out).unwrap();
+    let ov = o.video.unwrap();
+    assert_eq!((ov.width, ov.height, ov.rotation), (360, 640, 0));
+    assert_eq!(ov.pix_fmt, "yuv420p10le");
+    let _ = std::fs::remove_dir_all(&d);
+}

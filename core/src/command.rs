@@ -86,36 +86,58 @@ pub fn video_filters(info: &MediaInfo, p: &Preset, enc: &Encoder, preview: Optio
     let Some(v) = info.video.as_ref() else { return vec![] };
     let mut f = Vec::new();
     // Rotação do arquivo + giro extra do usuário (só no resultado).
-    let user = if preview.map_or(true, |(out, _)| out) { p.rotate % 360 } else { 0 };
-    match (v.rotation + user) % 360 {
-        90 => f.push("transpose=clock".to_string()),
-        180 => f.push("hflip,vflip".to_string()),
-        270 => f.push("transpose=cclock".to_string()),
-        _ => {}
-    }
     if let Some((out, max)) = preview {
+        let user = if out { p.rotate % 360 } else { 0 };
+        match (v.rotation + user) % 360 {
+            90 => f.push("transpose=clock".to_string()),
+            180 => f.push("hflip,vflip".to_string()),
+            270 => f.push("transpose=cclock".to_string()),
+            _ => {}
+        }
         // Prévia: diminui logo no começo (o tone mapping fica leve) e não mexe no frame rate.
         f.push(format!("scale=w={max}:h={max}:force_original_aspect_ratio=decrease:flags=bilinear"));
         if out && p.hdr_to_sdr && !v.hdr.is_empty() { f.extend(hdr_chain(v)); }
         f.push("format=yuvj420p".into());
         return f;
     }
-    {
-        let (w, h) = out_dims(v, p);
-        let (rw, rh) = if p.rotate % 180 == 90 { (v.height, v.width) } else { (v.width, v.height) };
-        let scale = ((w, h) != (rw, rh)).then(|| format!("scale={w}:{h}:flags=bicubic"));
-        let hdr = p.hdr_to_sdr && !v.hdr.is_empty();
-        let shrinking = (w as u64 * h as u64) < (rw as u64 * rh as u64);
-        if hdr && shrinking { if let Some(s) = &scale { f.push(s.clone()); } }
-        if hdr { f.extend(hdr_chain(v)); }
-        if !(hdr && shrinking) { if let Some(s) = scale { f.push(s); } }
-        if preview.is_none() && p.fps.conform {
-            let (n, d) = p.fps_rational();
-            f.push(format!("fps={n}/{d}"));
-        }
+    // Conversão: reduz e passa para 4:2:0 ANTES de girar (girar um quadro menor custa menos).
+    // Toda conversão usa scale com threads=0 (o scale automático do FFmpeg usa uma thread só,
+    // e em 4K 10-bit isso segurava o render inteiro).
+    let rot = (v.rotation + p.rotate % 360) % 360;
+    let (w, h) = out_dims(v, p);
+    let (pw, ph) = if rot % 180 == 90 { (h, w) } else { (w, h) };
+    let (cw, ch) = coded(v);
+    let hdr = p.hdr_to_sdr && !v.hdr.is_empty();
+    // HDR mantém 10-bit até o tone mapping.
+    let planar = if hdr || effective_bits(p) == 10 { "yuv420p10le" } else { "yuv420p" };
+    let src_planar = v.pix_fmt.is_empty() || v.pix_fmt == planar;
+    if (pw, ph) != (cw, ch) || !src_planar {
+        let size = if (pw, ph) != (cw, ch) { format!("{pw}:{ph}:flags=bicubic:") } else { String::new() };
+        f.push(format!("scale={size}threads=0,format={planar}"));
     }
-    f.push(format!("format={}", pix_fmt(p, enc)));
+    match rot { 90 => f.push("transpose=clock".into()), 180 => f.push("hflip,vflip".into()), 270 => f.push("transpose=cclock".into()), _ => {} }
+    if hdr { f.extend(hdr_chain(v)); }
+    if p.fps.conform { let (n, d) = p.fps_rational(); f.push(format!("fps={n}/{d}")); }
+    f.push(format!("scale=threads=0,format={}", pix_fmt(p, enc)));
     f
+}
+
+/// Tamanho do quadro como sai do decodificador (antes de girar).
+fn coded(v: &VideoInfo) -> (u32, u32) {
+    if v.coded_width > 0 { (v.coded_width, v.coded_height) } else if v.rotation % 180 == 90 { (v.height, v.width) } else { (v.width, v.height) }
+}
+
+/// A placa (NVDEC) lê este vídeo? H.264 só 8-bit 4:2:0; nada de 4:2:2 (ex.: Sony FX30 XAVC S-I),
+/// ProRes, DNxHR etc. — esses vão direto para a CPU, sem tentativas que falham.
+pub fn nvdec_supported(v: &VideoInfo) -> bool {
+    let pf = v.pix_fmt.as_str();
+    let c420 = pf.is_empty() || pf.contains("420") || pf.starts_with("nv12") || pf.starts_with("p010") || pf.starts_with("yuvj420");
+    match v.codec.as_str() {
+        "h264" => c420 && v.bit_depth <= 8,
+        "hevc" | "av1" | "vp9" => c420,
+        "mpeg2video" | "vc1" => c420 && v.bit_depth <= 8,
+        _ => false,
+    }
 }
 
 fn video_codec_args(info: &MediaInfo, p: &Preset, enc: &Encoder, warnings: &mut Vec<String>) -> Vec<String> {
@@ -261,7 +283,7 @@ pub fn gpu_filters(info: &MediaInfo, p: &Preset) -> Vec<String> {
     let (w, h) = out_dims(v, p);
     // Tamanho antes de girar (o quadro decodificado ainda está deitado).
     let (pw, ph) = if rot % 180 == 90 { (h, w) } else { (w, h) };
-    let (cw, ch) = if v.coded_width > 0 { (v.coded_width, v.coded_height) } else if v.rotation % 180 == 90 { (v.height, v.width) } else { (v.width, v.height) };
+    let (cw, ch) = coded(v);
     let src10 = v.bit_depth >= 10;
     let out10 = effective_bits(p) == 10;
     // HDR: mantém 10-bit até o tone mapping; senão, já converte para o formato final na GPU.
@@ -276,7 +298,7 @@ pub fn gpu_filters(info: &MediaInfo, p: &Preset) -> Vec<String> {
         if hdr { f.extend(hdr_chain(v)); }
     }
     if p.fps.conform { let (n, d) = p.fps_rational(); f.push(format!("fps={n}/{d}")); }
-    if rot != 0 || hdr { f.push(format!("format={}", if out10 { "p010le" } else { "nv12" })); }
+    if rot != 0 || hdr { f.push(format!("scale=threads=0,format={}", if out10 { "p010le" } else { "nv12" })); }
     f
 }
 
@@ -343,13 +365,33 @@ mod tests {
     use super::*;
 
     #[test]
+    fn fx30_422_goes_to_cpu() {
+        // Sony FX30: H.264 4:2:2 10-bit, gravado em pé (270°). A placa não lê: vai direto para a CPU,
+        // convertendo para 4:2:0 com várias threads ANTES de girar.
+        let mut i = iphone(270, "");
+        { let v = i.video.as_mut().unwrap(); v.codec = "h264".into(); v.pix_fmt = "yuv422p10le".into(); v.bit_depth = 10; v.vfr = false; }
+        assert!(!nvdec_supported(i.video.as_ref().unwrap()));
+        let mut p = preset("iphone-4k60"); p.bits = 10; p.codec = "h265".into();
+        let s = build_mode(&i, &p, &Encoder::Nvenc, Path::new("o.mp4"), Decode::Cpu).args.join(" ");
+        assert!(!s.contains("hwaccel"), "{s}");
+        assert!(s.contains("-vf scale=threads=0,format=yuv420p10le,transpose=cclock,fps=60000/1001,scale=threads=0,format=p010le "), "{s}");
+        // iPhone HEVC 4:2:0 a placa lê; H.264 8-bit 4:2:0 também.
+        let mut ok = iphone(90, ""); ok.video.as_mut().unwrap().codec = "hevc".into(); ok.video.as_mut().unwrap().pix_fmt = "yuv420p10le".into();
+        assert!(nvdec_supported(ok.video.as_ref().unwrap()));
+        ok.video.as_mut().unwrap().codec = "h264".into(); ok.video.as_mut().unwrap().pix_fmt = "yuv420p".into(); ok.video.as_mut().unwrap().bit_depth = 8;
+        assert!(nvdec_supported(ok.video.as_ref().unwrap()));
+        ok.video.as_mut().unwrap().codec = "prores".into();
+        assert!(!nvdec_supported(ok.video.as_ref().unwrap()));
+    }
+
+    #[test]
     fn gpu_pipeline() {
         // iPhone vertical (rotação 90), SDR 8-bit, só CFR: decodifica na GPU, baixa e gira na CPU.
         let mut i = iphone(90, "");
         i.video.as_mut().unwrap().bit_depth = 8;
         let s = build(&i, &preset("iphone-4k60"), &Encoder::Nvenc, Path::new("o.mp4")).args.join(" ");
         assert!(s.contains("-hwaccel cuda -hwaccel_output_format cuda"), "{s}");
-        assert!(s.contains("-vf hwdownload,format=nv12,transpose=clock,fps=60000/1001,format=nv12 "), "{s}");
+        assert!(s.contains("-vf hwdownload,format=nv12,transpose=clock,fps=60000/1001,scale=threads=0,format=nv12 "), "{s}");
         // Proxy 25% sem girar: tudo na GPU, sem hwdownload.
         let mut flat = iphone(0, "");
         flat.video.as_mut().unwrap().bit_depth = 8;
@@ -364,7 +406,7 @@ mod tests {
         let mut hp = preset("iphone-4k60"); hp.hdr_to_sdr = true;
         let s = build(&iphone(90, "HLG"), &hp, &Encoder::Nvenc, Path::new("o.mp4")).args.join(" ");
         assert!(s.contains("-vf hwdownload,format=p010,transpose=clock,zscale="), "{s}");
-        assert!(s.contains("fps=60000/1001,format=nv12 "), "{s}");
+        assert!(s.contains("fps=60000/1001,scale=threads=0,format=nv12 "), "{s}");
         // CPU não usa nada disso.
         let s = build(&i, &preset("iphone-4k60"), &Encoder::Cpu { preset: "ultrafast".into() }, Path::new("o.mp4")).args.join(" ");
         assert!(!s.contains("hwaccel") && !s.contains("scale_cuda"), "{s}");
@@ -415,7 +457,7 @@ mod tests {
         let plan = build_opts(&i, &preset("iphone-4k60"), &Encoder::Nvenc, Path::new("/v/out.mp4"), true);
         let s = plan.args.join(" ");
         assert!(s.contains("-display_rotation 0 -i /v/IMG_0001.MOV"), "{s}");
-        assert!(s.contains("-vf transpose=clock,fps=60000/1001,format=yuv420p"), "{s}");
+        assert!(s.contains("-vf transpose=clock,fps=60000/1001,scale=threads=0,format=yuv420p"), "{s}");
         assert!(s.contains("-c:v hevc_nvenc -preset p7 -tune hq -profile:v main -rc cbr -b:v 50000k -maxrate 50000k -bufsize 100000k"), "{s}");
         assert!(s.contains("[0:1]anull[l];[0:2]anull[r];[l][r]amerge=inputs=2,pan=stereo|c0=c0|c1=c1,aresample=async=1:first_pts=0[aout]"), "{s}");
         assert!(s.contains("-map_metadata 0"), "{s}");
@@ -427,13 +469,13 @@ mod tests {
         let i = iphone(90, "HLG");
         let p = preset("iphone-4k60-hdr");
         let vf = video_filters(&i, &p, &Encoder::Nvenc, None).join(",");
-        assert_eq!(vf, "transpose=clock,zscale=tin=arib-std-b67:pin=bt2020:min=bt2020nc:rin=tv:t=linear:npl=100,format=gbrpf32le,tonemap=tonemap=hable:desat=0:peak=10,zscale=p=bt709:t=bt709:m=bt709:r=tv,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv,fps=60000/1001,format=yuv420p");
+        assert_eq!(vf, "transpose=clock,zscale=tin=arib-std-b67:pin=bt2020:min=bt2020nc:rin=tv:t=linear:npl=100,format=gbrpf32le,tonemap=tonemap=hable:desat=0:peak=10,zscale=p=bt709:t=bt709:m=bt709:r=tv,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv,fps=60000/1001,scale=threads=0,format=yuv420p");
         let s = build_opts(&i, &p, &Encoder::Nvenc, Path::new("o.mp4"), true).args.join(" ");
         assert!(s.contains("-color_primaries bt709 -color_trc bt709 -colorspace bt709"));
         // Proxy de HDR: diminui antes do tone mapping (mais leve).
         let mut px = preset("proxy"); px.hdr_to_sdr = true;
         let vf = video_filters(&i, &px, &Encoder::Nvenc, None).join(",");
-        assert!(vf.starts_with("transpose=clock,scale=540:960:flags=bicubic,zscale"), "{vf}");
+        assert!(vf.starts_with("scale=960:540:flags=bicubic:threads=0,format=yuv420p10le,transpose=clock,zscale"), "{vf}");
     }
 
     #[test]
@@ -479,10 +521,10 @@ mod tests {
         let mut p = preset("iphone-1080p60"); p.rotate = 90;
         assert_eq!(out_dims(i.video.as_ref().unwrap(), &p), (1080, 1920));
         let vf = video_filters(&i, &p, &Encoder::Nvenc, None).join(",");
-        assert!(vf.starts_with("transpose=clock,scale=1080:1920"), "{vf}");
+        assert!(vf.starts_with("scale=1920:1080:flags=bicubic:threads=0,format=yuv420p,transpose=clock"), "{vf}");
         // iPhone já girado 90 + 90 do usuário = 180
         let vf = video_filters(&iphone(90, ""), &p, &Encoder::Nvenc, None).join(",");
-        assert!(vf.starts_with("hflip,vflip"), "{vf}");
+        assert!(vf.starts_with("scale=1920:1080:flags=bicubic:threads=0,format=yuv420p,hflip,vflip,"), "{vf}");
         // a prévia do original não usa o giro do usuário
         let vf = video_filters(&i, &p, &Encoder::Nvenc, Some((false, 480))).join(",");
         assert!(!vf.contains("transpose"), "{vf}");

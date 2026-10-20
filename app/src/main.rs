@@ -273,7 +273,9 @@ fn do_render(app: &AppHandle, engine: &Engine, info: &MediaInfo, cfg: &Preset, i
     let enc = engine.encoder.lock().unwrap().clone();
     // Com NVENC: 1) tudo na GPU; 2) só decodifica na GPU; 3) decodifica na CPU.
     // Se um modo falhar (codec que a placa não lê, filtro que falta), tenta o próximo.
-    let modes: &[command::Decode] = if enc == Encoder::Nvenc {
+    // Vídeo que a placa não lê (ex.: 4:2:2 da FX30) vai direto para a CPU.
+    let gpu_reads = info.video.as_ref().map_or(false, command::nvdec_supported);
+    let modes: &[command::Decode] = if enc == Encoder::Nvenc && gpu_reads {
         &[command::Decode::Gpu, command::Decode::Hw, command::Decode::Cpu]
     } else { &[command::Decode::Cpu] };
     let started = Instant::now();
