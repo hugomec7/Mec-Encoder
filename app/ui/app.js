@@ -954,6 +954,7 @@
       const st = await inv('get_state');
       S.presets = st.presets || [];
       if (st.settings && typeof st.settings === 'object') Object.assign(S.set, st.settings);
+      else if ((navigator.language || '').toLowerCase().startsWith('pt')) S.set.lang = 'pt'; // primeira vez: idioma do Windows
       if (!presetOf(S.set.defaultPreset) && S.presets[0]) S.set.defaultPreset = S.presets[0].id;
       S.engine = Object.assign(S.engine, st.engine); S.version = st.version;
       if (!st.engine.ffmpeg) S.engine.status = 'missing';

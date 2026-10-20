@@ -46,8 +46,11 @@ jobs:
         run: |
           set -e
           mkdir -p ff app/bin
-          gh release download latest -R BtbN/FFmpeg-Builds -p "*n7.1-latest-win64-gpl-shared-7.1.zip" -D ff \
+          # versão estável fixa (8.0); se o nome mudar, cai para 7.1 e por último para a master
+          gh release download latest -R BtbN/FFmpeg-Builds -p "*n8.0-latest-win64-gpl-shared-8.0.zip" -D ff \
+            || gh release download latest -R BtbN/FFmpeg-Builds -p "*n7.1-latest-win64-gpl-shared-7.1.zip" -D ff \
             || gh release download latest -R BtbN/FFmpeg-Builds -p "*master-latest-win64-gpl-shared.zip" -D ff
+          ls ff
           cd ff && 7z x -y *.zip > /dev/null && cd ..
           BIN=$(dirname "$(find ff -name ffmpeg.exe | head -1)")
           cp "$BIN"/ffmpeg.exe "$BIN"/ffprobe.exe "$BIN"/*.dll app/bin/
@@ -55,6 +58,15 @@ jobs:
           ls -la app/bin
           app/bin/ffmpeg.exe -hide_banner -version | head -1
           app/bin/ffmpeg.exe -hide_banner -filters | grep -E " zscale | tonemap "
+
+      - name: Engine tests with the bundled FFmpeg (Windows)
+        shell: bash
+        run: |
+          export PATH="$PWD/app/bin:$PATH"
+          cargo test -p mec-core --features serde > test.log 2>&1 || {
+            grep -E "panicked|assert|left:|right:|falhou|error" test.log | head -25 | while IFS= read -r l; do echo "::error title=Engine test::$l"; done
+            exit 1; }
+          grep "test result" test.log
 
       - name: Build (Tauri)
         working-directory: app
