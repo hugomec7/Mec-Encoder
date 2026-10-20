@@ -62,6 +62,8 @@ fn hdr_chain(v: &VideoInfo) -> Vec<String> {
         "format=gbrpf32le".into(),
         format!("tonemap=tonemap=hable:desat=0:peak={}", fmt_num(hdr_peak(v))),
         "zscale=p=bt709:t=bt709:m=bt709:r=tv".into(),
+        // FFmpeg 7.1+ leva as propriedades de cor pelo filtro: marca o resultado como Rec. 709 aqui mesmo.
+        "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv".into(),
     ]
 }
 
@@ -307,7 +309,7 @@ mod tests {
         let i = iphone(90, "HLG");
         let p = preset("iphone-4k60-hdr");
         let vf = video_filters(&i, &p, &Encoder::Nvenc, None).join(",");
-        assert_eq!(vf, "transpose=clock,zscale=tin=arib-std-b67:pin=bt2020:min=bt2020nc:rin=tv:t=linear:npl=100,format=gbrpf32le,tonemap=tonemap=hable:desat=0:peak=10,zscale=p=bt709:t=bt709:m=bt709:r=tv,fps=60000/1001,format=yuv420p");
+        assert_eq!(vf, "transpose=clock,zscale=tin=arib-std-b67:pin=bt2020:min=bt2020nc:rin=tv:t=linear:npl=100,format=gbrpf32le,tonemap=tonemap=hable:desat=0:peak=10,zscale=p=bt709:t=bt709:m=bt709:r=tv,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv,fps=60000/1001,format=yuv420p");
         let s = build(&i, &p, &Encoder::Nvenc, Path::new("o.mp4")).args.join(" ");
         assert!(s.contains("-color_primaries bt709 -color_trc bt709 -colorspace bt709"));
         // Proxy de HDR: diminui antes do tone mapping (mais leve).

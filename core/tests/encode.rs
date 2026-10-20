@@ -22,7 +22,8 @@ fn make_iphone_like(ff: &Path, d: &Path, hdr: bool) -> PathBuf {
     c.args(["-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=s=640x360:r=60",
             "-f", "lavfi", "-i", "sine=f=440:r=48000", "-f", "lavfi", "-i", "sine=f=880:r=48000", "-t", "3",
             "-map", "0", "-map", "1", "-map", "2",
-            "-vf", "select='not(eq(mod(n\\,7)\\,0))',format=yuv420p10le", "-fps_mode", "vfr",
+            "-vf", if hdr { "select='not(eq(mod(n\\,7)\\,0))',format=yuv420p10le,setparams=color_trc=arib-std-b67:color_primaries=bt2020:colorspace=bt2020nc" }
+                   else { "select='not(eq(mod(n\\,7)\\,0))',format=yuv420p10le" }, "-fps_mode", "vfr",
             "-c:v", "libx265", "-preset", "ultrafast", "-x265-params", "log-level=error", "-tag:v", "hvc1",
             "-c:a", "aac", "-ac", "1"]);
     if hdr { c.args(["-color_trc", "arib-std-b67", "-color_primaries", "bt2020", "-colorspace", "bt2020nc"]); }
