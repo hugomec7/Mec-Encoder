@@ -10,7 +10,7 @@ Built with **Rust** (Tauri 2) and **FFmpeg**, encoding with **NVIDIA NVENC**.
 - Converts **iPhone HDR (HLG) to Rec. 709** with real tone mapping (the same Hable filter chain HandBrake uses).
 - **Drop files or whole folders**: every video inside, subfolders included, goes to the queue.
 - **Queue where each video keeps its own preset**, shown next to its name.
-- **Output preview** before rendering: rotation, scale and color.
+- **Output preview** before rendering: rotation, scale and color, with **Compare** to see the original side by side.
 - **8-bit or 10-bit**, A/V sync, metadata copy, delete original after a verified render.
 - **Presets** you can create, share and import from Shutter Encoder (`.enc`).
 - **Render one video or the whole queue**, reorder by dragging, drag a preset onto a video, show in folder.

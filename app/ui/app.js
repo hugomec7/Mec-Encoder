@@ -55,7 +55,7 @@
     queue: demo.queue.map((q) => Object.assign(q, { cfg: clone(demo.presets.find((p) => p.id === q.preset)) })),
     set: Object.assign({ lang: 'en', theme: 'oled', lastDark: 'oled', defaultPreset: demo.presets[0] && demo.presets[0].id,
       clearWhenDone: true, notify: true, sound: true, foldPresets: false }, demo.settings),
-    sel: REAL ? null : 2, editPreset: null, pv: 'in', job: null, playing: false, t: REAL ? 0 : .31,
+    sel: REAL ? null : 2, editPreset: null, cmp: false, job: null, playing: false, t: REAL ? 0 : .31,
     open: { video: true }, engine: { status: REAL ? 'checking' : 'nvenc', gpu: REAL ? null : 'NVIDIA GeForce RTX' },
     version: '0.1.0', update: null,
   };
@@ -120,7 +120,7 @@
     L = window.MEC_I18N[S.set.lang] || window.MEC_I18N.en;
     root.lang = S.set.lang === 'pt' ? 'pt-BR' : 'en';
     const txt = { lQueue: L.queue, bClearDone: L.clearDone, lDropTitle: L.dropTitle, lDropSub: L.dropSub,
-      lOriginal: L.original, lResult: L.result, lPresets: L.presets, bManage: L.manage, lModified: L.modified,
+      lCompare: L.compare, lPresets: L.presets, bManage: L.manage, lModified: L.modified,
       bSavePreset: L.saveToPreset, lEst: L.estSize, bDiscard: L.discard, lSettings: L.settings, bDone: L.done, lDropAll: L.dropAll, lPvEmpty: L.pvEmpty };
     Object.entries(txt).forEach(([id, t]) => { const el = document.getElementById(id); if (el) el.textContent = t; });
     $('#bMin').title = L.minimize; $('#bMax').title = L.maximize; $('#bClose').title = L.close;
@@ -654,61 +654,71 @@
 
   /* ---------- prévia ---------- */
   const chip = (txt, c, ico) => `<span class="chip ${c ? 'hl' : ''}" ${c ? `style="--c:${c}"` : ''}>${ico || ''}${txt}</span>`;
-  let pvTimer = 0; let pvKey = ''; let pvSeq = 0;
+  /* prévia: mostra o Resultado; "Comparar" põe o Original ao lado */
+  const pvSt = { in: { timer: 0, key: '', seq: 0 }, out: { timer: 0, key: '', seq: 0 } };
   function requestPreview(q, out) {
     if (!REAL) return;
+    const side = out ? 'out' : 'in'; const st = pvSt[side]; const fr = $(out ? '#frame' : '#frameIn');
     const t = durOf(q) * S.t; const key = JSON.stringify([q.id, out, Math.round(t * 30), out ? q.cfg : 0]);
-    if (key === pvKey) return; pvKey = key;
-    clearTimeout(pvTimer);
-    pvTimer = setTimeout(() => {
-      const seq = ++pvSeq; $('#frame').classList.add('loading');
+    if (key === st.key) return; st.key = key;
+    clearTimeout(st.timer);
+    st.timer = setTimeout(() => {
+      const seq = ++st.seq; fr.classList.add('loading');
       inv('preview', { id: q.id, cfg: q.cfg, t, output: out, max: 960 }).then((img) => {
-        if (seq !== pvSeq) return;
-        const el = $('#pvImg'); if (el) el.src = img;
-        $('#frame').classList.remove('loading');
-      }).catch(() => { if (seq === pvSeq) $('#frame').classList.remove('loading'); });
+        if (seq !== st.seq) return;
+        const el = fr.querySelector('img'); if (el) el.src = img;
+        fr.classList.remove('loading');
+      }).catch(() => { if (seq === st.seq) fr.classList.remove('loading'); });
     }, 70);
   }
-  function renderPreview(anim) {
-    const q = selItem(); const fr = $('#frame'); const ch = $('#chips');
-    $('#previewCard').classList.toggle('no-video', !q);
-    if (!q) { fr.innerHTML = ''; ch.innerHTML = ''; $('#pvMeta').innerHTML = ''; $('#tcEnd').textContent = '00:00:00:00'; pvKey = ''; drawWave(); return; }
-    const out = S.pv === 'out'; const o = outDims(q.src, q.cfg); const vertical = q.src.h > q.src.w;
-    const c = [];
-    if (!out) {
-      c.push(chip(`${q.src.w}×${q.src.h}`), chip(`${q.src.codec} ${q.src.bits}-bit`),
-        chip(`${fpsTxt(q.src.fps)} fps${q.src.vfr ? ' ' + L.variable : ''}`, q.src.vfr ? COLORS.orange : null));
-      if (q.src.hdr) c.push(chip(`${q.src.hdr} · Rec. 2020`, COLORS.yellow));
-      if (q.src.rot) c.push(chip(`${q.src.rot}°`, COLORS.teal, ICONS.rot));
-      c.push(chip(L.audioTracks(q.src.audio)));
-    } else {
-      c.push(chip(`${o.w}×${o.h}`), chip(`${codecName(q.cfg.codec)} ${q.cfg.codec === 'h264' ? 8 : q.cfg.bits}-bit · ${S.engine.status === 'cpu' ? 'CPU' : 'NVENC'}`),
-        q.cfg.fps.conform ? chip(`${fpsTxt(q.cfg.fps.value)} fps ${L.constant}`, COLORS.green) : chip(`${fpsTxt(q.src.fps)} fps`));
-      if (q.src.hdr) c.push(q.cfg.hdrToSdr ? chip('Rec. 709', COLORS.green) : chip(L.hdrKept, COLORS.orange));
-      if (q.cfg.rotate) c.push(chip(`${q.cfg.rotate}°`, COLORS.teal, ICONS.rot));
-      c.push(chip(`≈ ${fmtMB(estMB(q))}`));
-    }
-    ch.innerHTML = c.join('');
-    $('#pvMeta').innerHTML = c.join('<span class="dot">·</span>');
-    if (anim) [ch, $('#pvMeta')].forEach((el) => { el.classList.remove('swap'); void el.offsetWidth; el.classList.add('swap'); });
-    const ar = out ? o : { w: q.src.w, h: q.src.h }; const tall = ar.h > ar.w;
-    fr.style.aspectRatio = `${ar.w}/${ar.h}`;
-    fr.style.height = tall ? '100%' : 'auto'; fr.style.width = tall ? 'auto' : '100%';
-    const keepImg = REAL && $('#pvImg') && fr.dataset.id === String(q.id);
+  const requestFrames = (q) => { requestPreview(q, true); if (S.cmp) requestPreview(q, false); };
+  // encaixa cada quadro no espaço disponível (um ou dois lado a lado)
+  function fitFrames() {
+    const st = $('.stage'); const r = st.getBoundingClientRect(); const pad = 14; const gap = 12;
+    const fs = S.cmp ? [$('#frameIn'), $('#frame')] : [$('#frame')];
+    const cw = (r.width - pad * 2 - gap * (fs.length - 1)) / fs.length; const ch = r.height - pad * 2 - (S.cmp ? 24 : 0);
+    fs.forEach((f) => {
+      const a = Number(f.dataset.ar) || 9 / 16; let w = cw; let h = w / a;
+      if (h > ch) { h = ch; w = h * a; }
+      f.style.width = Math.max(0, w) + 'px'; f.style.height = Math.max(0, h) + 'px';
+    });
+  }
+  function paintFrame(fr, q, out) {
+    const o = outDims(q.src, q.cfg); const ar = out ? o : { w: q.src.w, h: q.src.h };
+    fr.dataset.ar = ar.w / ar.h;
+    const keepImg = REAL && fr.querySelector('img') && fr.dataset.id === String(q.id);
     fr.className = 'frame' + (out ? ' out' : '');
-    fr.dataset.id = q.id;
-    const rot = '';
+    fr.dataset.id = q.id; fr.dataset.label = out ? L.result : L.original;
     if (REAL) {
-      if (!keepImg) fr.innerHTML = `${q.thumb ? `<img id="pvImg" src="${q.thumb}" alt="">` : '<img id="pvImg" alt="">'}<i class="pv-spin"></i>${rot}`;
-      else { const n = fr.querySelector('.rot-note'); if (n) n.outerHTML = rot || ''; else if (rot) fr.insertAdjacentHTML('beforeend', rot); }
-      requestPreview(q, out);
+      if (!keepImg) fr.innerHTML = `<img class="pv-img" ${q.thumb ? `src="${q.thumb}"` : ''} alt=""><i class="pv-spin"></i>`;
     } else {
       const washed = q.src.hdr && (!out || !q.cfg.hdrToSdr);
-      fr.innerHTML = scene(q.hue, out ? tall : vertical)
-        + `<div class="grade" style="${washed ? 'opacity:1;background:rgba(170,170,185,.16);mix-blend-mode:screen' : 'opacity:0'}"></div>` + rot;
+      fr.innerHTML = scene(q.hue, ar.h > ar.w)
+        + `<div class="grade" style="${washed ? 'opacity:1;background:rgba(170,170,185,.16);mix-blend-mode:screen' : 'opacity:0'}"></div>`;
       fr.querySelector('svg.scene').style.filter = washed ? 'saturate(.6) contrast(.82) brightness(1.04)' : 'none';
     }
-    if (anim) { fr.classList.remove('flip'); void fr.offsetWidth; fr.classList.add('flip'); }
+  }
+  function renderPreview(anim) {
+    const q = selItem(); const fr = $('#frame'); const fi = $('#frameIn');
+    $('#previewCard').classList.toggle('no-video', !q);
+    $('.stage').classList.toggle('compare', !!S.cmp);
+    $('#bCompare').classList.toggle('on', !!S.cmp);
+    if (!q) { fr.innerHTML = ''; fi.innerHTML = ''; $('#pvMeta').innerHTML = ''; $('#tcEnd').textContent = '00:00:00:00'; pvSt.in.key = pvSt.out.key = ''; drawWave(); return; }
+    const o = outDims(q.src, q.cfg); const c = [];
+    // informação de como o vídeo VAI FICAR
+    const cfr = q.cfg.fps.conform;
+    c.push(chip(`${o.w}×${o.h}`), chip(`${codecName(q.cfg.codec)} ${q.cfg.codec === 'h264' ? 8 : q.cfg.bits}-bit`),
+      cfr ? chip(`${fpsTxt(q.cfg.fps.value)} fps CFR`, COLORS.green) : chip(`${fpsTxt(q.src.fps)} fps ${q.src.vfr ? 'VFR' : ''}`.trim()));
+    if (q.src.hdr) c.push(q.cfg.hdrToSdr ? chip('Rec. 709', COLORS.green) : chip(L.hdrKept, COLORS.orange));
+    if (q.cfg.rotate) c.push(chip(`${q.cfg.rotate}°`, COLORS.teal, ICONS.rot));
+    c.push(chip(`≈ ${fmtMB(estMB(q))}`));
+    $('#pvMeta').innerHTML = c.join('<span class="dot">·</span>');
+    if (anim) { const m = $('#pvMeta'); m.classList.remove('swap'); void m.offsetWidth; m.classList.add('swap'); }
+    paintFrame(fr, q, true);
+    if (S.cmp) paintFrame(fi, q, false);
+    fitFrames();
+    if (REAL) requestFrames(q);
+    if (anim) { [fr, fi].forEach((f) => { f.classList.remove('flip'); void f.offsetWidth; f.classList.add('flip'); }); }
     $('#tcEnd').textContent = q.src.dur; setT(S.t, true);
     if (REAL && q.wave === undefined) {
       q.wave = null;
@@ -716,6 +726,8 @@
     }
     drawWave();
   }
+  $('#bCompare').onclick = () => { S.cmp = !S.cmp; if (!S.cmp) pvSt.in.key = ''; renderPreview(true); };
+  new ResizeObserver(() => fitFrames()).observe($('.stage'));
 
   /* segmentado com pílula que desliza */
   function seg(el, onChange) {
@@ -734,7 +746,6 @@
     };
     requestAnimationFrame(() => place(el.querySelector('button.active'), true));
   }
-  seg($('#pvSeg'), (v) => { S.pv = v; renderPreview(true); });
 
   /* forma de onda (no app vem do áudio de verdade) */
   function drawWave() {
@@ -765,7 +776,7 @@
     S.t = clamp(t, 0, 1); tl.style.setProperty('--t', S.t * 100 + '%');
     const q = selItem(); if (!q) { $('#tcNow').textContent = '00:00:00:00'; return; }
     $('#tcNow').textContent = tc(durOf(q) * S.t, q.src.fpsNum || 60);
-    if (!quiet && REAL) requestPreview(q, S.pv === 'out');
+    if (!quiet && REAL) requestFrames(q);
   }
   tl.addEventListener('pointerdown', (e) => {
     if (!selItem()) return;
@@ -779,9 +790,9 @@
   ctl[3].onclick = () => stepBy(5);
   ctl[4].onclick = () => { const q = selItem(); if (q) stepBy(1 / (q.src.fpsNum || 60)); };
   let playRaf;
-  $('#bPlay').onclick = () => {
+  if (REAL) $('#bPlay').remove(); // sem reprodução: a prévia mostra quadros
+  else $('#bPlay').onclick = () => {
     if (!selItem()) return;
-    if (REAL) { toast(L.playbackSoon); return; }
     S.playing = !S.playing; $('#playIco').innerHTML = S.playing ? ICONS.pause : ICONS.play;
     cancelAnimationFrame(playRaf);
     if (S.playing) { let last = performance.now(); const dur = durOf(selItem());
@@ -800,6 +811,12 @@
   }
   const sw = (key, on, red) => `<button class="switch ${on ? 'on' : ''} ${red ? 'red' : ''}" data-k="${key}"></button>`;
   const segH = (key, val, opts) => `<div class="seg" data-k="${key}"><div class="pill"></div>${opts.map(([v, t, dis]) => `<button data-v="${v}" class="${String(v) === String(val) ? 'active' : ''}" ${dis ? 'disabled' : ''}>${t}</button>`).join('')}</div>`;
+  // menu suspenso: botão compacto que abre a lista de opções
+  const DD = {}; const FPS_OPTS = [['23.976', '23,976'], ['29.97', '29,97'], ['59.94', '59,94'], ['60', '60']];
+  const dd = (key, val, opts) => {
+    DD[key] = { val, opts }; const cur = opts.find((o) => String(o[0]) === String(val)) || opts[0];
+    return `<button class="field pick dd" data-menu="1" data-dd="${key}">${cur[1]}${ICONS.chev}</button>`;
+  };
   const row = (lbl, ctl, sub, cls = '') => `<div class="row ${cls}"><span class="lbl">${lbl}${sub ? `<small>${sub}</small>` : ''}</span>${ctl}</div>`;
   const sec = (id, title, summary, body, extra = '') => `<div class="sec ${S.open[id] ? 'open' : ''}" data-sec="${id}">
       <button class="sec-head"><span class="sec-t">${title}</span>${extra}<span class="sec-sum">${summary}</span>${ICONS.chev}</button>
@@ -825,29 +842,26 @@
     el.innerHTML = (T.isPreset ? `<div class="hint top-hint">${L.presetHint}</div>` : '')
       + sec('video', L.video, `${codecName(c.codec)} · ${h264 ? 8 : c.bits}-bit · ${scaleTxt(c.scale)}${rotTxt} · ${c.fps.conform ? fpsTxt(c.fps.value) + ' CFR' : c.bitrate.mode === 'manual' ? fmtK(c.bitrate.kbps) : c.bitrate.mode === 'source' ? L.source : L.auto}${c.hdrToSdr ? ' · 709' : ''}`,
         `<div class="group">
-          ${row(L.codec, segH('codec', c.codec, [['h264', 'H.264'], ['h265', 'H.265']]))}
-          ${row(L.bitDepth, segH('bits', h264 ? 8 : c.bits, [[8, '8-bit'], [10, '10-bit', h264]]))}
-          ${row(`${L.resolution}<small class="res-out">${resLabel(c, src)}</small>`, '', '', 'res-row')}
-          <div class="row res-seg">${segH('scale', c.scale, [['source', L.source], ['1080', '1080p'], ['50', '50%'], ['25', '25%'], ['custom', L.custom]])}</div>
+          ${row(`${L.resolution}<small class="res-out">${resLabel(c, src)}</small>`, dd('scale', c.scale, [['source', L.source], ['1080', '1080p'], ['50', '50%'], ['25', '25%'], ['custom', L.custom]]))}
           <div class="collapse ${c.scale === 'custom' ? '' : 'closed'}" style="max-height:60px">
             ${row(L.size, `<div class="field"><input class="tnum" data-k="customW" value="${c.customW || ''}" placeholder="auto"><span>W</span></div><span class="times">×</span><div class="field"><input class="tnum" data-k="customH" value="${c.customH || ''}" placeholder="auto"><span>H</span></div>`)}
           </div>
-          ${row(L.rotate, segH('rotate', c.rotate || 0, [[0, '0°'], [90, '↻ 90°'], [180, '180°'], [270, '↺ 90°']]), L.rotateSub)}
-          ${row(L.bitrate, segH('bitrate.mode', c.bitrate.mode, [['auto', L.auto], ['source', L.source], ['manual', L.manual]]))}
+          ${row(L.bitrate, dd('bitrate.mode', c.bitrate.mode, [['auto', L.auto], ['source', L.source], ['manual', L.manual]]))}
           <div class="collapse ${c.bitrate.mode === 'manual' ? '' : 'closed'}" style="max-height:60px">
-            ${row(L.value, `<div class="field"><input class="tnum" data-k="bitrate.kbps" value="${num(c.bitrate.kbps, 0)}"><span>kb/s</span></div>${segH('bitrate.rc', c.bitrate.rc, [['cbr', 'CBR'], ['vbr', 'VBR']])}`)}
+            ${row(L.value, `<div class="field"><input class="tnum" data-k="bitrate.kbps" value="${num(c.bitrate.kbps, 0)}"><span>kb/s</span></div>${dd('bitrate.rc', c.bitrate.rc, [['cbr', 'CBR'], ['vbr', 'VBR']])}`)}
           </div>
-          ${row(L.maxQuality, sw('maxQuality', c.maxQuality), L.maxQualitySub)}
-          ${row(L.cfr, sw('fps.conform', c.fps.conform), L.cfrSub)}
-          <div class="collapse ${c.fps.conform ? '' : 'closed'}" style="max-height:60px">
-            ${row(L.fps, segH('fps.value', c.fps.value, [['23.976', fpsTxt('23.976')], ['29.97', fpsTxt('29.97')], ['59.94', fpsTxt('59.94')], ['60', '60']]))}
-          </div>
+          ${row(L.codec, dd('codec', c.codec, [['h264', 'H.264'], ['h265', 'H.265']]))}
+          ${row(L.bitDepth, dd('bits', h264 ? 8 : c.bits, [[8, '8-bit'], [10, '10-bit', h264]]))}
+          ${row(L.fps, c.fps.conform ? dd('fps.value', c.fps.value, FPS_OPTS) : `<span class="field pick dis">${L.source}${ICONS.chev}</span>`)}
+          ${row(L.fpsMode, segH('fpsMode', c.fps.conform ? 'cfr' : 'vfr', [['vfr', 'VFR'], ['cfr', 'CFR']]))}
+          ${row(L.rotate, dd('rotate', c.rotate || 0, [[0, L.rotNone], [90, L.rotCw], [180, '180°'], [270, L.rotCcw]]))}
+          ${row(L.maxQuality, sw('maxQuality', c.maxQuality))}
           ${row(L.hdr + (src && src.hdr ? ` <span class="pill-tag" style="--c:${COLORS.yellow}">${L.detected(src.hdr)}</span>` : ''), sw('hdrToSdr', c.hdrToSdr), L.hdrSub)}
         </div>${resHint}${h264 && c.bits === 10 ? `<div class="hint">${L.h264no10}</div>` : ''}${c.bitrate.mode === 'source' && src ? `<div class="hint">${L.sameBitrate(fmtK(src.kbps))}</div>` : ''}${src && src.hdr && !c.hdrToSdr ? `<div class="hint warn-t">${L.hdrWarn}</div>` : ''}`)
       + sec('audio', L.audio, a.codec === 'copy' ? L.copy : `AAC · ${a.channels === 'stereo' ? L.stereo : L.mono}`,
         `<div class="group">
-          ${row(L.codec, segH('audio.codec', a.codec, [['aac', 'AAC'], ['copy', L.copy]]))}
-          ${a.codec === 'aac' ? row(L.channels, segH('audio.channels', a.channels, [['stereo', L.stereo], ['mono', L.mono]])) : ''}
+          ${row(L.codec, dd('audio.codec', a.codec, [['aac', 'AAC'], ['copy', L.copy]]))}
+          ${a.codec === 'aac' ? row(L.channels, dd('audio.channels', a.channels, [['stereo', L.stereo], ['mono', L.mono]])) : ''}
           ${a.codec === 'aac' ? row(L.tracks, `<div class="val">${a.channels === 'stereo' ? trackBtn(0, a.tracks[0]) + trackBtn(1, a.tracks[1]) : trackBtn(0, a.tracks[0])}</div>`, a.channels === 'stereo' ? L.tracksStereo : L.tracksMono) : ''}
           ${a.codec === 'aac' ? row(L.quality, `<span class="val tnum">${a.kbps} kb/s · 48 kHz</span>`) : ''}
         </div>`)
@@ -858,6 +872,10 @@
         </div>`);
     renderOutput(T);
     $$('.seg', el).forEach((s) => seg(s, (v) => set(s.dataset.k, v)));
+    $$('[data-dd]', el).forEach((b) => { b.onclick = () => {
+      const k = b.dataset.dd; const d = DD[k];
+      openMenu(b, d.opts.filter((o) => !o[2]).map(([v, t]) => ({ label: t, value: v, sel: String(v) === String(d.val) })), (v) => { if (String(v) !== String(d.val)) set(k, v); });
+    }; });
     $('#estBox').style.visibility = T.q ? '' : 'hidden';
     if (T.q) $('#est').textContent = '≈ ' + fmtMB(estMB(T.q));
     $('#bApplyAll').textContent = T.isPreset ? L.setForAllBtn : L.applyAll;
@@ -897,6 +915,7 @@
     if (key === 'customW' || key === 'customH') o[last] = Math.min(16384, Number(String(v).replace(/\D/g, '')) || 0);
     if (key === 'audio.channels') T.cfg.audio.tracks = v === 'mono' ? [1, 1] : [1, 2];
     if (key === 'codec' && v === 'h264') T.cfg.bits = 8;
+    if (key === 'fpsMode') { delete T.cfg.fpsMode; T.cfg.fps.conform = v === 'cfr'; }
     renderQueue(); renderPresets(); renderInspector(); renderPreview();
   }
   $('#inspIn').addEventListener('click', (e) => {
@@ -979,7 +998,7 @@
     if (e.key === 'Escape') { openSheet(false); closeMenu(); }
     if (e.target.closest('input')) return;
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'o') { e.preventDefault(); if (REAL) inv('pick', { folder: e.shiftKey }); }
-    if (e.key === ' ' && selItem()) { e.preventDefault(); $('#bPlay').click(); }
+    if (e.key === ' ' && selItem() && $('#bPlay')) { e.preventDefault(); $('#bPlay').click(); }
     if (e.key === 'ArrowLeft' && selItem()) ctl[e.shiftKey ? 1 : 0].click();
     if (e.key === 'ArrowRight' && selItem()) ctl[e.shiftKey ? 3 : 4].click();
     if (e.key === 'Delete' && selItem()) removeItem(S.sel);
@@ -1179,7 +1198,7 @@
     if (qs.get('update')) S.update = { version: '0.2.0' };
     renderAll(); setT(S.t, true);
     requestAnimationFrame(drawWave);
-    if (qs.get('pv') === 'out') $('#pvSeg button[data-v="out"]').click();
+    if (qs.get('cmp')) { S.cmp = true; renderPreview(); }
     if (qs.get('sheet')) openSheet(true);
     if (qs.get('folder')) setTimeout(addFolder, 300);
     if (qs.get('run')) setTimeout(() => $('#bRender').click(), 50);

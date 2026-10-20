@@ -8,7 +8,7 @@
 | 2 | Engine: ffprobe, FFmpeg command from the preset, NVENC with progress | Motor: ffprobe, comando do FFmpeg a partir do preset, NVENC com progresso | ✅ 0.1.0 |
 | 3 | Queue: per-video preset, folder scan, single render, reorder, notifications | Fila: preset por vídeo, pastas, render de um vídeo, reordenar, avisos | ✅ 0.1.0 |
 | 4 | Preview: real output frames + waveform | Prévia: quadros reais do resultado + forma de onda | ✅ 0.1.0 |
-| 4b | Preview playback with sound | Reproduzir a prévia com som | ⏳ |
+| 4b | Preview playback with sound | Reproduzir a prévia com som | ✖ dropped · descartado (keeps the app light · deixa o app mais leve) |
 | 5 | HDR → Rec. 709 (HandBrake chain) | HDR → Rec. 709 (igual HandBrake) | ✅ 0.1.0 |
 | 6 | Presets: create, rename, delete, import `.enc`, export/import `.json` | Presets: criar, renomear, excluir, importar `.enc`, exportar/importar `.json` | ✅ 0.1.0 |
 | 7 | Build: MSI + portable on GitHub Actions, bundled FFmpeg, in-app updates | Build: MSI + portátil no GitHub Actions, FFmpeg embutido, atualização no app | ✅ 0.1.0 |

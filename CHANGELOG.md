@@ -1,5 +1,23 @@
 # Changelog · Novidades
 
+## 0.1.3
+
+**English**
+- **Preview shows the Output by default.** New **Compare** button puts Original and Output side by side.
+- The line under the preview now shows **how the video will come out** (size, codec, fps CFR/VFR, color, rotation, estimated size), not the original file info.
+- **Video** reorganized: Resolution, Bitrate, Codec, Bit depth, FPS, **VFR | CFR**, Rotate, Max quality, HDR → Rec. 709.
+- Options are now **dropdown menus**, so the panel is cleaner.
+- “Constant frame rate” switch replaced by **VFR | CFR** under FPS. Descriptions of Max quality and frame rate removed.
+- The play button was removed from the preview (frame-by-frame and the timeline stay).
+
+**Português**
+- **A prévia mostra o Resultado por padrão.** Novo botão **Comparar** coloca Original e Resultado lado a lado.
+- A linha embaixo da prévia agora mostra **como o vídeo vai ficar** (tamanho, codec, fps CFR/VFR, cor, rotação, tamanho estimado), não a informação do arquivo original.
+- **Vídeo** reorganizado: Resolução, Bitrate, Codec, Profundidade, FPS, **VFR | CFR**, Girar, Qualidade máxima, HDR → Rec. 709.
+- As opções agora são **menus suspensos**, o painel fica mais limpo.
+- O botão “Manter frame rate constante” virou **VFR | CFR** embaixo do FPS. Saíram as descrições de Qualidade máxima e de frame rate.
+- O botão de play saiu da prévia (quadro a quadro e a linha do tempo continuam).
+
 ## 0.1.2
 
 **English**

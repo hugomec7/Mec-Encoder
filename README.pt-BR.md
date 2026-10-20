@@ -10,7 +10,7 @@ Feito em **Rust** (Tauri 2) com **FFmpeg** e encode por **NVIDIA NVENC**.
 - Converte **HDR do iPhone (HLG) para Rec. 709** com tone mapping de verdade (a mesma sequência de filtros Hable do HandBrake).
 - **Arraste arquivos ou pastas inteiras**: todos os vídeos de dentro, inclusive das subpastas, entram na fila.
 - **Fila em que cada vídeo tem o próprio preset**, visível ao lado do nome.
-- **Prévia do resultado** antes de renderizar: rotação, escala e cor.
+- **Prévia do resultado** antes de renderizar: rotação, escala e cor, com **Comparar** para ver o original lado a lado.
 - **8-bit ou 10-bit**, sincronia A/V, cópia dos metadados, apagar o original só depois do render conferido.
 - **Presets** para criar, compartilhar e importar do Shutter Encoder (`.enc`).
 - **Renderize um vídeo só ou a fila inteira**, reordene arrastando, arraste um preset até o vídeo, mostrar na pasta.
