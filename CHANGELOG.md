@@ -1,5 +1,15 @@
 # Changelog · Novidades
 
+## 0.1.2
+
+**English**
+- Mec Encoder menu: **Settings**, **Theme** (opens the theme choices), **Check for updates** and, at the bottom, the **version**, which opens the project page on GitHub.
+- **Open presets folder** stays only in the Presets › Manage menu.
+
+**Português**
+- Menu do Mec Encoder: **Configurações**, **Tema** (abre as opções de tema), **Procurar atualizações** e, no final, a **versão**, que abre a página do projeto no GitHub.
+- **Abrir pasta dos presets** fica só no menu Presets › Gerenciar.
+
 ## 0.1.1
 
 **English**

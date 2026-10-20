@@ -7,7 +7,7 @@ window.MEC_I18N = {
     sameAsSource: 'same as the source', shortSide1080: 'shorter side 1080', halfOfSource: 'half of the source', quarterOfSource: 'a quarter of the source',
     colors: { blue: 'Blue', orange: 'Orange', green: 'Green', purple: 'Purple', teal: 'Teal', yellow: 'Yellow', pink: 'Pink', indigo: 'Indigo', red: 'Red' },
 
-    rotate: 'Rotate', rotateSub: 'For videos shot sideways', addVideos: 'Add videos…', addFolder: 'Add folder…', importEnc: 'Import from Shutter Encoder (.enc)…', importJson: 'Import presets (.json)…',
+    theme: 'Theme', rotate: 'Rotate', rotateSub: 'For videos shot sideways', addVideos: 'Add videos…', addFolder: 'Add folder…', importEnc: 'Import from Shutter Encoder (.enc)…', importJson: 'Import presets (.json)…',
     exportPresets: 'Export presets…', restoreDefaults: 'Restore default presets', newPresetName: 'New preset', newPresetMenu: 'New preset',
     rename: 'Rename', duplicate: 'Duplicate', deletePreset: 'Delete preset', cantDeleteLast: 'Keep at least one preset',
     presetsImported: (n) => `${n} preset${n === 1 ? '' : 's'} imported`, presetsExported: 'Presets exported', presetDeleted: (p) => `“${p}” deleted`,
@@ -75,7 +75,7 @@ window.MEC_I18N = {
     sameAsSource: 'igual ao original', shortSide1080: 'lado menor com 1080', halfOfSource: 'metade do original', quarterOfSource: 'um quarto do original',
     colors: { blue: 'Azul', orange: 'Laranja', green: 'Verde', purple: 'Roxo', teal: 'Ciano', yellow: 'Amarelo', pink: 'Rosa', indigo: 'Índigo', red: 'Vermelho' },
 
-    rotate: 'Girar', rotateSub: 'Para vídeo gravado deitado', addVideos: 'Adicionar vídeos…', addFolder: 'Adicionar pasta…', importEnc: 'Importar do Shutter Encoder (.enc)…', importJson: 'Importar presets (.json)…',
+    theme: 'Tema', rotate: 'Girar', rotateSub: 'Para vídeo gravado deitado', addVideos: 'Adicionar vídeos…', addFolder: 'Adicionar pasta…', importEnc: 'Importar do Shutter Encoder (.enc)…', importJson: 'Importar presets (.json)…',
     exportPresets: 'Exportar presets…', restoreDefaults: 'Restaurar presets padrão', newPresetName: 'Novo preset', newPresetMenu: 'Novo preset',
     rename: 'Renomear', duplicate: 'Duplicar', deletePreset: 'Excluir preset', cantDeleteLast: 'Mantenha pelo menos um preset',
     presetsImported: (n) => `${n} preset${n === 1 ? '' : 's'} importado${n === 1 ? '' : 's'}`, presetsExported: 'Presets exportados', presetDeleted: (p) => `“${p}” excluído`,

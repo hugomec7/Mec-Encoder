@@ -380,6 +380,13 @@ fn open_data_dir(app: AppHandle) -> Result<(), String> {
     std::process::Command::new("explorer.exe").arg(dir).spawn().map(|_| ()).map_err(|e| e.to_string())
 }
 
+/// Abre a página do app no navegador (só endereços do GitHub do projeto).
+#[tauri::command]
+fn open_url(url: String) -> Result<(), String> {
+    if !url.starts_with("https://github.com/hugomec7/Mec-Encoder") { return Err("blocked".into()); }
+    std::process::Command::new("explorer.exe").arg(url).spawn().map(|_| ()).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn notify(app: AppHandle, title: String, body: String) {
     let _ = app.notification().builder().title(title).body(body).show();
@@ -475,7 +482,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             pick, add, forget, preview, waveform, render, stop, get_state, save_presets, save_settings,
-            default_presets, import_enc, export_presets, import_presets, reveal, open_data_dir, notify, ready, check_update, install_update
+            default_presets, import_enc, export_presets, import_presets, reveal, open_data_dir, open_url, notify, ready, check_update, install_update
         ])
         .build(tauri::generate_context!())
         .expect("error while building Mec Encoder")

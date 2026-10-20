@@ -42,6 +42,7 @@
     down: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.5v8M4.5 7L8 10.5 11.5 7M3 13.5h10"/></svg>',
     up: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10.5v-8M4.5 6L8 2.5 11.5 6M3 13.5h10"/></svg>',
     reset: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 8A5.5 5.5 0 1 0 4.2 4"/><path d="M3.8 1.5V4.3h2.8"/></svg>',
+    info: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="8" cy="8" r="6"/><path d="M8 7.2v4M8 4.9v.1"/></svg>',
     gear: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.8v1.6M8 12.6v1.6M1.8 8h1.6M12.6 8h1.6M3.6 3.6l1.1 1.1M11.3 11.3l1.1 1.1M3.6 12.4l1.1-1.1M11.3 4.7l1.1-1.1" stroke-linecap="round"/></svg>',
     theme: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="5.5"/><path d="M8 2.5a5.5 5.5 0 0 1 0 11z" fill="currentColor"/></svg>',
     play: '<path d="M4.5 2.6v10.8c0 .5.6.8 1 .5l8-5.4a.6.6 0 0 0 0-1l-8-5.4c-.4-.3-1 0-1 .5z"/>',
@@ -94,20 +95,26 @@
     saveSettings(); applyTheme(true);
   }
   $('#bAppMenu').dataset.menu = '1';
-  $('#bAppMenu').onclick = (e) => openMenu(e.currentTarget, [
-    { label: L.settings + '…', value: 'settings', icon: ICONS.gear },
-    { sep: true },
-    ...[['system', L.system], ['light', L.light], ['dark', L.dark], ['oled', L.oled]].map(([v, t]) => ({ label: `${L.appearance}: ${t}`, value: 'theme:' + v, sel: S.set.theme === v, icon: ICONS.theme })),
-    { sep: true },
-    { label: L.checkUpdates, value: 'update', icon: ICONS.down },
-    { label: L.openPresetsFolder, value: 'open', icon: ICONS.reveal },
-  ], (v) => {
-    if (v === 'settings') openSheet(true);
-    else if (v.startsWith('theme:')) setTheme(v.slice(6));
-    else if (v === 'update') checkUpdate(true);
-    else if (v === 'open') openPresetsFolder();
-  });
-
+  const REPO_URL = 'https://github.com/hugomec7/Mec-Encoder';
+  function themeMenu(at) {
+    openMenu(at, [['system', L.system], ['light', L.light], ['dark', L.dark], ['oled', L.oled]]
+      .map(([v, t]) => ({ label: t, value: v, sel: S.set.theme === v, icon: ICONS.theme })), (v) => setTheme(v));
+  }
+  $('#bAppMenu').onclick = (e) => {
+    const btn = e.currentTarget;
+    openMenu(btn, [
+      { label: L.settings + '…', value: 'settings', icon: ICONS.gear },
+      { label: L.theme, value: 'theme', icon: ICONS.theme },
+      { label: L.checkUpdates, value: 'update', icon: ICONS.down },
+      { sep: true },
+      { label: `${L.version} ${S.version}`, value: 'about', icon: ICONS.info },
+    ], (v) => {
+      if (v === 'settings') openSheet(true);
+      else if (v === 'theme') setTimeout(() => themeMenu(btn), 0);
+      else if (v === 'update') checkUpdate(true);
+      else if (v === 'about') { if (REAL) inv('open_url', { url: REPO_URL }).catch(() => {}); else window.open(REPO_URL, '_blank'); }
+    });
+  };
   /* ---------- idioma ---------- */
   function applyLang() {
     L = window.MEC_I18N[S.set.lang] || window.MEC_I18N.en;
