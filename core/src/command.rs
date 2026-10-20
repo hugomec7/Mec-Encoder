@@ -157,22 +157,27 @@ fn audio_args(info: &MediaInfo, p: &Preset) -> (Option<String>, Vec<String>) {
     let n = info.audio.len() as u32;
     if n == 0 { return (None, vec!["-an".into()]); }
     if p.audio.codec == "copy" {
-        return (None, vec!["-map".into(), "0:a?".into(), "-c:a".into(), "copy".into()]);
+        let mut a = Vec::new();
+        for t in &info.audio { a.extend(["-map".to_string(), format!("0:{}", t.index)]); }
+        a.extend(["-c:a".to_string(), "copy".to_string()]);
+        return (None, a);
     }
+    // Faixa escolhida (1, 2...) → índice real do stream no arquivo.
     let track = |i: usize| -> u32 { p.audio.tracks.get(i).copied().unwrap_or(1).clamp(1, n) - 1 };
     let ch = |t: u32| info.audio.get(t as usize).map_or(2, |a| a.channels);
+    let sid = |t: u32| info.audio.get(t as usize).map_or(t + 1, |a| a.index);
     let sync = if p.av_sync { ",aresample=async=1:first_pts=0" } else { "" };
     let graph = if p.audio.channels == "mono" {
         let a = track(0);
-        format!("[0:a:{a}]aformat=channel_layouts=mono{sync}[aout]")
+        format!("[0:{}]aformat=channel_layouts=mono{sync}[aout]", sid(a))
     } else {
         let (l, r) = (track(0), track(1));
         if l == r {
             let up = if ch(l) >= 2 { "aformat=channel_layouts=stereo" } else { "pan=stereo|c0=c0|c1=c0" };
-            format!("[0:a:{l}]{up}{sync}[aout]")
+            format!("[0:{}]{up}{sync}[aout]", sid(l))
         } else {
             let mono = |t: u32| if ch(t) >= 2 { "pan=mono|c0=0.5*c0+0.5*c1" } else { "anull" };
-            format!("[0:a:{l}]{}[l];[0:a:{r}]{}[r];[l][r]amerge=inputs=2,pan=stereo|c0=c0|c1=c1{sync}[aout]", mono(l), mono(r))
+            format!("[0:{}]{}[l];[0:{}]{}[r];[l][r]amerge=inputs=2,pan=stereo|c0=c0|c1=c1{sync}[aout]", sid(l), mono(l), sid(r), mono(r))
         }
     };
     let kbps = if p.audio.kbps > 0 { p.audio.kbps } else { 256 };
@@ -299,7 +304,7 @@ mod tests {
         assert!(s.contains("-display_rotation 0 -i /v/IMG_0001.MOV"), "{s}");
         assert!(s.contains("-vf transpose=clock,fps=60000/1001,format=yuv420p"), "{s}");
         assert!(s.contains("-c:v hevc_nvenc -preset p7 -tune hq -profile:v main -rc cbr -b:v 50000k -maxrate 50000k -bufsize 100000k"), "{s}");
-        assert!(s.contains("[0:a:0]anull[l];[0:a:1]anull[r];[l][r]amerge=inputs=2,pan=stereo|c0=c0|c1=c1,aresample=async=1:first_pts=0[aout]"), "{s}");
+        assert!(s.contains("[0:1]anull[l];[0:2]anull[r];[l][r]amerge=inputs=2,pan=stereo|c0=c0|c1=c1,aresample=async=1:first_pts=0[aout]"), "{s}");
         assert!(s.contains("-map_metadata 0"), "{s}");
         assert_eq!((plan.width, plan.height), (2160, 3840));
     }
@@ -335,13 +340,13 @@ mod tests {
         let mut i = iphone(0, "");
         let mut p = preset("iphone-4k60");
         p.audio.channels = "mono".into(); p.audio.tracks = vec![1, 1]; p.av_sync = false;
-        assert_eq!(audio_args(&i, &p).0.unwrap(), "[0:a:0]aformat=channel_layouts=mono[aout]");
+        assert_eq!(audio_args(&i, &p).0.unwrap(), "[0:1]aformat=channel_layouts=mono[aout]");
         p.audio.channels = "stereo".into(); p.audio.tracks = vec![1, 1];
-        assert_eq!(audio_args(&i, &p).0.unwrap(), "[0:a:0]pan=stereo|c0=c0|c1=c0[aout]");
+        assert_eq!(audio_args(&i, &p).0.unwrap(), "[0:1]pan=stereo|c0=c0|c1=c0[aout]");
         i.audio.truncate(1); i.audio[0].channels = 2; p.audio.tracks = vec![1, 2];
-        assert_eq!(audio_args(&i, &p).0.unwrap(), "[0:a:0]aformat=channel_layouts=stereo[aout]", "faixa 2 não existe: usa a 1");
+        assert_eq!(audio_args(&i, &p).0.unwrap(), "[0:1]aformat=channel_layouts=stereo[aout]", "faixa 2 não existe: usa a 1");
         p.audio.codec = "copy".into();
-        assert_eq!(audio_args(&i, &p).1, vec!["-map", "0:a?", "-c:a", "copy"]);
+        assert_eq!(audio_args(&i, &p).1, vec!["-map", "0:1", "-c:a", "copy"]);
         i.audio.clear();
         assert_eq!(audio_args(&i, &p).1, vec!["-an"]);
     }

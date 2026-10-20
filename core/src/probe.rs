@@ -158,7 +158,8 @@ pub fn parse_flat(text: &str) -> MediaInfo {
                     max_cll, mastering_max,
                 });
             }
-            "audio" => info.audio.push(AudioInfo {
+            // Faixas que o FFmpeg não decodifica (ex.: áudio espacial APAC do iPhone) ficam de fora.
+            "audio" if !matches!(g("codec_name"), "" | "none" | "apac" | "unknown") => info.audio.push(AudioInfo {
                 index: g("index").parse().unwrap_or(n),
                 codec: g("codec_name").to_string(),
                 channels: g("channels").parse().unwrap_or(2),
@@ -199,6 +200,9 @@ streams.stream.1.sample_rate="48000"
 streams.stream.1.channels=2
 streams.stream.2.index=2
 streams.stream.2.codec_type="data"
+streams.stream.3.index=3
+streams.stream.3.codec_name="apac"
+streams.stream.3.codec_type="audio"
 format.duration="135.516000"
 format.bit_rate="50100000"
 "#;
