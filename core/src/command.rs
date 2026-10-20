@@ -127,17 +127,27 @@ fn coded(v: &VideoInfo) -> (u32, u32) {
     if v.coded_width > 0 { (v.coded_width, v.coded_height) } else if v.rotation % 180 == 90 { (v.height, v.width) } else { (v.width, v.height) }
 }
 
-/// A placa (NVDEC) lê este vídeo? H.264 só 8-bit 4:2:0; nada de 4:2:2 (ex.: Sony FX30 XAVC S-I),
-/// ProRes, DNxHR etc. — esses vão direto para a CPU, sem tentativas que falham.
-pub fn nvdec_supported(v: &VideoInfo) -> bool {
+/// A placa (NVDEC) lê este vídeo? H.264 só 8-bit 4:2:0 e nada de 4:2:2 (ex.: Sony FX30 XAVC S-I)...
+/// exceto nas RTX 50 (Blackwell), que leem H.264 e HEVC 4:2:2 (`gpu_422`).
+/// ProRes, DNxHR etc. vão direto para a CPU, sem tentativas que falham.
+pub fn nvdec_supported(v: &VideoInfo, gpu_422: bool) -> bool {
     let pf = v.pix_fmt.as_str();
     let c420 = pf.is_empty() || pf.contains("420") || pf.starts_with("nv12") || pf.starts_with("p010") || pf.starts_with("yuvj420");
+    let c422 = pf.contains("422") || pf.starts_with("p210") || pf.starts_with("nv16");
     match v.codec.as_str() {
-        "h264" => c420 && v.bit_depth <= 8,
-        "hevc" | "av1" | "vp9" => c420,
+        "h264" => (c420 && v.bit_depth <= 8) || (gpu_422 && (c420 || c422)),
+        "hevc" => c420 || (gpu_422 && c422),
+        "av1" | "vp9" => c420,
         "mpeg2video" | "vc1" => c420 && v.bit_depth <= 8,
         _ => false,
     }
+}
+
+/// RTX 50 (Blackwell): a primeira geração que lê 4:2:2 na placa.
+pub fn gpu_reads_422(gpu_name: &str) -> bool {
+    let n = gpu_name.to_uppercase();
+    // "NVIDIA GeForce RTX 5090", "RTX 5070 Ti", "RTX PRO 6000 Blackwell"...
+    n.contains("BLACKWELL") || n.split(|c: char| !c.is_ascii_alphanumeric()).any(|w| w.len() == 4 && w.starts_with('5') && w.chars().all(|c| c.is_ascii_digit()) && n.contains("RTX"))
 }
 
 fn video_codec_args(info: &MediaInfo, p: &Preset, enc: &Encoder, warnings: &mut Vec<String>) -> Vec<String> {
@@ -288,7 +298,8 @@ pub fn gpu_filters(info: &MediaInfo, p: &Preset) -> Vec<String> {
     let out10 = effective_bits(p) == 10;
     // HDR: mantém 10-bit até o tone mapping; senão, já converte para o formato final na GPU.
     let gpu_fmt = if hdr { if src10 { "p010" } else { "nv12" } } else if out10 { "p010" } else { "nv12" };
-    let src_fmt = if src10 { "p010" } else { "nv12" };
+    let is422 = v.pix_fmt.contains("422");
+    let src_fmt = if is422 { "p210" } else if src10 { "p010" } else { "nv12" };
     if (pw, ph) != (cw, ch) || gpu_fmt != src_fmt {
         f.push(format!("scale_cuda=w={pw}:h={ph}:format={gpu_fmt}"));
     }
@@ -370,18 +381,23 @@ mod tests {
         // convertendo para 4:2:0 com várias threads ANTES de girar.
         let mut i = iphone(270, "");
         { let v = i.video.as_mut().unwrap(); v.codec = "h264".into(); v.pix_fmt = "yuv422p10le".into(); v.bit_depth = 10; v.vfr = false; }
-        assert!(!nvdec_supported(i.video.as_ref().unwrap()));
+        assert!(!nvdec_supported(i.video.as_ref().unwrap(), false));
+        assert!(nvdec_supported(i.video.as_ref().unwrap(), true), "RTX 50 lê 4:2:2");
+        assert!(gpu_reads_422("NVIDIA GeForce RTX 5070 Ti") && !gpu_reads_422("NVIDIA GeForce RTX 3070") && !gpu_reads_422("NVIDIA GeForce GTX 1050"));
+        // Na RTX 50 converte 4:2:2 → 4:2:0 na placa
+        let s = build(&i, &{ let mut p = preset("iphone-4k60"); p.bits = 10; p }, &Encoder::Nvenc, Path::new("o.mp4")).args.join(" ");
+        assert!(s.contains("-vf scale_cuda=w=3840:h=2160:format=p010,hwdownload,format=p010,transpose=cclock"), "{s}");
         let mut p = preset("iphone-4k60"); p.bits = 10; p.codec = "h265".into();
         let s = build_mode(&i, &p, &Encoder::Nvenc, Path::new("o.mp4"), Decode::Cpu).args.join(" ");
         assert!(!s.contains("hwaccel"), "{s}");
         assert!(s.contains("-vf scale=threads=0,format=yuv420p10le,transpose=cclock,fps=60000/1001,scale=threads=0,format=p010le "), "{s}");
         // iPhone HEVC 4:2:0 a placa lê; H.264 8-bit 4:2:0 também.
         let mut ok = iphone(90, ""); ok.video.as_mut().unwrap().codec = "hevc".into(); ok.video.as_mut().unwrap().pix_fmt = "yuv420p10le".into();
-        assert!(nvdec_supported(ok.video.as_ref().unwrap()));
+        assert!(nvdec_supported(ok.video.as_ref().unwrap(), false));
         ok.video.as_mut().unwrap().codec = "h264".into(); ok.video.as_mut().unwrap().pix_fmt = "yuv420p".into(); ok.video.as_mut().unwrap().bit_depth = 8;
-        assert!(nvdec_supported(ok.video.as_ref().unwrap()));
+        assert!(nvdec_supported(ok.video.as_ref().unwrap(), false));
         ok.video.as_mut().unwrap().codec = "prores".into();
-        assert!(!nvdec_supported(ok.video.as_ref().unwrap()));
+        assert!(!nvdec_supported(ok.video.as_ref().unwrap(), true));
     }
 
     #[test]

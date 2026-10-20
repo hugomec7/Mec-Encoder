@@ -117,7 +117,7 @@ fn fx30_422_10bit_rotated() {
     let info = probe(&fp, &src).unwrap();
     let v = info.video.as_ref().unwrap();
     assert_eq!((v.width, v.height, v.rotation, v.pix_fmt.as_str()), (360, 640, 270, "yuv422p10le"));
-    assert!(!mec_core::command::nvdec_supported(v));
+    assert!(!mec_core::command::nvdec_supported(v, false));
     let mut p = Preset::defaults().into_iter().find(|p| p.id == "iphone-4k60").unwrap();
     p.codec = "h265".into(); p.bits = 10;
     let out = d.join("fx30_out.mp4");
