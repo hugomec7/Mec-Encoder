@@ -1,5 +1,37 @@
 # Changelog · Novidades
 
+## 0.1.1
+
+**English**
+- **New layout**: Presets › Video › Audio › Advanced on the right. Frame rate and HDR → Rec. 709 are now inside Video.
+- **Output** (suffix, subfolder, delete original) moved to the bottom left, next to Render queue.
+- **Rotate**: 0°, 90° clockwise, 180°, 90° counterclockwise. Turns a horizontal video upright.
+- **Resolution** shows the exact output size (e.g. 540 × 960) and has a **Custom** option (width × height; leave one empty to keep the proportion).
+- **Presets don't save by themselves anymore**: edit, then click **Save changes** (or **Discard**).
+- Presets have **colors only** (no icons). Change the color by clicking the dot or with right-click › Color.
+- **Preset folders**: create, rename, collapse and delete folders; **drag presets** to reorder them or move them into a folder. Right-click › Move to folder.
+- **Open presets folder** (Manage menu and app menu).
+- **Settings and theme** moved to the menu under the **Mec Encoder** name (top left).
+- **OLED is the default theme.**
+- The default presets are now **RAW, RAW HDR, Proxy and Meta HDR**.
+- The rotation notice over the preview and “New videos use” on the main screen were removed (the latter is in Settings).
+- Portable updates download the same .zip from the release page.
+
+**Português**
+- **Novo layout**: Presets › Vídeo › Áudio › Avançado à direita. Frame rate e HDR → Rec. 709 agora ficam dentro de Vídeo.
+- **Saída** (sufixo, subpasta, apagar original) foi para o canto inferior esquerdo, perto do Renderizar fila.
+- **Girar**: 0°, 90° horário, 180°, 90° anti-horário. Deixa em pé um vídeo gravado deitado.
+- **Resolução** mostra o tamanho exato do resultado (ex.: 540 × 960) e tem a opção **Personalizado** (largura × altura; deixe uma vazia para manter a proporção).
+- **Presets não salvam mais sozinhos**: edite e clique em **Salvar alterações** (ou **Descartar**).
+- Presets têm **só cor** (sem ícone). Troque a cor clicando na bolinha ou com botão direito › Cor.
+- **Pastas de presets**: crie, renomeie, recolha e exclua pastas; **arraste os presets** para reordenar ou colocar numa pasta. Botão direito › Mover para pasta.
+- **Abrir pasta dos presets** (menu Gerenciar e menu do app).
+- **Configurações e tema** foram para o menu no nome **Mec Encoder** (canto superior esquerdo).
+- **OLED é o tema padrão.**
+- Os presets padrão agora são **RAW, RAW HDR, Proxy e Meta HDR**.
+- Saíram o aviso de rotação em cima da prévia e o “Vídeos novos usam” da tela principal (este continua nas Configurações).
+- A atualização do portátil baixa o mesmo .zip da página de releases.
+
 ## 0.1.0 — first test build · primeira build de teste
 
 **English**

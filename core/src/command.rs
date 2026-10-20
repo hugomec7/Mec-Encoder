@@ -29,16 +29,24 @@ fn even(x: f64) -> u32 { ((x / 2.0).round() as u32).max(1) * 2 }
 
 /// Resolução final (já em pé). "1080" usa o lado menor, então vertical continua vertical.
 pub fn out_dims(v: &VideoInfo, p: &Preset) -> (u32, u32) {
-    let (w, h) = (v.width as f64, v.height as f64);
+    // Giro extra escolhido pelo usuário (90/270 troca largura e altura).
+    let (vw, vh) = if p.rotate % 180 == 90 { (v.height, v.width) } else { (v.width, v.height) };
+    let (w, h) = (vw as f64, vh as f64);
     match p.scale.as_str() {
+        "custom" => match (p.custom_w, p.custom_h) {
+            (0, 0) => (vw, vh),
+            (cw, 0) => (even(cw as f64), even(cw as f64 * h / w)),
+            (0, ch) => (even(ch as f64 * w / h), even(ch as f64)),
+            (cw, ch) => (even(cw as f64), even(ch as f64)),
+        },
         "50" => (even(w / 2.0), even(h / 2.0)),
         "25" => (even(w / 4.0), even(h / 4.0)),
         "1080" | "720" | "2160" => {
             let target: f64 = p.scale.parse().unwrap_or(1080.0);
             let short = w.min(h);
-            if short <= target { (v.width, v.height) } else { let k = target / short; (even(w * k), even(h * k)) }
+            if short <= target { (vw, vh) } else { let k = target / short; (even(w * k), even(h * k)) }
         }
-        _ => (v.width, v.height),
+        _ => (vw, vh),
     }
 }
 
@@ -77,7 +85,9 @@ fn pix_fmt(p: &Preset, enc: &Encoder) -> &'static str {
 pub fn video_filters(info: &MediaInfo, p: &Preset, enc: &Encoder, preview: Option<(bool, u32)>) -> Vec<String> {
     let Some(v) = info.video.as_ref() else { return vec![] };
     let mut f = Vec::new();
-    match v.rotation {
+    // Rotação do arquivo + giro extra do usuário (só no resultado).
+    let user = if preview.map_or(true, |(out, _)| out) { p.rotate % 360 } else { 0 };
+    match (v.rotation + user) % 360 {
         90 => f.push("transpose=clock".to_string()),
         180 => f.push("hflip,vflip".to_string()),
         270 => f.push("transpose=cclock".to_string()),
@@ -92,9 +102,10 @@ pub fn video_filters(info: &MediaInfo, p: &Preset, enc: &Encoder, preview: Optio
     }
     {
         let (w, h) = out_dims(v, p);
-        let scale = ((w, h) != (v.width, v.height)).then(|| format!("scale={w}:{h}:flags=bicubic"));
+        let (rw, rh) = if p.rotate % 180 == 90 { (v.height, v.width) } else { (v.width, v.height) };
+        let scale = ((w, h) != (rw, rh)).then(|| format!("scale={w}:{h}:flags=bicubic"));
         let hdr = p.hdr_to_sdr && !v.hdr.is_empty();
-        let shrinking = (w as u64 * h as u64) < (v.width as u64 * v.height as u64);
+        let shrinking = (w as u64 * h as u64) < (rw as u64 * rh as u64);
         if hdr && shrinking { if let Some(s) = &scale { f.push(s.clone()); } }
         if hdr { f.extend(hdr_chain(v)); }
         if !(hdr && shrinking) { if let Some(s) = scale { f.push(s); } }
@@ -285,7 +296,22 @@ mod tests {
             ..Default::default()
         }
     }
-    fn preset(id: &str) -> Preset { Preset::defaults().into_iter().find(|p| p.id == id).unwrap() }
+    /// Presets de teste (independentes dos padrões do app).
+    fn preset(id: &str) -> Preset {
+        let base = Preset {
+            bitrate: crate::preset::Bitrate { mode: "manual".into(), kbps: 50_000, rc: "cbr".into() }, max_quality: true,
+            fps: crate::preset::Fps { conform: true, value: "59.94".into() }, ..Preset::default()
+        };
+        match id {
+            "iphone-4k60" => Preset { output: crate::preset::Output { delete_source: true, ..Default::default() }, ..base },
+            "iphone-4k60-hdr" => Preset { hdr_to_sdr: true, ..base },
+            "iphone-1080p60" => Preset { scale: "1080".into(), ..base },
+            "proxy" => Preset { scale: "25".into(), fps: crate::preset::Fps { conform: false, value: "59.94".into() },
+                output: crate::preset::Output { suffix: crate::preset::Toggle { on: true, text: "_proxy".into() },
+                    subfolder: crate::preset::Toggle { on: true, text: "proxy".into() }, delete_source: false }, ..base },
+            _ => base,
+        }
+    }
 
     #[test]
     fn scale_1080_keeps_orientation() {
@@ -358,6 +384,36 @@ mod tests {
         assert_eq!(o, PathBuf::from("/nao/existe/proxy/IMG_1_proxy.mp4"));
         let o = output_path(Path::new("/nao/existe/IMG_1.MOV"), &preset("iphone-4k60"));
         assert_eq!(o, PathBuf::from("/nao/existe/IMG_1_H265.mp4"));
+    }
+
+    #[test]
+    fn user_rotation() {
+        let i = iphone(0, ""); // gravado deitado, sem metadado
+        let mut p = preset("iphone-1080p60"); p.rotate = 90;
+        assert_eq!(out_dims(i.video.as_ref().unwrap(), &p), (1080, 1920));
+        let vf = video_filters(&i, &p, &Encoder::Nvenc, None).join(",");
+        assert!(vf.starts_with("transpose=clock,scale=1080:1920"), "{vf}");
+        // iPhone já girado 90 + 90 do usuário = 180
+        let vf = video_filters(&iphone(90, ""), &p, &Encoder::Nvenc, None).join(",");
+        assert!(vf.starts_with("hflip,vflip"), "{vf}");
+        // a prévia do original não usa o giro do usuário
+        let vf = video_filters(&i, &p, &Encoder::Nvenc, Some((false, 480))).join(",");
+        assert!(!vf.contains("transpose"), "{vf}");
+    }
+
+    #[test]
+    fn custom_resolution() {
+        let v = iphone(90, "").video.unwrap();
+        let mut p = preset("iphone-4k60"); p.scale = "custom".into();
+        p.custom_w = 720; assert_eq!(out_dims(&v, &p), (720, 1280));
+        p.custom_w = 0; p.custom_h = 1000; assert_eq!(out_dims(&v, &p), (562, 1000));
+        p.custom_w = 1080; p.custom_h = 1350; assert_eq!(out_dims(&v, &p), (1080, 1350));
+    }
+
+    #[test]
+    fn defaults_are_the_four() {
+        let names: Vec<_> = Preset::defaults().into_iter().map(|p| p.name).collect();
+        assert_eq!(names, vec!["RAW", "RAW HDR", "Proxy", "Meta HDR"]);
     }
 
     #[test]

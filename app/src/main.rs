@@ -373,6 +373,13 @@ fn reveal(path: PathBuf) -> Result<(), String> {
     Ok(())
 }
 
+/// Abre a pasta onde ficam presets.json e settings.json.
+#[tauri::command]
+fn open_data_dir(app: AppHandle) -> Result<(), String> {
+    let dir = store::dir(&app);
+    std::process::Command::new("explorer.exe").arg(dir).spawn().map(|_| ()).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn notify(app: AppHandle, title: String, body: String) {
     let _ = app.notification().builder().title(title).body(body).show();
@@ -468,7 +475,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             pick, add, forget, preview, waveform, render, stop, get_state, save_presets, save_settings,
-            default_presets, import_enc, export_presets, import_presets, reveal, notify, ready, check_update, install_update
+            default_presets, import_enc, export_presets, import_presets, reveal, open_data_dir, notify, ready, check_update, install_update
         ])
         .build(tauri::generate_context!())
         .expect("error while building Mec Encoder")

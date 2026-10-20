@@ -42,6 +42,8 @@
     down: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.5v8M4.5 7L8 10.5 11.5 7M3 13.5h10"/></svg>',
     up: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10.5v-8M4.5 6L8 2.5 11.5 6M3 13.5h10"/></svg>',
     reset: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 8A5.5 5.5 0 1 0 4.2 4"/><path d="M3.8 1.5V4.3h2.8"/></svg>',
+    gear: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.8v1.6M8 12.6v1.6M1.8 8h1.6M12.6 8h1.6M3.6 3.6l1.1 1.1M11.3 11.3l1.1 1.1M3.6 12.4l1.1-1.1M11.3 4.7l1.1-1.1" stroke-linecap="round"/></svg>',
+    theme: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="5.5"/><path d="M8 2.5a5.5 5.5 0 0 1 0 11z" fill="currentColor"/></svg>',
     play: '<path d="M4.5 2.6v10.8c0 .5.6.8 1 .5l8-5.4a.6.6 0 0 0 0-1l-8-5.4c-.4-.3-1 0-1 .5z"/>',
     pause: '<rect x="3.5" y="2.5" width="3.2" height="11" rx="1"/><rect x="9.3" y="2.5" width="3.2" height="11" rx="1"/>',
   };
@@ -50,7 +52,7 @@
   const S = {
     presets: demo.presets,
     queue: demo.queue.map((q) => Object.assign(q, { cfg: clone(demo.presets.find((p) => p.id === q.preset)) })),
-    set: Object.assign({ lang: 'en', theme: 'dark', lastDark: 'dark', defaultPreset: demo.presets[0] && demo.presets[0].id,
+    set: Object.assign({ lang: 'en', theme: 'oled', lastDark: 'oled', defaultPreset: demo.presets[0] && demo.presets[0].id,
       clearWhenDone: true, notify: true, sound: true, foldPresets: false }, demo.settings),
     sel: REAL ? null : 2, editPreset: null, pv: 'in', job: null, playing: false, t: REAL ? 0 : .31,
     open: { video: true }, engine: { status: REAL ? 'checking' : 'nvenc', gpu: REAL ? null : 'NVIDIA GeForce RTX' },
@@ -91,17 +93,30 @@
     S.set.theme = t; if (t === 'dark' || t === 'oled') S.set.lastDark = t;
     saveSettings(); applyTheme(true);
   }
-  $('#bTheme').onclick = () => setTheme(root.dataset.theme === 'light' ? S.set.lastDark : 'light');
+  $('#bAppMenu').dataset.menu = '1';
+  $('#bAppMenu').onclick = (e) => openMenu(e.currentTarget, [
+    { label: L.settings + '…', value: 'settings', icon: ICONS.gear },
+    { sep: true },
+    ...[['system', L.system], ['light', L.light], ['dark', L.dark], ['oled', L.oled]].map(([v, t]) => ({ label: `${L.appearance}: ${t}`, value: 'theme:' + v, sel: S.set.theme === v, icon: ICONS.theme })),
+    { sep: true },
+    { label: L.checkUpdates, value: 'update', icon: ICONS.down },
+    { label: L.openPresetsFolder, value: 'open', icon: ICONS.reveal },
+  ], (v) => {
+    if (v === 'settings') openSheet(true);
+    else if (v.startsWith('theme:')) setTheme(v.slice(6));
+    else if (v === 'update') checkUpdate(true);
+    else if (v === 'open') openPresetsFolder();
+  });
 
   /* ---------- idioma ---------- */
   function applyLang() {
     L = window.MEC_I18N[S.set.lang] || window.MEC_I18N.en;
     root.lang = S.set.lang === 'pt' ? 'pt-BR' : 'en';
-    const txt = { lQueue: L.queue, bClearDone: L.clearDone, lDropTitle: L.dropTitle, lDropSub: L.dropSub, lNewUse: L.newUse,
+    const txt = { lQueue: L.queue, bClearDone: L.clearDone, lDropTitle: L.dropTitle, lDropSub: L.dropSub,
       lOriginal: L.original, lResult: L.result, lPresets: L.presets, bManage: L.manage, lModified: L.modified,
-      bSavePreset: L.saveToPreset, lEst: L.estSize, lSettings: L.settings, bDone: L.done, lDropAll: L.dropAll, lPvEmpty: L.pvEmpty };
+      bSavePreset: L.saveToPreset, lEst: L.estSize, bDiscard: L.discard, lSettings: L.settings, bDone: L.done, lDropAll: L.dropAll, lPvEmpty: L.pvEmpty };
     Object.entries(txt).forEach(([id, t]) => { const el = document.getElementById(id); if (el) el.textContent = t; });
-    $('#bMin').title = L.minimize; $('#bMax').title = L.maximize; $('#bClose').title = L.close; $('#bSettings').title = L.settings;
+    $('#bMin').title = L.minimize; $('#bMax').title = L.maximize; $('#bClose').title = L.close;
     $('#bSetAll').title = L.setAll; $('#bFoldPresets').title = L.presetsFold; $('#bAdd').title = L.addVideos;
     renderRenderBtn(); renderUpdateBtn();
   }
@@ -131,8 +146,13 @@
   const durOf = (q) => q.src.durS || secs(q.src.dur);
   function outDims(src, cfg) {
     let { w, h } = src;
+    if ((cfg.rotate || 0) % 180 === 90) [w, h] = [h, w];
     if (cfg.scale === '50') { w /= 2; h /= 2; } else if (cfg.scale === '25') { w /= 4; h /= 4; }
     else if (cfg.scale === '1080') { const s = Math.min(w, h); if (s > 1080) { const k = 1080 / s; w *= k; h *= k; } }
+    else if (cfg.scale === 'custom') {
+      const cw = +cfg.customW || 0, ch = +cfg.customH || 0;
+      if (cw && ch) { w = cw; h = ch; } else if (cw) { h = cw * h / w; w = cw; } else if (ch) { w = ch * w / h; h = ch; }
+    }
     return { w: Math.max(2, Math.round(w / 2) * 2), h: Math.max(2, Math.round(h / 2) * 2) };
   }
   function videoKbps(src, cfg) {
@@ -143,7 +163,7 @@
   const estMB = (q) => (videoKbps(q.src, q.cfg) + (q.cfg.audio.codec === 'copy' ? 256 : q.cfg.audio.kbps)) * durOf(q) / 8 / 1000;
   const warnings = (q) => (q.src.hdr && !q.cfg.hdrToSdr ? [L.hdrMismatch(q.src.hdr)] : []);
   const codecName = (c) => (c === 'h265' ? 'H.265' : 'H.264');
-  const scaleTxt = (s) => (s === 'source' ? L.source : s === '1080' ? '1080p' : s + '%');
+  const scaleTxt = (s) => (s === 'source' ? L.source : s === '1080' ? '1080p' : s === 'custom' ? L.custom : s + '%');
   const pending = () => S.queue.filter((q) => q.status !== 'done');
 
   /* ---------- cena de exemplo (só no modo demonstração) ---------- */
@@ -245,8 +265,6 @@
     const pend = pending();
     $('#tTotal').innerHTML = pend.length ? L.toRender(pend.length, fmtMB(pend.reduce((a, q) => a + estMB(q), 0))) : '';
     $('#tEta').textContent = S.engine.status === 'nvenc' ? 'NVENC' : S.engine.status === 'cpu' ? 'CPU' : '';
-    const dp = presetOf(S.set.defaultPreset) || S.presets[0];
-    $('#bDefPreset').innerHTML = dp ? `<i style="--c:${COLORS[dp.color]}"></i>${esc(dp.name)}${ICONS.chev}` : '';
     $('#bRender').disabled = !S.queue.some((q) => q.status === 'ready' || q.status === 'err') && !S.job;
   }
   function patchItem(q) {
@@ -370,10 +388,9 @@
     setTimeout(() => $('#queue').smoothTo(1e6), 60);
     toast(L.folderAdded('Day 3', add.length));
   }
-  $('#drop').addEventListener('click', (e) => { if (!e.target.closest('#bDefPreset')) addMenu(e.currentTarget.querySelector('svg') || e.currentTarget); });
+  $('#drop').addEventListener('click', (e) => { if (true) addMenu(e.currentTarget.querySelector('svg') || e.currentTarget); });
   $('#bAdd').dataset.menu = '1';
   $('#bAdd').onclick = (e) => addMenu(e.currentTarget);
-  $('#bDefPreset').onclick = (e) => openMenu(e.currentTarget, presetItems(S.set.defaultPreset), (v) => { S.set.defaultPreset = v; saveSettings(); renderQueue(); renderSheetIfOpen(); });
   $('#bSetAll').onclick = (e) => openMenu(e.currentTarget, presetItems(null), (v) => assignAll(v));
 
   function assign(q, pid) { q.preset = pid; q.cfg = clone(presetOf(pid)); }
@@ -391,11 +408,24 @@
       p.audio.codec === 'copy' ? L.audioCopied : `AAC ${p.audio.channels === 'stereo' ? L.stereoL : L.monoL}`].filter(Boolean);
     return `<b>${esc(p.name)}:</b> ${parts.join(' · ')}`;
   }
+  /* lista de presets: soltos + pastas (recolhíveis), só cor, sem ícone */
+  function folderList() {
+    const f = (S.set.folders || []).slice();
+    S.presets.forEach((p) => { if (p.folder && !f.includes(p.folder)) f.push(p.folder); });
+    return f;
+  }
+  const pill = (p, selId) => `<button class="preset ${selId === p.id ? 'sel' : ''}" data-id="${p.id}" style="--c:${COLORS[p.color] || COLORS.blue}"><i class="pdot"></i>${esc(p.name)}</button>`;
   function renderPresets() {
-    const t = target();
-    $('#presets').innerHTML = S.presets.map((p) =>
-      `<button class="preset ${t.preset && t.preset.id === p.id ? 'sel' : ''}" data-id="${p.id}" style="--c:${COLORS[p.color] || COLORS.blue}"><span class="ic">${ICONS[p.icon] || ICONS.camera}</span>${esc(p.name)}</button>`
-    ).join('') + `<button class="preset add" data-menu="1"><span class="ic">${ICONS.plus}</span>${L.newPreset}</button>`;
+    const t = target(); const selId = t.preset && t.preset.id; const closed = S.set.folderClosed || {};
+    const loose = S.presets.filter((p) => !p.folder);
+    let html = `<div class="p-row" data-folder="">${loose.map((p) => pill(p, selId)).join('')}<button class="preset add" data-menu="1"><span class="ic">${ICONS.plus}</span>${L.newPreset}</button></div>`;
+    folderList().forEach((f) => {
+      const list = S.presets.filter((p) => p.folder === f);
+      html += `<div class="pfolder ${closed[f] ? 'closed' : ''}" data-folder="${esc(f)}">
+        <button class="pf-head" data-folder="${esc(f)}">${ICONS.chev}${ICONS.folder}<span class="pf-name">${esc(f)}</span><small>${list.length}</small></button>
+        <div class="pf-body"><div class="pf-in"><div class="p-row" data-folder="${esc(f)}">${list.map((p) => pill(p, selId)).join('') || `<span class="pf-empty">${L.folderEmpty}</span>`}</div></div></div></div>`;
+    });
+    $('#presets').innerHTML = html;
     $('#presetDesc').innerHTML = t.preset ? describe(t.preset) : '';
     $('#presetsFold').classList.toggle('closed', !!S.set.foldPresets);
     $('#bFoldPresets').classList.toggle('closed', !!S.set.foldPresets);
@@ -409,12 +439,12 @@
     if (select && list[0]) editPreset(list[0].id); else renderAll();
   }
   function editPreset(pid, focusName) {
-    S.sel = null; S.editPreset = pid; renderAll(true);
+    S.sel = null; S.editPreset = pid; S.draft = null; renderAll(true);
     if (focusName) setTimeout(() => { const i = $('#presetNameInput'); if (i) { i.focus(); i.select(); } }, 80);
   }
-  function newPreset() {
+  function newPreset(folder) {
     const base = clone(target().preset || S.presets[0]);
-    Object.assign(base, { id: uid(), name: L.newPresetName, color: PALETTE[S.presets.length % PALETTE.length] });
+    Object.assign(base, { id: uid(), name: L.newPresetName, color: PALETTE[S.presets.length % PALETTE.length], folder: folder || '' });
     addPresets([base], false); editPreset(base.id, true);
   }
   function deletePreset(pid) {
@@ -423,49 +453,126 @@
     const fallback = S.presets[0].id;
     S.queue.forEach((q) => { if (q.preset === pid) q.preset = fallback; });
     if (S.set.defaultPreset === pid) { S.set.defaultPreset = fallback; saveSettings(); }
-    if (S.editPreset === pid) S.editPreset = null;
+    if (S.editPreset === pid) { S.editPreset = null; S.draft = null; }
     savePresets(); renderAll(); toast(L.presetDeleted(p.name));
   }
   function importEnc() { if (!REAL) { toast(L.soon); return; } inv('import_enc').then((l) => { if (l.length) { addPresets(l, true); toast(L.presetsImported(l.length)); } }).catch((e) => toast(String(e))); }
   function importJson() { if (!REAL) { toast(L.soon); return; } inv('import_presets').then((l) => { if (l.length) { addPresets(l, true); toast(L.presetsImported(l.length)); } }).catch((e) => toast(String(e))); }
   function exportPresets() { if (!REAL) { toast(L.soon); return; } inv('export_presets', { presets: S.presets }).then((ok) => ok && toast(L.presetsExported)).catch((e) => toast(String(e))); }
+  function openPresetsFolder() { if (!REAL) { toast(L.revealToast); return; } inv('open_data_dir').catch((e) => toast(String(e))); }
   async function restoreDefaults() {
     const defs = REAL ? await inv('default_presets') : clone(demo.presets);
     const have = new Set(S.presets.map((p) => p.id));
     defs.filter((p) => !have.has(p.id)).forEach((p) => S.presets.push(p));
     savePresets(); renderAll(); toast(L.presetsImported(defs.length));
   }
+
+  /* pastas */
+  function newFolder() {
+    const f = folderList(); let n = L.newFolder; let i = 2;
+    while (f.includes(n)) n = `${L.newFolder} ${i++}`;
+    S.set.folders = [...f, n]; saveSettings(); renderPresets();
+    if (S.set.foldPresets) { S.set.foldPresets = false; renderPresets(); }
+    setTimeout(() => renameFolder(n), 60);
+  }
+  function renameFolder(f) {
+    const head = $(`.pf-head[data-folder="${CSS.escape(f)}"]`); if (!head) return;
+    const span = head.querySelector('.pf-name');
+    const input = document.createElement('input'); input.className = 'pf-input'; input.value = f; input.spellcheck = false;
+    span.replaceWith(input); input.focus(); input.select();
+    let done = false;
+    const finish = (ok) => {
+      if (done) return; done = true;
+      const v = input.value.trim();
+      if (ok && v && v !== f && !folderList().includes(v)) {
+        S.set.folders = folderList().map((x) => (x === f ? v : x));
+        S.presets.forEach((p) => { if (p.folder === f) p.folder = v; });
+        if (S.set.folderClosed && S.set.folderClosed[f]) { S.set.folderClosed[v] = true; delete S.set.folderClosed[f]; }
+        saveSettings(); savePresets();
+      }
+      renderPresets();
+    };
+    input.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') finish(true); if (e.key === 'Escape') finish(false); });
+    input.addEventListener('blur', () => finish(true));
+    input.addEventListener('click', (e) => e.stopPropagation());
+  }
+  function deleteFolder(f) {
+    S.presets.forEach((p) => { if (p.folder === f) p.folder = ''; });
+    S.set.folders = folderList().filter((x) => x !== f);
+    saveSettings(); savePresets(); renderPresets();
+  }
+  function moveToFolder(pid, f) {
+    const p = presetOf(pid); if (!p) return;
+    p.folder = f; S.presets = [...S.presets.filter((x) => x !== p), p];
+    if (S.draft && S.draft.id === pid) S.draft.folder = f;
+    savePresets(); renderPresets();
+  }
+  function folderMenu(at, pid) {
+    const cur = presetOf(pid).folder || '';
+    openMenu(at, [{ label: L.noFolder, value: '', sel: !cur, icon: ICONS.x },
+      ...folderList().map((f) => ({ label: f, value: f, sel: cur === f, icon: ICONS.folder })),
+      { sep: true }, { label: L.newFolderMenu, value: '\u0000new', icon: ICONS.plus }],
+      (v) => { if (v === '\u0000new') { const f = folderList(); let n = L.newFolder; let i = 2; while (f.includes(n)) n = `${L.newFolder} ${i++}`; S.set.folders = [...f, n]; saveSettings(); moveToFolder(pid, n); setTimeout(() => renameFolder(n), 60); } else moveToFolder(pid, v); });
+  }
+  function colorMenu(at, pid) {
+    const p = (S.draft && S.draft.id === pid) ? S.draft : presetOf(pid);
+    openMenu(at, PALETTE.map((k) => ({ label: L.colors[k], value: k, color: COLORS[k], sel: p.color === k })), (k) => {
+      if (S.draft && S.draft.id === pid) { S.draft.color = k; renderInspector(); }
+      else { presetOf(pid).color = k; savePresets(); renderAll(); }
+    });
+  }
+
   $('#bManage').dataset.menu = '1';
   $('#bManage').onclick = (e) => openMenu(e.currentTarget, [
     { label: L.newPresetMenu, value: 'new', icon: ICONS.plus },
+    { label: L.newFolderMenu, value: 'folder', icon: ICONS.folder },
+    { sep: true },
     { label: L.importEnc, value: 'enc', icon: ICONS.down },
     { label: L.importJson, value: 'json', icon: ICONS.down },
     { label: L.exportPresets, value: 'export', icon: ICONS.up },
+    { label: L.openPresetsFolder, value: 'open', icon: ICONS.reveal },
     { sep: true },
     { label: L.restoreDefaults, value: 'defaults', icon: ICONS.reset },
-  ], (v) => ({ new: newPreset, enc: importEnc, json: importJson, export: exportPresets, defaults: restoreDefaults }[v]()));
+  ], (v) => ({ new: () => newPreset(), folder: newFolder, enc: importEnc, json: importJson, export: exportPresets, open: openPresetsFolder, defaults: restoreDefaults }[v]()));
 
   const pressPreset = { justDropped: false };
   $('#presets').addEventListener('click', (e) => {
     if (pressPreset.justDropped) { pressPreset.justDropped = false; return; }
+    const fh = e.target.closest('.pf-head');
+    if (fh) { const f = fh.dataset.folder; S.set.folderClosed = Object.assign({}, S.set.folderClosed, { [f]: !(S.set.folderClosed || {})[f] }); saveSettings(); renderPresets(); return; }
     const b = e.target.closest('.preset'); if (!b) return;
     if (b.classList.contains('add')) {
-      openMenu(b, [{ label: L.newPresetMenu, value: 'new', icon: ICONS.plus }, { label: L.importEnc, value: 'enc', icon: ICONS.down }],
-        (v) => (v === 'new' ? newPreset() : importEnc()));
+      openMenu(b, [{ label: L.newPresetMenu, value: 'new', icon: ICONS.plus }, { label: L.newFolderMenu, value: 'folder', icon: ICONS.folder }, { label: L.importEnc, value: 'enc', icon: ICONS.down }],
+        (v) => (v === 'new' ? newPreset() : v === 'folder' ? newFolder() : importEnc()));
       return;
     }
     const q = selItem();
-    if (!q) { S.editPreset = b.dataset.id; renderPresets(); renderInspector(true); return; }
+    if (!q) { if (S.editPreset !== b.dataset.id) { S.editPreset = b.dataset.id; S.draft = null; } renderPresets(); renderInspector(true); return; }
     assign(q, b.dataset.id); renderAll(true);
     const badge = $(`.item[data-id="${q.id}"] .badge`); if (badge) badge.classList.add('bump');
   });
+  $('#presets').addEventListener('dblclick', (e) => { const fh = e.target.closest('.pf-head'); if (fh) renameFolder(fh.dataset.folder); });
   $('#presets').addEventListener('contextmenu', (e) => {
+    const fh = e.target.closest('.pf-head');
+    if (fh) {
+      const f = fh.dataset.folder;
+      openMenu({ x: e.clientX, y: e.clientY }, [
+        { label: L.newPresetHere, value: 'new', icon: ICONS.plus },
+        { label: L.rename, value: 'rename', icon: ICONS.edit },
+        { sep: true },
+        { label: L.deleteFolder, value: 'del', icon: ICONS.trash, danger: true },
+      ], (v) => (v === 'new' ? newPreset(f) : v === 'rename' ? renameFolder(f) : deleteFolder(f)));
+      return;
+    }
     const b = e.target.closest('.preset:not(.add)'); if (!b) return; const pid = b.dataset.id;
-    openMenu({ x: e.clientX, y: e.clientY }, [
+    const at = { x: e.clientX, y: e.clientY };
+    openMenu(at, [
       { label: L.useForAll, value: 'all', icon: ICONS.layers },
       { label: L.setDefault, value: 'def', icon: ICONS.star },
       { label: L.editPreset, value: 'edit', icon: ICONS.edit },
       { label: L.rename, value: 'rename', icon: ICONS.edit },
+      { label: L.changeColor, value: 'color', icon: `<i style="--c:${COLORS[presetOf(pid).color]}" class="menu-dot"></i>` },
+      { label: L.moveToFolder, value: 'folder', icon: ICONS.folder },
       { label: L.duplicate, value: 'dup', icon: ICONS.copy },
       { sep: true },
       { label: L.deletePreset, value: 'del', icon: ICONS.trash, danger: true },
@@ -474,39 +581,65 @@
       if (v === 'def') { S.set.defaultPreset = pid; saveSettings(); renderQueue(); toast(L.defaultSet(presetOf(pid).name)); }
       if (v === 'edit') editPreset(pid);
       if (v === 'rename') editPreset(pid, true);
+      if (v === 'color') setTimeout(() => colorMenu(at, pid), 0);
+      if (v === 'folder') setTimeout(() => folderMenu(at, pid), 0);
       if (v === 'dup') { const c = clone(presetOf(pid)); c.id = uid(); c.name += ' 2'; addPresets([c], true); }
       if (v === 'del') deletePreset(pid);
     });
   });
 
-  /* arrastar um preset até um vídeo (ou até "todos") */
+  /* arrastar um preset: até um vídeo, até "todos", até outro preset (reordenar) ou até uma pasta */
   const ghost = $('#ghost');
   $('#presets').addEventListener('pointerdown', (e) => {
     const b = e.target.closest('.preset:not(.add)'); if (!b || e.button !== 0) return;
     Object.assign(pressPreset, { b, pid: b.dataset.id, x0: e.clientX, y0: e.clientY, on: false });
   });
+  function presetDropTarget(e) {
+    const under = document.elementFromPoint(e.clientX, e.clientY);
+    if (!under) return {};
+    const before = under.closest('.preset:not(.add)');
+    if (before && before.dataset.id !== pressPreset.pid) {
+      const r = before.getBoundingClientRect();
+      return { pill: before, after: e.clientX > r.left + r.width / 2 };
+    }
+    const fh = under.closest('.pf-head') || under.closest('.pfolder');
+    if (fh) return { folder: fh.dataset.folder };
+    const row = under.closest('.p-row');
+    if (row) return { row, folder: row.dataset.folder };
+    return { item: under.closest('.item:not(.is-done)'), all: under.closest('#allDrop') };
+  }
   addEventListener('pointermove', (e) => {
     const P = pressPreset; if (!P.b) return;
     if (!P.on) {
-      if (Math.hypot(e.clientX - P.x0, e.clientY - P.y0) < 6 || !S.queue.length) return;
+      if (Math.hypot(e.clientX - P.x0, e.clientY - P.y0) < 6) return;
       P.on = true; const p = presetOf(P.pid);
       ghost.innerHTML = `<i style="--c:${COLORS[p.color]}"></i>${esc(p.name)}`; ghost.classList.add('show');
-      root.classList.add('dragging-preset'); closeMenu();
+      root.classList.add('dragging-preset'); P.b.classList.add('dragging'); closeMenu();
     }
     ghost.style.transform = `translate(${e.clientX + 12}px,${e.clientY + 10}px)`;
-    const under = document.elementFromPoint(e.clientX, e.clientY);
-    const item = under && under.closest('.item:not(.is-done)'); const all = under && under.closest('#allDrop');
-    $$('.drop-hover').forEach((el) => el !== item && el !== all && el.classList.remove('drop-hover'));
-    if (item) item.classList.add('drop-hover'); if (all) all.classList.add('drop-hover');
+    const t = presetDropTarget(e);
+    $$('.drop-hover,.drop-before,.drop-after').forEach((el) => el.classList.remove('drop-hover', 'drop-before', 'drop-after'));
+    if (t.pill) t.pill.classList.add(t.after ? 'drop-after' : 'drop-before');
+    else if (t.folder !== undefined) { const el = t.folder ? $(`.pfolder[data-folder="${CSS.escape(t.folder)}"]`) : t.row; if (el) el.classList.add('drop-hover'); }
+    else { if (t.item) t.item.classList.add('drop-hover'); if (t.all) t.all.classList.add('drop-hover'); }
   });
   addEventListener('pointerup', (e) => {
     const P = pressPreset; if (!P.b) return;
     if (P.on) {
-      const under = document.elementFromPoint(e.clientX, e.clientY);
-      const item = under && under.closest('.item:not(.is-done)'); const all = under && under.closest('#allDrop');
-      ghost.classList.remove('show'); root.classList.remove('dragging-preset'); $$('.drop-hover').forEach((el) => el.classList.remove('drop-hover'));
-      if (all) assignAll(P.pid);
-      else if (item) { const q = itemOf(+item.dataset.id); assign(q, P.pid); renderAll(); const bd = $(`.item[data-id="${q.id}"] .badge`); if (bd) bd.classList.add('bump'); toast(L.assigned(presetOf(P.pid).name, 1)); }
+      const t = presetDropTarget(e);
+      ghost.classList.remove('show'); root.classList.remove('dragging-preset'); P.b.classList.remove('dragging');
+      $$('.drop-hover,.drop-before,.drop-after').forEach((el) => el.classList.remove('drop-hover', 'drop-before', 'drop-after'));
+      const p = presetOf(P.pid);
+      if (t.pill) {
+        const target = presetOf(t.pill.dataset.id);
+        const list = S.presets.filter((x) => x !== p);
+        let idx = list.indexOf(target) + (t.after ? 1 : 0);
+        p.folder = target.folder || ''; list.splice(idx, 0, p); S.presets = list;
+        if (S.draft && S.draft.id === p.id) S.draft.folder = p.folder;
+        savePresets(); renderPresets();
+      } else if (t.folder !== undefined) moveToFolder(p.id, t.folder || '');
+      else if (t.all) assignAll(P.pid);
+      else if (t.item) { const q = itemOf(+t.item.dataset.id); assign(q, P.pid); renderAll(); const bd = $(`.item[data-id="${q.id}"] .badge`); if (bd) bd.classList.add('bump'); toast(L.assigned(p.name, 1)); }
       P.justDropped = true; setTimeout(() => { P.justDropped = false; }, 0);
     }
     P.b = null; P.on = false;
@@ -545,24 +678,26 @@
       c.push(chip(`${o.w}×${o.h}`), chip(`${codecName(q.cfg.codec)} ${q.cfg.codec === 'h264' ? 8 : q.cfg.bits}-bit · ${S.engine.status === 'cpu' ? 'CPU' : 'NVENC'}`),
         q.cfg.fps.conform ? chip(`${fpsTxt(q.cfg.fps.value)} fps ${L.constant}`, COLORS.green) : chip(`${fpsTxt(q.src.fps)} fps`));
       if (q.src.hdr) c.push(q.cfg.hdrToSdr ? chip('Rec. 709', COLORS.green) : chip(L.hdrKept, COLORS.orange));
+      if (q.cfg.rotate) c.push(chip(`${q.cfg.rotate}°`, COLORS.teal, ICONS.rot));
       c.push(chip(`≈ ${fmtMB(estMB(q))}`));
     }
     ch.innerHTML = c.join('');
     $('#pvMeta').innerHTML = c.join('<span class="dot">·</span>');
     if (anim) [ch, $('#pvMeta')].forEach((el) => { el.classList.remove('swap'); void el.offsetWidth; el.classList.add('swap'); });
-    fr.style.aspectRatio = `${q.src.w}/${q.src.h}`;
-    fr.style.height = vertical ? '100%' : 'auto'; fr.style.width = vertical ? 'auto' : '100%';
+    const ar = out ? o : { w: q.src.w, h: q.src.h }; const tall = ar.h > ar.w;
+    fr.style.aspectRatio = `${ar.w}/${ar.h}`;
+    fr.style.height = tall ? '100%' : 'auto'; fr.style.width = tall ? 'auto' : '100%';
     const keepImg = REAL && $('#pvImg') && fr.dataset.id === String(q.id);
     fr.className = 'frame' + (out ? ' out' : '');
     fr.dataset.id = q.id;
-    const rot = q.src.rot ? `<div class="rot-note">${ICONS.rot}${out ? L.rotOut(q.src.rot) : L.rotIn(q.src.rot)}</div>` : '';
+    const rot = '';
     if (REAL) {
       if (!keepImg) fr.innerHTML = `${q.thumb ? `<img id="pvImg" src="${q.thumb}" alt="">` : '<img id="pvImg" alt="">'}<i class="pv-spin"></i>${rot}`;
       else { const n = fr.querySelector('.rot-note'); if (n) n.outerHTML = rot || ''; else if (rot) fr.insertAdjacentHTML('beforeend', rot); }
       requestPreview(q, out);
     } else {
       const washed = q.src.hdr && (!out || !q.cfg.hdrToSdr);
-      fr.innerHTML = scene(q.hue, vertical)
+      fr.innerHTML = scene(q.hue, out ? tall : vertical)
         + `<div class="grade" style="${washed ? 'opacity:1;background:rgba(170,170,185,.16);mix-blend-mode:screen' : 'opacity:0'}"></div>` + rot;
       fr.querySelector('svg.scene').style.filter = washed ? 'saturate(.6) contrast(.82) brightness(1.04)' : 'none';
     }
@@ -652,7 +787,9 @@
     const q = selItem();
     if (q) return { q, cfg: q.cfg, src: q.src, preset: presetOf(q.preset), isPreset: false };
     const p = presetOf(S.editPreset) || presetOf(S.set.defaultPreset) || S.presets[0];
-    return { q: null, cfg: p, src: null, preset: p, isPreset: true };
+    if (!p) return { q: null, cfg: null, src: null, preset: null, isPreset: true };
+    if (!S.draft || S.draft.id !== p.id) S.draft = clone(p);
+    return { q: null, cfg: S.draft, src: null, preset: p, isPreset: true, dirty: !same(S.draft, p) };
   }
   const sw = (key, on, red) => `<button class="switch ${on ? 'on' : ''} ${red ? 'red' : ''}" data-k="${key}"></button>`;
   const segH = (key, val, opts) => `<div class="seg" data-k="${key}"><div class="pill"></div>${opts.map(([v, t, dis]) => `<button data-v="${v}" class="${String(v) === String(val) ? 'active' : ''}" ${dis ? 'disabled' : ''}>${t}</button>`).join('')}</div>`;
@@ -666,37 +803,40 @@
     const T = target(); const el = $('#inspIn');
     if (!T.cfg) { el.innerHTML = ''; return; }
     const c = T.cfg; const src = T.src;
-    const mod = !T.isPreset && T.preset && !same(c, T.preset);
+    const mod = T.isPreset ? T.dirty : T.preset && !same(c, T.preset);
     $('#inspFor').innerHTML = T.isPreset
-      ? `<span class="dotc" style="--c:${COLORS[T.preset.color] || COLORS.blue}"></span><input id="presetNameInput" class="name-input" value="${esc(T.preset.name)}" spellcheck="false" aria-label="${L.presetName}">`
+      ? `<button class="dotc color-btn" id="bPresetColor" data-menu="1" title="${L.changeColor}" style="--c:${COLORS[c.color] || COLORS.blue}"></button><input id="presetNameInput" class="name-input" value="${esc(c.name)}" spellcheck="false" aria-label="${L.presetName}">`
       : L.settingsFor;
     $('#inspFor').classList.toggle('editing', T.isPreset);
     $('#modified').classList.toggle('show', !!mod); $('#bSavePreset').classList.toggle('show', !!mod);
+    $('#bSavePreset').textContent = T.isPreset ? L.saveChanges : L.saveToPreset;
+    $('#bDiscard').classList.toggle('show', !!(mod && T.isPreset));
     const a = c.audio; const o = c.output; const h264 = c.codec === 'h264';
     const dims = src ? outDims(src, c) : null;
-    const resHint = src ? `<div class="hint">${L.outputRes}: <b>${dims.w} × ${dims.h}</b></div>` : c.scale === '1080' ? `<div class="hint">${L.scale1080Hint}</div>` : '';
+    const resHint = !src && c.scale === '1080' ? `<div class="hint">${L.scale1080Hint}</div>` : '';
+    const rotTxt = c.rotate ? ` · ↻ ${c.rotate}°` : '';
     el.innerHTML = (T.isPreset ? `<div class="hint top-hint">${L.presetHint}</div>` : '')
-      + sec('video', L.video, `${codecName(c.codec)} · ${h264 ? 8 : c.bits}-bit · ${scaleTxt(c.scale)} · ${c.bitrate.mode === 'manual' ? fmtK(c.bitrate.kbps) : c.bitrate.mode === 'source' ? L.source : L.auto}`,
+      + sec('video', L.video, `${codecName(c.codec)} · ${h264 ? 8 : c.bits}-bit · ${scaleTxt(c.scale)}${rotTxt} · ${c.fps.conform ? fpsTxt(c.fps.value) + ' CFR' : c.bitrate.mode === 'manual' ? fmtK(c.bitrate.kbps) : c.bitrate.mode === 'source' ? L.source : L.auto}${c.hdrToSdr ? ' · 709' : ''}`,
         `<div class="group">
           ${row(L.codec, segH('codec', c.codec, [['h264', 'H.264'], ['h265', 'H.265']]))}
           ${row(L.bitDepth, segH('bits', h264 ? 8 : c.bits, [[8, '8-bit'], [10, '10-bit', h264]]))}
-          ${row(L.resolution, segH('scale', c.scale, [['source', L.source], ['1080', '1080p'], ['50', '50%'], ['25', '25%']]))}
+          ${row(`${L.resolution}<small class="res-out">${resLabel(c, src)}</small>`, '', '', 'res-row')}
+          <div class="row res-seg">${segH('scale', c.scale, [['source', L.source], ['1080', '1080p'], ['50', '50%'], ['25', '25%'], ['custom', L.custom]])}</div>
+          <div class="collapse ${c.scale === 'custom' ? '' : 'closed'}" style="max-height:60px">
+            ${row(L.size, `<div class="field"><input class="tnum" data-k="customW" value="${c.customW || ''}" placeholder="auto"><span>W</span></div><span class="times">×</span><div class="field"><input class="tnum" data-k="customH" value="${c.customH || ''}" placeholder="auto"><span>H</span></div>`)}
+          </div>
+          ${row(L.rotate, segH('rotate', c.rotate || 0, [[0, '0°'], [90, '↻ 90°'], [180, '180°'], [270, '↺ 90°']]), L.rotateSub)}
           ${row(L.bitrate, segH('bitrate.mode', c.bitrate.mode, [['auto', L.auto], ['source', L.source], ['manual', L.manual]]))}
           <div class="collapse ${c.bitrate.mode === 'manual' ? '' : 'closed'}" style="max-height:60px">
             ${row(L.value, `<div class="field"><input class="tnum" data-k="bitrate.kbps" value="${num(c.bitrate.kbps, 0)}"><span>kb/s</span></div>${segH('bitrate.rc', c.bitrate.rc, [['cbr', 'CBR'], ['vbr', 'VBR']])}`)}
           </div>
           ${row(L.maxQuality, sw('maxQuality', c.maxQuality), L.maxQualitySub)}
-        </div>${resHint}${h264 && c.bits === 10 ? `<div class="hint">${L.h264no10}</div>` : ''}${c.bitrate.mode === 'source' && src ? `<div class="hint">${L.sameBitrate(fmtK(src.kbps))}</div>` : ''}`)
-      + sec('fps', L.frameRate, c.fps.conform ? `${fpsTxt(c.fps.value)} CFR` : L.source,
-        `<div class="group">
           ${row(L.cfr, sw('fps.conform', c.fps.conform), L.cfrSub)}
           <div class="collapse ${c.fps.conform ? '' : 'closed'}" style="max-height:60px">
             ${row(L.fps, segH('fps.value', c.fps.value, [['23.976', fpsTxt('23.976')], ['29.97', fpsTxt('29.97')], ['59.94', fpsTxt('59.94')], ['60', '60']]))}
-          </div></div>`)
-      + sec('color', L.color, c.hdrToSdr ? 'HDR → Rec. 709' : '—',
-        `<div class="group">${row(L.hdr, sw('hdrToSdr', c.hdrToSdr), L.hdrSub)}</div>
-         ${src && src.hdr && !c.hdrToSdr ? `<div class="hint warn-t">${L.hdrWarn}</div>` : ''}`,
-        src && src.hdr ? `<span class="pill-tag" style="--c:${COLORS.yellow}">${L.detected(src.hdr)}</span>` : '')
+          </div>
+          ${row(L.hdr + (src && src.hdr ? ` <span class="pill-tag" style="--c:${COLORS.yellow}">${L.detected(src.hdr)}</span>` : ''), sw('hdrToSdr', c.hdrToSdr), L.hdrSub)}
+        </div>${resHint}${h264 && c.bits === 10 ? `<div class="hint">${L.h264no10}</div>` : ''}${c.bitrate.mode === 'source' && src ? `<div class="hint">${L.sameBitrate(fmtK(src.kbps))}</div>` : ''}${src && src.hdr && !c.hdrToSdr ? `<div class="hint warn-t">${L.hdrWarn}</div>` : ''}`)
       + sec('audio', L.audio, a.codec === 'copy' ? L.copy : `AAC · ${a.channels === 'stereo' ? L.stereo : L.mono}`,
         `<div class="group">
           ${row(L.codec, segH('audio.codec', a.codec, [['aac', 'AAC'], ['copy', L.copy]]))}
@@ -704,26 +844,38 @@
           ${a.codec === 'aac' ? row(L.tracks, `<div class="val">${a.channels === 'stereo' ? trackBtn(0, a.tracks[0]) + trackBtn(1, a.tracks[1]) : trackBtn(0, a.tracks[0])}</div>`, a.channels === 'stereo' ? L.tracksStereo : L.tracksMono) : ''}
           ${a.codec === 'aac' ? row(L.quality, `<span class="val tnum">${a.kbps} kb/s · 48 kHz</span>`) : ''}
         </div>`)
-      + sec('output', L.output, [o.suffix.on ? o.suffix.text : null, o.subfolder.on ? o.subfolder.text + '\\' : null, o.deleteSource ? L.deleteSrc : null].filter(Boolean).map(esc).join(' · ') || L.sameFolder,
-        `<div class="group">
-          ${row(L.suffix, `<div class="field ${o.suffix.on ? '' : 'off'}"><input data-k="output.suffix.text" value="${esc(o.suffix.text)}" class="txt" spellcheck="false"></div>${sw('output.suffix.on', o.suffix.on)}`)}
-          ${row(L.subfolder, `<div class="field ${o.subfolder.on ? '' : 'off'}"><input data-k="output.subfolder.text" value="${esc(o.subfolder.text)}" class="txt" spellcheck="false"></div>${sw('output.subfolder.on', o.subfolder.on)}`)}
-          ${row(L.deleteSrc, sw('output.deleteSource', o.deleteSource, true), L.deleteSrcSub, o.deleteSource ? 'danger' : '')}
-          ${row(L.dest, `<span class="val">${L.sameFolder}</span>`)}
-        </div><div class="hint">${L.savesAs(esc(outName(T.q ? T.q.file : 'IMG_0001.MOV', c)))}</div>`)
       + sec('adv', L.advanced, [c.avSync ? L.avSync : null, c.metadata ? L.metadata : null].filter(Boolean).join(' · ') || '—',
         `<div class="group">
           ${row(L.avSync, sw('avSync', c.avSync), L.avSyncSub)}
           ${row(L.metadata, sw('metadata', c.metadata), L.metadataSub)}
         </div>`);
+    renderOutput(T);
     $$('.seg', el).forEach((s) => seg(s, (v) => set(s.dataset.k, v)));
     $('#estBox').style.visibility = T.q ? '' : 'hidden';
     if (T.q) $('#est').textContent = '≈ ' + fmtMB(estMB(T.q));
     $('#bApplyAll').textContent = T.isPreset ? L.setForAllBtn : L.applyAll;
     $('#bApplyAll').disabled = !pending().length;
     const ni = $('#presetNameInput');
-    if (ni) ni.onchange = () => { const v = ni.value.trim(); if (v) { T.preset.name = v; savePresets(); renderQueue(); renderPresets(); } };
+    if (ni) ni.oninput = () => { const v = ni.value.trim(); if (v) { T.cfg.name = v; const d = !same(T.cfg, T.preset); $('#modified').classList.toggle('show', d); $('#bSavePreset').classList.toggle('show', d); $('#bDiscard').classList.toggle('show', d); } };
+    const cb = $('#bPresetColor'); if (cb) cb.onclick = (e) => colorMenu(e.currentTarget, T.preset.id);
     if (anim) { el.classList.remove('swap'); void el.offsetWidth; el.classList.add('swap'); }
+  }
+  /* Saída: fica embaixo da fila, perto do botão de renderizar */
+  function renderOutput(T) {
+    const c = T.cfg; const o = c.output; const box = $('#outPanel');
+    const sum = [o.suffix.on ? o.suffix.text : null, o.subfolder.on ? o.subfolder.text + '\\' : null].filter(Boolean).map(esc).join(' · ') || L.sameFolder;
+    box.innerHTML = `<div class="out-head"><span>${L.output}</span><small title="${esc(outName(T.q ? T.q.file : 'IMG_0001.MOV', c))}">${sum}</small></div>
+      <div class="group">
+        ${row(L.suffix, `<div class="field ${o.suffix.on ? '' : 'off'}"><input data-k="output.suffix.text" value="${esc(o.suffix.text)}" class="txt" spellcheck="false"></div>${sw('output.suffix.on', o.suffix.on)}`)}
+        ${row(L.subfolder, `<div class="field ${o.subfolder.on ? '' : 'off'}"><input data-k="output.subfolder.text" value="${esc(o.subfolder.text)}" class="txt" spellcheck="false"></div>${sw('output.subfolder.on', o.subfolder.on)}`)}
+        ${row(L.deleteSrc, sw('output.deleteSource', o.deleteSource, true), '', o.deleteSource ? 'danger' : '')}
+      </div>`;
+  }
+  // texto da resolução final ao lado de "Resolução"
+  function resLabel(c, src) {
+    if (src) { const d = outDims(src, c); return `${d.w} × ${d.h}`; }
+    if (c.scale === 'custom') return c.customW || c.customH ? `${c.customW || 'auto'} × ${c.customH || 'auto'}` : L.source;
+    return { source: L.sameAsSource, '1080': L.shortSide1080, '50': L.halfOfSource, '25': L.quarterOfSource }[c.scale] || '';
   }
   function outName(file, cfg) {
     const c = cfg.output; const base = file.replace(/\.[^.]+$/, '');
@@ -732,15 +884,12 @@
   }
   function set(key, v) {
     const T = target();
-    // ao editar o preset, os vídeos que ainda usam o preset sem mudanças acompanham
-    const followers = T.isPreset ? S.queue.filter((q) => q.status !== 'done' && q.status !== 'running' && q.preset === T.preset.id && same(q.cfg, T.preset)) : [];
     const ks = key.split('.'); let o = T.cfg; ks.slice(0, -1).forEach((k) => { o = o[k]; });
     const last = ks[ks.length - 1];
     o[last] = typeof o[last] === 'boolean' ? !o[last] : typeof o[last] === 'number' ? Number(String(v).replace(/\D/g, '')) || 0 : v;
+    if (key === 'customW' || key === 'customH') o[last] = Math.min(16384, Number(String(v).replace(/\D/g, '')) || 0);
     if (key === 'audio.channels') T.cfg.audio.tracks = v === 'mono' ? [1, 1] : [1, 2];
     if (key === 'codec' && v === 'h264') T.cfg.bits = 8;
-    followers.forEach((q) => { q.cfg = clone(T.preset); });
-    if (T.isPreset) savePresets();
     renderQueue(); renderPresets(); renderInspector(); renderPreview();
   }
   $('#inspIn').addEventListener('click', (e) => {
@@ -751,10 +900,23 @@
     const t = e.target.closest('[data-track]');
     if (t) { const T = target(); const i = +t.dataset.track; const n = T.src ? T.src.audio : 2;
       openMenu(t, [1, 2, 3, 4, 5, 6, 7, 8].slice(0, Math.max(2, n)).map((k) => ({ label: L.track(k), value: k, sel: T.cfg.audio.tracks[i] === k })),
-        (k) => { T.cfg.audio.tracks[i] = k; if (T.isPreset) savePresets(); renderAll(); }); }
+        (k) => { T.cfg.audio.tracks[i] = k; renderAll(); }); }
   });
   $('#inspIn').addEventListener('change', (e) => { const i = e.target.closest('input[data-k]'); if (i) set(i.dataset.k, i.value); });
-  $('#bSavePreset').onclick = () => { const q = selItem(); const p = presetOf(q.preset); Object.assign(p, clone(q.cfg), { id: p.id, name: p.name, icon: p.icon, color: p.color }); savePresets(); renderAll(); toast(L.presetSaved(p.name)); };
+  $('#outPanel').addEventListener('click', (e) => { const s = e.target.closest('.switch'); if (s) { s.classList.toggle('on'); setTimeout(() => set(s.dataset.k), 180); } });
+  $('#outPanel').addEventListener('change', (e) => { const i = e.target.closest('input[data-k]'); if (i) set(i.dataset.k, i.value); });
+  // Salvar: do vídeo para o preset, ou o rascunho do preset (só grava quando clica)
+  $('#bSavePreset').onclick = () => {
+    const T = target(); const p = T.preset; if (!p) return;
+    // os vídeos que ainda usam o preset sem mudanças acompanham
+    const followers = S.queue.filter((q) => q.status !== 'done' && q.status !== 'running' && q.preset === p.id && same(q.cfg, p));
+    if (T.isPreset) Object.assign(p, clone(S.draft));
+    else Object.assign(p, clone(T.q.cfg), { id: p.id, name: p.name, icon: p.icon, color: p.color, folder: p.folder });
+    followers.forEach((q) => { q.cfg = clone(p); });
+    if (T.isPreset) S.draft = clone(p);
+    savePresets(); renderAll(); toast(L.presetSaved(p.name), true);
+  };
+  $('#bDiscard').onclick = () => { S.draft = null; renderAll(); };
   $('#bApplyAll').onclick = () => {
     const T = target();
     if (T.isPreset) { assignAll(T.preset.id); return; }
@@ -804,8 +966,7 @@
     if (s.dataset.k === 'sound' && S.set.sound) playDone();
   });
   const openSheet = (on) => { if (on) renderSheet(); root.classList.toggle('sheet-open', on); };
-  $('#bSettings').onclick = () => openSheet(true);
-  $('#bDone').onclick = () => openSheet(false);
+    $('#bDone').onclick = () => openSheet(false);
   $('#sheetBg').onclick = () => openSheet(false);
   addEventListener('keydown', (e) => {
     if (e.key === 'Escape') { openSheet(false); closeMenu(); }

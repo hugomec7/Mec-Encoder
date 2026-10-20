@@ -53,7 +53,8 @@ fn iphone_to_cfr_and_proxy() {
 
     let cpu = Encoder::Cpu { preset: "ultrafast".into() };
     // Bruto do iPhone → 59,94 constante, estéreo com as duas faixas.
-    let p = Preset::defaults().into_iter().find(|p| p.id == "iphone-4k60").unwrap();
+    let mut p = Preset::defaults().into_iter().find(|p| p.id == "iphone-4k60").unwrap();
+    p.audio.codec = "aac".into(); p.audio.tracks = vec![1, 2]; // dois microfones → estéreo
     let out = output_path(&src, &p);
     let plan = build(&info, &p, &cpu, &out);
     run(&ff, &plan.args);
@@ -88,8 +89,7 @@ fn hlg_to_rec709() {
     let src = make_iphone_like(&ff, &d, true);
     let info = probe(&fp, &src).unwrap();
     assert_eq!(info.video.as_ref().unwrap().hdr, "HLG");
-    let mut p = Preset::defaults().into_iter().find(|p| p.id == "iphone-4k60-hdr").unwrap();
-    p.bits = 10;
+    let p = Preset::defaults().into_iter().find(|p| p.id == "iphone-4k60-hdr").unwrap();
     let out = d.join("hdr_out.mp4");
     run(&ff, &build(&info, &p, &Encoder::Cpu { preset: "ultrafast".into() }, &out).args);
     let o = probe(&fp, &out).unwrap();

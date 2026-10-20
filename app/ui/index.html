@@ -13,20 +13,14 @@
   <!-- barra de título (controles no padrão do Windows, à direita) -->
   <div class="titlebar">
     <div class="drag" data-tauri-drag-region></div>
-    <div class="tb-title">
+    <button class="tb-title" id="bAppMenu">
       <span class="logo"><svg viewBox="0 0 10 10" fill="currentColor"><path d="M2.5 1.6v6.8L8.6 5z"/></svg></span>
       Mec Encoder
-    </div>
+      <svg class="chev" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 4.5L6 7l2.5-2.5"/></svg>
+    </button>
     <div class="tb-actions">
       <button class="update-pill" id="bUpdate" hidden><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.5v8M4.5 7L8 10.5 11.5 7M3 13.5h10"/></svg><span></span></button>
-      <button class="icon-btn theme-btn" id="bTheme">
-        <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7z"/></svg>
-        <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4L6 18M18 6l1.4-1.4"/></svg>
-      </button>
-      <button class="icon-btn" id="bSettings">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-      </button>
-      <span class="tb-sep"></span>
+<span class="tb-sep"></span>
       <div class="win">
         <button class="w-min" id="bMin"><svg viewBox="0 0 12 12"><path d="M2.5 6h7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg></button>
         <button class="w-max" id="bMax"><svg viewBox="0 0 12 12"><rect x="2.5" y="2.5" width="7" height="7" rx="2" fill="none" stroke="currentColor" stroke-width="1.3"/></svg></button>
@@ -48,8 +42,9 @@
       <div class="queue smooth" id="queue"><div class="sc" id="qList"></div></div>
       <div class="drop" id="drop">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2h7.5A2.5 2.5 0 0 1 21 9.5v8a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z"/><path d="M12 10.5v6M9.5 13l2.5-2.5 2.5 2.5"/></svg>
-        <div class="drop-t"><b id="lDropTitle"></b><span id="lDropSub"></span><span class="def-line"><span id="lNewUse"></span><button class="def-preset" id="bDefPreset" data-menu="1"></button></span></div>
+        <div class="drop-t"><b id="lDropTitle"></b><span id="lDropSub"></span></div>
       </div>
+      <div class="out-panel" id="outPanel"></div>
       <div class="queue-foot">
         <div class="totals"><span id="tTotal"></span><span id="tEta">NVENC · RTX</span></div>
         <button class="btn" id="bRender"><i class="fillbar" id="renderFill"></i>
@@ -94,7 +89,7 @@
         <div class="presets" id="presets"></div>
         <div class="preset-desc" id="presetDesc"></div>
       </div></div>
-      <div class="insp-title"><h3 id="inspFor"></h3><span class="modified" id="modified"><i></i><span id="lModified"></span></span><button class="link" id="bSavePreset"></button></div>
+      <div class="insp-title"><h3 id="inspFor"></h3><span class="modified" id="modified"><i></i><span id="lModified"></span></span><button class="link discard" id="bDiscard"></button><button class="link" id="bSavePreset"></button></div>
       <div class="inspector-body smooth" id="insp"><div class="sc" id="inspIn"></div></div>
       <div class="insp-foot">
         <div class="est" id="estBox"><small id="lEst"></small><b class="tnum" id="est"></b></div>

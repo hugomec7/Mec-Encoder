@@ -63,6 +63,13 @@ pub struct Preset {
     pub container: String,
     /// "source", "1080" (lado menor = 1080), "50" ou "25" (%).
     pub scale: String,
+    /// Giro extra no sentido horário: 0, 90, 180 ou 270.
+    pub rotate: u32,
+    /// Resolução personalizada (scale = "custom"). 0 = calcula pela proporção.
+    pub custom_w: u32,
+    pub custom_h: u32,
+    /// Pasta onde o preset aparece na lista ("" = sem pasta).
+    pub folder: String,
     pub bitrate: Bitrate,
     pub max_quality: bool,
     pub fps: Fps,
@@ -94,7 +101,7 @@ impl Default for Preset {
     fn default() -> Self {
         Self {
             id: "preset".into(), name: "Preset".into(), icon: "phone".into(), color: "blue".into(),
-            codec: "h265".into(), bits: 8, container: "mp4".into(), scale: "source".into(),
+            codec: "h265".into(), bits: 8, container: "mp4".into(), scale: "source".into(), rotate: 0, custom_w: 0, custom_h: 0, folder: String::new(),
             bitrate: Bitrate::default(), max_quality: false, fps: Fps::default(), hdr_to_sdr: false,
             audio: Audio::default(), output: Output::default(), av_sync: true, metadata: true,
         }
@@ -102,36 +109,29 @@ impl Default for Preset {
 }
 
 impl Preset {
-    fn manual(kbps: u32, rc: &str) -> Bitrate { Bitrate { mode: "manual".into(), kbps, rc: rc.into() } }
 
-    /// Presets que vêm com o app (os do Hugo, recriados a partir dos .enc do Shutter Encoder).
+    /// Presets que vêm com o app.
     pub fn defaults() -> Vec<Preset> {
-        let iphone = Preset {
-            id: "iphone-4k60".into(), name: "iPhone 4K60".into(), icon: "phone".into(), color: "blue".into(),
-            bitrate: Self::manual(50_000, "cbr"), max_quality: true, fps: Fps { conform: true, value: "59.94".into() },
-            output: Output { delete_source: true, ..Output::default() },
-            ..Preset::default()
-        };
-        let proxy = Preset {
-            id: "proxy".into(), name: "Proxy".into(), icon: "proxy".into(), color: "green".into(), scale: "25".into(),
-            metadata: false,
-            output: Output { suffix: Toggle { on: true, text: "_proxy".into() }, subfolder: Toggle { on: true, text: "proxy".into() }, delete_source: false },
+        let raw = Preset {
+            id: "iphone-4k60".into(), name: "RAW".into(), icon: String::new(), color: "blue".into(),
+            bitrate: Bitrate { mode: "source".into(), kbps: 50_000, rc: "cbr".into() }, max_quality: true,
+            fps: Fps { conform: true, value: "59.94".into() },
+            audio: Audio { codec: "copy".into(), ..Audio::default() },
             ..Preset::default()
         };
         vec![
-            iphone.clone(),
-            Preset { id: "iphone-4k60-hdr".into(), name: "iPhone 4K60 HDR".into(), icon: "hdr".into(), color: "orange".into(), hdr_to_sdr: true, ..iphone.clone() },
-            proxy.clone(),
-            Preset { id: "proxy-fx30".into(), name: "Proxy FX30".into(), icon: "camera".into(), color: "purple".into(),
-                audio: Audio { codec: "copy".into(), ..Audio::default() }, ..proxy },
-            Preset { id: "iphone-1080p60".into(), name: "iPhone 1080p60".into(), color: "teal".into(), scale: "1080".into(),
-                bitrate: Self::manual(15_000, "cbr"), ..iphone.clone() },
-            Preset { id: "iphone-1080p60-hdr".into(), name: "iPhone 1080p60 HDR".into(), icon: "hdr".into(), color: "yellow".into(),
-                scale: "1080".into(), hdr_to_sdr: true, bitrate: Self::manual(15_000, "cbr"), ..iphone.clone() },
-            Preset { id: "meta-15".into(), name: "Meta 15 Mb/s HDR".into(), icon: "meta".into(), color: "pink".into(), hdr_to_sdr: true,
-                bitrate: Self::manual(15_000, "cbr"), fps: Fps { conform: true, value: "29.97".into() },
-                audio: Audio { channels: "mono".into(), tracks: vec![1, 1], ..Audio::default() },
-                output: Output::default(), ..iphone },
+            raw.clone(),
+            Preset { id: "iphone-4k60-hdr".into(), name: "RAW HDR".into(), color: "orange".into(), bits: 10, hdr_to_sdr: true,
+                output: Output { delete_source: true, ..Output::default() }, ..raw.clone() },
+            Preset { id: "proxy".into(), name: "Proxy".into(), color: "green".into(), scale: "25".into(),
+                bitrate: Bitrate { mode: "auto".into(), kbps: 0, rc: "vbr".into() }, max_quality: false,
+                fps: Fps { conform: false, value: "59.94".into() },
+                output: Output { suffix: Toggle { on: true, text: "_proxy".into() }, subfolder: Toggle { on: true, text: "proxy".into() }, delete_source: false },
+                ..raw.clone() },
+            Preset { id: "meta-15".into(), name: "Meta HDR".into(), color: "pink".into(), hdr_to_sdr: true,
+                bitrate: Bitrate { mode: "source".into(), kbps: 15_000, rc: "cbr".into() }, fps: Fps { conform: true, value: "29.97".into() },
+                audio: Audio { codec: "copy".into(), channels: "mono".into(), tracks: vec![1, 1], kbps: 256 },
+                output: Output { delete_source: true, ..Output::default() }, ..raw },
         ]
     }
 

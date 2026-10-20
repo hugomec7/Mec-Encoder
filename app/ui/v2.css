@@ -217,3 +217,68 @@
 .update-pill[hidden]{display:none}
 .state.err{cursor:help}
 @keyframes pillIn{from{opacity:0;transform:scale(.7)}to{opacity:1;transform:none}}
+
+/* Saída embaixo da fila; a área de arrastar só aparece com a fila vazia */
+#queueCard:not(.empty) .drop{display:none}
+.out-panel{flex:none;margin:0 8px;padding:6px 0 2px;border-top:1px solid var(--sep)}
+.out-head{display:flex;align-items:baseline;gap:10px;padding:4px 8px 2px;font-size:12.5px;font-weight:650}
+.out-head small{flex:1;min-width:0;text-align:right;color:var(--text-3);font-size:11px;font-weight:450;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.out-panel .group{background:none;border:0;border-radius:0}
+.out-panel .row{min-height:36px;padding:3px 8px;gap:8px}
+.out-panel .row+.row::before{left:8px;right:8px}
+.out-panel .lbl{font-size:12.5px}
+.out-panel .field{height:26px}
+.out-panel .field input.txt{width:84px}
+.out-panel .switch{transform:scale(.9);transform-origin:right center}
+
+/* ---------- menu do app no título ---------- */
+.tb-title{pointer-events:auto;position:relative;z-index:1;border-radius:9px;padding:5px 9px 5px 6px;margin-left:-8px;color:var(--text);transition:background .2s}
+.tb-title:hover{background:var(--fill)}
+.tb-title .chev{width:11px;height:11px;color:var(--text-3)}
+.menu button.sel>svg:first-child{color:var(--blue)}
+
+/* ---------- presets: só cor, pastas, reordenar ---------- */
+#presets.presets{display:block;padding:0 12px 12px}
+.p-row{display:flex;flex-wrap:wrap;gap:4px;min-height:28px;border-radius:10px;transition:background .2s}
+.p-row.drop-hover{background:color-mix(in srgb,var(--blue) 10%,transparent)}
+.preset .pdot{width:10px;height:10px;border-radius:50%;background:var(--c);flex:none;margin-left:6px;box-shadow:0 0 0 3px color-mix(in srgb,var(--c) 18%,transparent)}
+[data-variant="2"] .preset{padding:0 11px 0 4px}
+.preset.dragging{opacity:.35}
+.preset.drop-before{box-shadow:-3px 0 0 var(--blue)!important}
+.preset.drop-after{box-shadow:3px 0 0 var(--blue)!important}
+.pfolder{margin-top:6px;border-radius:11px;transition:background .2s}
+.pfolder.drop-hover{background:color-mix(in srgb,var(--blue) 10%,transparent)}
+.pf-head{display:flex;align-items:center;gap:6px;width:100%;height:28px;padding:0 6px;border-radius:8px;color:var(--text-2);font-size:12px;font-weight:600;text-align:left}
+.pf-head:hover{background:var(--hover);color:var(--text)}
+.pf-head svg{width:12px;height:12px;flex:none;color:var(--text-3)}
+.pf-head .chev{transition:transform .4s var(--spring)}
+.pfolder.closed .pf-head .chev{transform:rotate(-90deg)}
+.pf-head small{margin-left:auto;color:var(--text-3);font-weight:500}
+.pf-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pf-input{flex:1;min-width:0;height:22px;border:0;outline:0;border-radius:6px;padding:0 6px;background:var(--fill);font:inherit;font-weight:600;color:var(--text);box-shadow:0 0 0 2px color-mix(in srgb,var(--blue) 55%,transparent)}
+.pf-body{display:grid;grid-template-rows:1fr;transition:grid-template-rows .4s var(--ease)}
+.pfolder.closed .pf-body{grid-template-rows:0fr}
+.pf-in{overflow:hidden;min-height:0;padding-left:18px}
+.pf-in .p-row{padding:2px 0 4px}
+.pf-empty{font-size:11.5px;color:var(--text-3);padding:5px 4px}
+.menu-dot{width:10px;height:10px;border-radius:50%;background:var(--c);display:block;flex:none;margin:0 2px}
+
+/* cor do preset em edição */
+.color-btn{width:14px!important;height:14px!important;border-radius:50%;background:var(--c);flex:none;cursor:pointer;
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--c) 22%,transparent);transition:transform .3s var(--spring)}
+.color-btn:hover{transform:scale(1.15)}
+.insp-title .link.discard{color:var(--text-3);margin-left:auto}
+.insp-title .link.discard+.link{margin-left:10px}
+.insp-title .link.discard:not(.show)+.link{margin-left:auto}
+
+/* resolução: valor final ao lado e opções em linha inteira */
+.res-row .lbl{flex-direction:row;align-items:baseline;gap:8px}
+.res-out{font-size:12px!important;color:var(--blue)!important;font-weight:600;font-variant-numeric:tabular-nums}
+.row.res-seg{min-height:0;padding-top:0}
+.row.res-seg::before{display:none}
+.row.res-seg .seg{width:100%;grid-auto-columns:1fr}
+.times{color:var(--text-3);font-size:12px}
+.field input[data-k="customW"],.field input[data-k="customH"]{width:52px}
+/* nome do preset numa linha; Modificado / Descartar / Salvar na linha de baixo */
+[data-variant="2"] .insp-title{flex-wrap:wrap;row-gap:6px}
+#inspFor.editing{flex:1 1 100%}
