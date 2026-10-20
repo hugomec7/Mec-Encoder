@@ -5,6 +5,14 @@
 Conversor de vídeo para Windows, rápido e minimalista, feito para editores de vídeos curtos.
 Feito em **Rust** (Tauri 2) com **FFmpeg** e encode por **NVIDIA NVENC**.
 
+![Mec Encoder convertendo um vídeo do iPhone](docs/screenshots/main.png)
+
+<p>
+  <img src="docs/screenshots/empty-queue.png" width="49%" alt="Fila vazia, editando um preset">
+  <img src="docs/screenshots/settings.png" width="49%" alt="Configurações">
+</p>
+
+
 - Converte vídeos do iPhone para **frame rate constante** (ex.: 59,94 fps), mantendo bitrate e qualidade.
 - Gera **proxy** em 25% com sufixo e subpasta automáticos.
 - Converte **HDR do iPhone (HLG) para Rec. 709** com tone mapping de verdade (a mesma sequência de filtros Hable do HandBrake).
