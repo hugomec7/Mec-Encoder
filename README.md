@@ -1,22 +1,28 @@
 # Mec Encoder
 
-Conversor de vídeo para Windows, rápido e minimalista, para editores de vídeos curtos.
-Feito em **Rust** (Tauri 2) com **FFmpeg** e encode por **NVIDIA NVENC**.
+**English** · [Português](README.pt-BR.md)
 
-- Converte o bruto do iPhone para **59,94 fps constante** (pronto para o After Effects), mantendo bitrate e qualidade.
-- Gera **proxy** em 25% com sufixo e subpasta automáticos.
-- Converte **HDR do iPhone (HLG) para Rec. 709** com tone mapping de verdade.
-- **Fila** em que cada vídeo tem o próprio preset, visível ao lado do nome.
-- **Prévia do resultado** antes de renderizar: rotação, escala e cor.
-- **Presets** próprios para criar, compartilhar e importar do Shutter Encoder.
+A fast, minimal video converter for Windows, made for short-form video editors.
+Built with **Rust** (Tauri 2) and **FFmpeg**, encoding with **NVIDIA NVENC**.
 
-> Em desenvolvimento. Veja o [plano](PLANO.md) e as [novidades](CHANGELOG.md).
+- Converts iPhone footage to a **constant frame rate** (e.g. 59.94 fps), keeping bitrate and quality.
+- Creates **proxies** at 25% with automatic suffix and subfolder.
+- Converts **iPhone HDR (HLG) to Rec. 709** with real tone mapping (the same Hable filter chain HandBrake uses).
+- **Drop files or whole folders**: every video inside, subfolders included, goes to the queue.
+- **Queue where each video keeps its own preset**, shown next to its name.
+- **Output preview** before rendering: rotation, scale and color.
+- **8-bit or 10-bit**, A/V sync, metadata copy, delete original after a verified render.
+- **Presets** you can create, share and import from Shutter Encoder (`.enc`).
+- English and Portuguese, dark and light themes.
 
-## Ver a interface
+> Work in progress. See the [roadmap](ROADMAP.md) and the [changelog](CHANGELOG.md).
 
-Abra `app/ui/index.html` no navegador. Sem o app instalado, ela roda em modo demonstração com vídeos de exemplo.
+## Try the interface
 
-## Créditos
+Open `app/ui/index.html` in a browser. Without the app it runs in demo mode with sample videos.
+Add `?v=2` to the address to see the more minimal v2 layout, and `?lang=pt` for Portuguese.
 
-Inspirado no [Shutter Encoder](https://github.com/paulpacifico/shutter-encoder), de Paul Pacifico. O Mec Encoder é um app novo e não usa código dele.
-Fonte Inter (SIL Open Font License). Por [@hugoeditor_](https://x.com/hugoeditor_).
+## Credits
+
+Inspired by [Shutter Encoder](https://github.com/paulpacifico/shutter-encoder) by Paul Pacifico. Mec Encoder is a new app and contains none of its code.
+Inter typeface (SIL Open Font License). Made by [@hugoeditor_](https://x.com/hugoeditor_).

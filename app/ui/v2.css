@@ -1,0 +1,89 @@
+/* Mec Encoder — interface v2 (mais minimalista)
+   Sem cartões: uma superfície só, divisórias finas, seções que abrem e fecham. */
+
+[data-variant="2"]{--canvas:#09090B;--side:#141416}
+[data-variant="2"][data-theme="light"]{--canvas:#E7E7EC;--side:#FAFAFC}
+[data-variant="2"] body{background:var(--side)}
+
+[data-variant="2"] .titlebar{border-bottom:1px solid var(--sep);height:42px}
+[data-variant="2"] .main{gap:0;padding:0;grid-template-columns:292px minmax(0,1fr) 340px}
+[data-variant="2"] .card{background:none;border:0;border-radius:0;box-shadow:none}
+[data-variant="2"] #queueCard{border-right:1px solid var(--sep)}
+[data-variant="2"] #inspector{border-left:1px solid var(--sep)}
+[data-variant="2"] .preview{background:var(--canvas)}
+[data-variant="2"] .card-head{padding:14px 16px 8px}
+[data-variant="2"] .card-head h2{font-size:14px}
+[data-variant="2"] .card-head .link{font-size:12px;color:var(--text-3)}
+[data-variant="2"] .card-head .link:hover{color:var(--blue);opacity:1}
+
+/* fila */
+[data-variant="2"] .add-btn{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;color:var(--text-2);margin-left:4px;
+  transition:background .2s,color .2s,transform .3s var(--spring)}
+[data-variant="2"] .add-btn:hover{background:var(--fill);color:var(--text)}
+[data-variant="2"] .add-btn:active{transform:scale(.88)}
+[data-variant="2"] .add-btn svg{width:15px;height:15px}
+[data-variant="2"] .queue{padding:0 8px 8px;gap:2px}
+[data-variant="2"] .item{padding:7px 8px;border-radius:11px;gap:10px}
+[data-variant="2"] .thumb{width:32px;height:50px;border-radius:7px}
+[data-variant="2"] .thumb .hdr{font-size:7px;left:2px;bottom:2px}
+[data-variant="2"] .item .meta{gap:2px}
+[data-variant="2"] .item .name{font-size:12.5px}
+[data-variant="2"] .item .spec{font-size:10.5px}
+[data-variant="2"] .badge{background:none;padding:0;height:16px;color:var(--text-2);font-weight:550;font-size:11px}
+[data-variant="2"] .warn{width:16px;height:16px;background:none}
+[data-variant="2"] .prog{left:50px;bottom:3px;height:2px}
+[data-variant="2"] .drop{border:0;margin:0 8px 4px;padding:10px 8px;gap:10px;font-size:11px;align-items:flex-start;border-radius:11px}
+[data-variant="2"] .drop svg{width:18px;height:18px;margin-top:1px}
+[data-variant="2"] .drop b{font-size:12px}
+[data-variant="2"] .drop:hover{background:var(--hover)}
+[data-variant="2"] .queue-foot{border-top:0;padding:6px 12px 12px;gap:8px}
+[data-variant="2"] .btn{height:38px;border-radius:11px;font-size:13px}
+
+/* prévia */
+[data-variant="2"] .pv-top{justify-content:center;padding-top:12px}
+[data-variant="2"] .pv-top .chips{display:none}
+[data-variant="2"] .seg{background:var(--fill)}
+[data-variant="2"] .frame{border-radius:12px;box-shadow:0 24px 60px rgba(0,0,0,.35)}
+[data-variant="2"] .frame .tag,[data-variant="2"] .frame .res{display:none}
+[data-variant="2"] .rot-note{font-size:11px;padding:6px 10px;border-radius:99px;bottom:16px}
+[data-variant="2"] .pv-meta{display:flex;justify-content:center;flex-wrap:wrap;gap:4px 6px;padding:0 16px 10px;font-size:11.5px;color:var(--text-3);flex:none}
+[data-variant="2"] .pv-meta .chip{background:none;padding:0;height:auto;font-size:11.5px;color:var(--text-2);font-weight:500}
+[data-variant="2"] .pv-meta .chip.hl{background:none;color:var(--c)}
+[data-variant="2"] .pv-meta .chip svg{width:10px;height:10px}
+[data-variant="2"] .pv-meta.swap{animation:chipSwap .45s var(--ease)}
+[data-variant="2"] .transport{padding:0 20px 14px;gap:8px}
+[data-variant="2"] .timeline{height:30px;border-radius:8px;background:color-mix(in srgb,var(--fill) 70%,transparent)}
+[data-variant="2"] .ctl.play{width:36px;height:36px}
+
+/* presets */
+[data-variant="2"] .presets{gap:4px;padding:0 12px 12px}
+[data-variant="2"] .preset{background:none;height:28px;padding:0 10px 0 4px;font-size:12px;font-weight:550;color:var(--text-2)}
+[data-variant="2"] .preset:hover{background:var(--fill);color:var(--text)}
+[data-variant="2"] .preset .ic{width:20px;height:20px;box-shadow:none}
+[data-variant="2"] .preset .ic svg{width:11px;height:11px}
+[data-variant="2"] .preset.sel{background:var(--fill);box-shadow:none;color:var(--text)}
+[data-variant="2"] .preset.add{box-shadow:none}
+[data-variant="2"] .preset-desc{display:none}
+
+/* ajustes em seções recolhíveis */
+[data-variant="2"] .insp-title{border-top:1px solid var(--sep);padding:12px 16px 4px}
+[data-variant="2"] .inspector-body{padding:0 8px 10px;gap:0}
+[data-variant="2"] .sec{gap:0;border-bottom:1px solid var(--sep)}
+[data-variant="2"] .sec:last-child{border-bottom:0}
+[data-variant="2"] .sec-head{pointer-events:auto;cursor:pointer;margin:0;height:44px;padding:0 8px;gap:8px;font-size:13px;color:var(--text);font-weight:600;border-radius:10px;transition:background .2s}
+[data-variant="2"] .sec-head:hover{background:var(--hover)}
+[data-variant="2"] .sec-head .sec-sum{display:block;flex:1;min-width:0;text-align:right;font-size:11.5px;font-weight:450;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:opacity .25s}
+[data-variant="2"] .sec-head .chev{display:block;width:12px;height:12px;color:var(--text-3);transform:rotate(-90deg);transition:transform .4s var(--spring);flex:none}
+[data-variant="2"] .sec.open .sec-head .chev{transform:none}
+[data-variant="2"] .sec.open .sec-sum{opacity:0}
+[data-variant="2"] .sec-body{display:grid;grid-template-rows:0fr;transition:grid-template-rows .45s var(--ease)}
+[data-variant="2"] .sec.open .sec-body{grid-template-rows:1fr}
+[data-variant="2"] .sec-inner{overflow:hidden;min-height:0;gap:6px;padding:0 0 0}
+[data-variant="2"] .sec.open .sec-inner{padding-bottom:10px}
+[data-variant="2"] .sec-inner .group{background:none;border:0;border-radius:0}
+[data-variant="2"] .sec-inner .row{min-height:38px;padding:4px 8px}
+[data-variant="2"] .sec-inner .row+.row::before{left:8px;right:8px}
+[data-variant="2"] .sec-inner .hint{margin:0;padding:0 8px}
+[data-variant="2"] .insp-foot{padding:10px 16px 12px}
+[data-variant="2"] .btn.small.ghost{background:none;color:var(--blue);padding:0 4px}
+[data-variant="2"] .btn.small.ghost:hover{filter:none;opacity:.75}

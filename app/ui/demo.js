@@ -4,11 +4,12 @@
   if (window.__TAURI__) return;
 
   const base = {
-    codec: 'h265', container: 'mp4', scale: 'source',
+    codec: 'h265', bits: 8, container: 'mp4', scale: 'source',
     bitrate: { mode: 'manual', kbps: 50000, rc: 'cbr' }, maxQuality: true,
     fps: { conform: true, value: '59.94' }, hdrToSdr: false,
     audio: { codec: 'aac', channels: 'stereo', tracks: [1, 2], kbps: 256 },
     output: { suffix: { on: true, text: '_{codec}' }, subfolder: { on: false, text: 'proxy' }, deleteSource: true },
+    avSync: true, metadata: true,
   };
   const P = (o) => JSON.parse(JSON.stringify(Object.assign({}, base, o)));
 
@@ -19,11 +20,11 @@
     P({ id: 'proxy', name: 'Proxy', icon: 'proxy', color: 'green', scale: '25',
         bitrate: { mode: 'auto', kbps: 0, rc: 'vbr' }, maxQuality: false, fps: { conform: false, value: '59.94' },
         audio: { codec: 'aac', channels: 'stereo', tracks: [1, 2], kbps: 256 },
-        output: { suffix: { on: true, text: '_proxy' }, subfolder: { on: true, text: 'proxy' }, deleteSource: false } }),
+        output: { suffix: { on: true, text: '_proxy' }, subfolder: { on: true, text: 'proxy' }, deleteSource: false }, metadata: false }),
     P({ id: 'proxy-fx30', name: 'Proxy FX30', icon: 'camera', color: 'purple', scale: '25',
         bitrate: { mode: 'auto', kbps: 0, rc: 'vbr' }, maxQuality: false, fps: { conform: false, value: '59.94' },
         audio: { codec: 'copy', channels: 'stereo', tracks: [1, 2], kbps: 0 },
-        output: { suffix: { on: true, text: '_proxy' }, subfolder: { on: true, text: 'proxy' }, deleteSource: false } }),
+        output: { suffix: { on: true, text: '_proxy' }, subfolder: { on: true, text: 'proxy' }, deleteSource: false }, metadata: false }),
     P({ id: 'iphone-1080p60', name: 'iPhone 1080p60', icon: 'phone', color: 'teal', scale: '1080',
         bitrate: { mode: 'manual', kbps: 15000, rc: 'cbr' } }),
     P({ id: 'iphone-1080p60-hdr', name: 'iPhone 1080p60 HDR', icon: 'hdr', color: 'yellow', scale: '1080', hdrToSdr: true,
@@ -45,5 +46,6 @@
     { id: 5, file: 'IMG_4801.MOV', src: Object.assign({}, iphone, { hdr: false, rot: 0, mb: 1034 }), preset: 'iphone-4k60', status: 'done', hue: 330 },
   ];
 
-  window.MEC_DEMO = { presets, queue };
+  const settings = { lang: 'en', theme: 'dark', defaultPreset: 'iphone-4k60', clearWhenDone: true, notify: true };
+  window.MEC_DEMO = { presets, queue, settings };
 })();
