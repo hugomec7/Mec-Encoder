@@ -1,0 +1,134 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core:
+    name: Engine tests (real FFmpeg)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: core
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+      - name: Unit + end-to-end tests
+        run: cargo test -p mec-core --features serde
+
+  windows:
+    name: Windows x64 (MSI + portable)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: windows
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: FFmpeg (BtbN GPL shared, with NVENC)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          mkdir -p ff app/bin
+          gh release download latest -R BtbN/FFmpeg-Builds -p "*n7.1-latest-win64-gpl-shared-7.1.zip" -D ff \
+            || gh release download latest -R BtbN/FFmpeg-Builds -p "*master-latest-win64-gpl-shared.zip" -D ff
+          cd ff && 7z x -y *.zip > /dev/null && cd ..
+          BIN=$(dirname "$(find ff -name ffmpeg.exe | head -1)")
+          cp "$BIN"/ffmpeg.exe "$BIN"/ffprobe.exe "$BIN"/*.dll app/bin/
+          LIC=$(find ff -maxdepth 2 -name LICENSE.txt | head -1); [ -n "$LIC" ] && cp "$LIC" app/bin/FFMPEG-LICENSE.txt || true
+          ls -la app/bin
+          app/bin/ffmpeg.exe -hide_banner -version | head -1
+          app/bin/ffmpeg.exe -hide_banner -filters | grep -E " zscale | tonemap "
+
+      - name: Build (Tauri)
+        working-directory: app
+        shell: bash
+        run: |
+          set -o pipefail
+          npx --yes @tauri-apps/cli@2 build 2>&1 | tee build.log
+
+      - name: Compile errors (annotations)
+        if: failure()
+        working-directory: app
+        shell: bash
+        run: |
+          python - <<'PY'
+          import re, os
+          if not os.path.exists("build.log"): raise SystemExit
+          log = open("build.log", encoding="utf-8", errors="replace").read()
+          log = re.sub(r"\x1b\[[0-9;]*m", "", log)
+          blocks = re.findall(r"(?ms)^error(?:\[E\d+\])?:.*?(?=^\s*$|^error|^warning)", log)
+          if not blocks:
+              blocks = [log[-3500:]]
+          for b in blocks[:12]:
+              msg = b.strip()[:3000].replace("%", "%25").replace("\r", "").replace("\n", "%0A")
+              print("::error title=Build::" + msg)
+          PY
+
+      - name: Package (MSI, portable, latest.json)
+        shell: pwsh
+        run: |
+          $v = (Get-Content app/tauri.conf.json -Raw | ConvertFrom-Json).version
+          "VERSION=$v" | Out-File -FilePath $env:GITHUB_ENV -Append
+          New-Item -ItemType Directory -Force out, "portable/Mec Encoder" | Out-Null
+          $msi = Get-ChildItem target/release/bundle/msi/*.msi | Select-Object -First 1
+          Copy-Item $msi.FullName "out/MecEncoder_${v}_x64.msi"
+          $exe = "target/release/mec-encoder.exe"
+          Copy-Item $exe "portable/Mec Encoder/Mec Encoder.exe"
+          Copy-Item -Recurse app/bin "portable/Mec Encoder/bin"
+          Set-Content "portable/Mec Encoder/portable.ini" "Mec Encoder portable. Settings are saved in %APPDATA%\com.hugomec.mecencoder."
+          Compress-Archive -Path "portable/Mec Encoder" -DestinationPath "out/MecEncoder_${v}_x64_portable.zip"
+          Copy-Item $exe "out/MecEncoder_x64_portable.exe"
+          $base = "https://github.com/${{ github.repository }}/releases/download/v$v"
+          $notesFile = "docs/release-notes/$v.md"
+          $notes = if (Test-Path $notesFile) { Get-Content $notesFile -Raw } else { "Mec Encoder $v" }
+          $latest = [ordered]@{
+            version  = $v
+            notes    = $notes
+            msi      = @{ url = "$base/MecEncoder_${v}_x64.msi"; sha256 = (Get-FileHash "out/MecEncoder_${v}_x64.msi" -Algorithm SHA256).Hash.ToLower() }
+            portable = @{ url = "$base/MecEncoder_x64_portable.exe"; sha256 = (Get-FileHash "out/MecEncoder_x64_portable.exe" -Algorithm SHA256).Hash.ToLower() }
+          }
+          $latest | ConvertTo-Json -Depth 4 | Set-Content -Encoding utf8 out/latest.json
+          Get-ChildItem out | Format-Table Name, Length
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MecEncoder-windows-x64
+          path: |
+            out/*.msi
+            out/*.zip
+          if-no-files-found: error
+
+      - name: GitHub release
+        if: github.ref == 'refs/heads/main'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="v$VERSION"
+          NOTES="docs/release-notes/$VERSION.md"
+          [ -f "$NOTES" ] || echo "Mec Encoder $VERSION" > "$NOTES"
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release edit "$TAG" --notes-file "$NOTES" --target "$GITHUB_SHA"
+          else
+            gh release create "$TAG" --title "Mec Encoder $VERSION" --notes-file "$NOTES" --target "$GITHUB_SHA"
+          fi
+          gh release upload "$TAG" out/* --clobber
+          echo "### Download" >> "$GITHUB_STEP_SUMMARY"
+          echo "https://github.com/${{ github.repository }}/releases/tag/$TAG" >> "$GITHUB_STEP_SUMMARY"

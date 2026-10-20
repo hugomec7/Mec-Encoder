@@ -1,4 +1,8 @@
 target/
 app/gen/
+app/bin/
+ff/
+out/
+portable/
 *.log
 __pycache__/

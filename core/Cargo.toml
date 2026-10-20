@@ -1,0 +1,13 @@
+[package]
+name = "mec-core"
+version = "0.1.0"
+edition = "2021"
+description = "Mec Encoder engine: ffprobe parsing, FFmpeg command building, queue helpers"
+license = "MIT"
+
+[features]
+default = []
+serde = ["dep:serde"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"], optional = true }

@@ -1,0 +1,102 @@
+//! Testes de ponta a ponta com FFmpeg de verdade (encoder de CPU no lugar do NVENC).
+//! São pulados quando o ffmpeg/ffprobe não está no PATH.
+
+use std::path::{Path, PathBuf};
+use std::process::Command;
+
+use mec_core::{build, output_path, preview_args, probe::probe, tools, Encoder, Preset};
+
+fn tool(name: &str) -> Option<PathBuf> { tools::find(name, &[]) }
+
+fn dir(name: &str) -> PathBuf {
+    let d = std::env::temp_dir().join(format!("mec-e2e-{name}-{}", std::process::id()));
+    std::fs::create_dir_all(&d).unwrap();
+    d
+}
+
+/// Vídeo parecido com o do iPhone: gravado deitado com rotação -90, frame rate variável,
+/// HLG/Rec.2020 10-bit e duas faixas de áudio mono (dois microfones).
+fn make_iphone_like(ff: &Path, d: &Path, hdr: bool) -> PathBuf {
+    let base = d.join(if hdr { "base_hdr.mov" } else { "base.mov" });
+    let mut c = Command::new(ff);
+    c.args(["-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=s=640x360:r=60",
+            "-f", "lavfi", "-i", "sine=f=440:r=48000", "-f", "lavfi", "-i", "sine=f=880:r=48000", "-t", "3",
+            "-map", "0", "-map", "1", "-map", "2",
+            "-vf", "select='not(eq(mod(n\\,7)\\,0))',format=yuv420p10le", "-fps_mode", "vfr",
+            "-c:v", "libx265", "-preset", "ultrafast", "-x265-params", "log-level=error", "-tag:v", "hvc1",
+            "-c:a", "aac", "-ac", "1"]);
+    if hdr { c.args(["-color_trc", "arib-std-b67", "-color_primaries", "bt2020", "-colorspace", "bt2020nc"]); }
+    c.arg(&base);
+    assert!(c.status().unwrap().success());
+    let out = d.join(if hdr { "IMG_HDR.MOV" } else { "IMG_0001.MOV" });
+    assert!(Command::new(ff).args(["-v", "error", "-y", "-display_rotation", "-90", "-i"]).arg(&base)
+        .args(["-map", "0", "-c", "copy"]).arg(&out).status().unwrap().success());
+    out
+}
+
+fn run(ff: &Path, args: &[String]) {
+    let o = Command::new(ff).args(args).output().unwrap();
+    assert!(o.status.success(), "ffmpeg falhou:\n{}\n{}", args.join(" "), String::from_utf8_lossy(&o.stderr));
+}
+
+#[test]
+fn iphone_to_cfr_and_proxy() {
+    let (Some(ff), Some(fp)) = (tool("ffmpeg"), tool("ffprobe")) else { eprintln!("sem ffmpeg, pulando"); return };
+    let d = dir("sdr");
+    let src = make_iphone_like(&ff, &d, false);
+    let info = probe(&fp, &src).unwrap();
+    let v = info.video.as_ref().unwrap();
+    assert_eq!((v.width, v.height, v.rotation), (360, 640, 90));
+    assert!(v.vfr, "fonte deveria ser VFR: {} vs {}", v.fps, v.fps_nominal);
+    assert_eq!(info.audio.len(), 2);
+
+    let cpu = Encoder::Cpu { preset: "ultrafast".into() };
+    // Bruto do iPhone → 59,94 constante, estéreo com as duas faixas.
+    let p = Preset::defaults().into_iter().find(|p| p.id == "iphone-4k60").unwrap();
+    let out = output_path(&src, &p);
+    let plan = build(&info, &p, &cpu, &out);
+    run(&ff, &plan.args);
+    let o = probe(&fp, &out).unwrap();
+    let ov = o.video.as_ref().unwrap();
+    assert_eq!((ov.width, ov.height, ov.rotation), (360, 640, 0), "deve sair em pé e sem metadado de rotação");
+    assert!(!ov.vfr && (ov.fps_nominal - 59.94).abs() < 0.01, "fps {} / {}", ov.fps, ov.fps_nominal);
+    assert_eq!(o.audio.len(), 1);
+    assert_eq!(o.audio[0].channels, 2);
+    mec_core::command::verify(&info, &o).unwrap();
+
+    // Proxy 25% numa subpasta.
+    let px = Preset::defaults().into_iter().find(|p| p.id == "proxy").unwrap();
+    let out = output_path(&src, &px);
+    assert!(out.to_string_lossy().contains("proxy"));
+    std::fs::create_dir_all(out.parent().unwrap()).unwrap();
+    run(&ff, &build(&info, &px, &cpu, &out).args);
+    let o = probe(&fp, &out).unwrap();
+    let ov = o.video.unwrap();
+    assert_eq!((ov.width, ov.height, ov.rotation), (90, 160, 0));
+
+    // Prévia: um JPEG do resultado.
+    let jpg = Command::new(&ff).args(preview_args(&info, &px, 1.0, true, 480)).output().unwrap();
+    assert!(jpg.status.success() && jpg.stdout.starts_with(&[0xFF, 0xD8]), "{}", String::from_utf8_lossy(&jpg.stderr));
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+#[test]
+fn hlg_to_rec709() {
+    let (Some(ff), Some(fp)) = (tool("ffmpeg"), tool("ffprobe")) else { eprintln!("sem ffmpeg, pulando"); return };
+    let d = dir("hdr");
+    let src = make_iphone_like(&ff, &d, true);
+    let info = probe(&fp, &src).unwrap();
+    assert_eq!(info.video.as_ref().unwrap().hdr, "HLG");
+    let mut p = Preset::defaults().into_iter().find(|p| p.id == "iphone-4k60-hdr").unwrap();
+    p.bits = 10;
+    let out = d.join("hdr_out.mp4");
+    run(&ff, &build(&info, &p, &Encoder::Cpu { preset: "ultrafast".into() }, &out).args);
+    let o = probe(&fp, &out).unwrap();
+    let ov = o.video.unwrap();
+    assert_eq!(ov.transfer, "bt709");
+    assert_eq!(ov.primaries, "bt709");
+    assert_eq!(ov.hdr, "");
+    assert_eq!(ov.bit_depth, 10);
+    assert_eq!((ov.width, ov.height), (360, 640));
+    let _ = std::fs::remove_dir_all(&d);
+}
