@@ -219,9 +219,31 @@ pub fn output_path(src: &Path, p: &Preset) -> PathBuf {
     out
 }
 
-fn input_args(info: &MediaInfo, enc: &Encoder, hwdecode: bool) -> Vec<String> {
+/// Onde o vídeo é decodificado e filtrado.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Decode {
+    /// Tudo na placa: NVDEC decodifica, a escala e a conversão de 10→8-bit rodam na GPU (scale_cuda).
+    /// Só baixa para a CPU o que a GPU não faz (girar, HDR → Rec. 709).
+    Gpu,
+    /// NVDEC decodifica e o FFmpeg traz os quadros para a CPU sozinho (modo antigo).
+    Hw,
+    /// Decodifica pela CPU.
+    Cpu,
+}
+
+impl Decode {
+    pub fn name(self) -> &'static str { match self { Decode::Gpu => "gpu", Decode::Hw => "nvdec", Decode::Cpu => "cpu" } }
+}
+
+fn input_args(info: &MediaInfo, enc: &Encoder, dec: Decode) -> Vec<String> {
     let mut a: Vec<String> = vec!["-nostdin".into(), "-hide_banner".into(), "-v".into(), "error".into()];
-    if hwdecode && *enc == Encoder::Nvenc { a.extend(["-hwaccel".into(), "cuda".into()]); }
+    if *enc == Encoder::Nvenc {
+        match dec {
+            Decode::Gpu => a.extend(["-hwaccel", "cuda", "-hwaccel_output_format", "cuda", "-extra_hw_frames", "8"].map(String::from)),
+            Decode::Hw => a.extend(["-hwaccel".into(), "cuda".into()]),
+            Decode::Cpu => {}
+        }
+    }
     // Rotação: zera a matriz de exibição e gira com transpose (ver video_filters).
     // Assim o arquivo novo sai em pé e sem metadado que faria o player girar de novo.
     if info.video.as_ref().map_or(false, |v| v.rotation != 0) { a.extend(["-display_rotation".into(), "0".into()]); }
@@ -229,17 +251,54 @@ fn input_args(info: &MediaInfo, enc: &Encoder, hwdecode: bool) -> Vec<String> {
     a
 }
 
-/// Comando completo de conversão.
-pub fn build(info: &MediaInfo, p: &Preset, enc: &Encoder, output: &Path) -> Plan { build_opts(info, p, enc, output, true) }
+/// Filtros do modo [`Decode::Gpu`]: escala e formato na placa; girar e HDR baixam para a CPU.
+/// Sem girar e sem HDR, o quadro nunca sai da GPU (NVDEC → scale_cuda → NVENC).
+pub fn gpu_filters(info: &MediaInfo, p: &Preset) -> Vec<String> {
+    let Some(v) = info.video.as_ref() else { return vec![] };
+    let mut f = Vec::new();
+    let rot = (v.rotation + p.rotate % 360) % 360;
+    let hdr = p.hdr_to_sdr && !v.hdr.is_empty();
+    let (w, h) = out_dims(v, p);
+    // Tamanho antes de girar (o quadro decodificado ainda está deitado).
+    let (pw, ph) = if rot % 180 == 90 { (h, w) } else { (w, h) };
+    let (cw, ch) = if v.coded_width > 0 { (v.coded_width, v.coded_height) } else if v.rotation % 180 == 90 { (v.height, v.width) } else { (v.width, v.height) };
+    let src10 = v.bit_depth >= 10;
+    let out10 = effective_bits(p) == 10;
+    // HDR: mantém 10-bit até o tone mapping; senão, já converte para o formato final na GPU.
+    let gpu_fmt = if hdr { if src10 { "p010" } else { "nv12" } } else if out10 { "p010" } else { "nv12" };
+    let src_fmt = if src10 { "p010" } else { "nv12" };
+    if (pw, ph) != (cw, ch) || gpu_fmt != src_fmt {
+        f.push(format!("scale_cuda=w={pw}:h={ph}:format={gpu_fmt}"));
+    }
+    if rot != 0 || hdr {
+        f.push(format!("hwdownload,format={gpu_fmt}"));
+        match rot { 90 => f.push("transpose=clock".into()), 180 => f.push("hflip,vflip".into()), 270 => f.push("transpose=cclock".into()), _ => {} }
+        if hdr { f.extend(hdr_chain(v)); }
+    }
+    if p.fps.conform { let (n, d) = p.fps_rational(); f.push(format!("fps={n}/{d}")); }
+    if rot != 0 || hdr { f.push(format!("format={}", if out10 { "p010le" } else { "nv12" })); }
+    f
+}
 
-/// Igual a [`build`], escolhendo se a GPU também decodifica (`hwdecode`).
+/// Comando completo de conversão (com NVENC, tenta primeiro tudo na GPU).
+pub fn build(info: &MediaInfo, p: &Preset, enc: &Encoder, output: &Path) -> Plan {
+    build_mode(info, p, enc, output, if *enc == Encoder::Nvenc { Decode::Gpu } else { Decode::Cpu })
+}
+
+/// Igual a [`build`], escolhendo se a GPU também decodifica (`hwdecode`, modo antigo).
 pub fn build_opts(info: &MediaInfo, p: &Preset, enc: &Encoder, output: &Path, hwdecode: bool) -> Plan {
+    build_mode(info, p, enc, output, if hwdecode { Decode::Hw } else { Decode::Cpu })
+}
+
+/// Comando completo escolhendo onde decodificar e filtrar.
+pub fn build_mode(info: &MediaInfo, p: &Preset, enc: &Encoder, output: &Path, dec: Decode) -> Plan {
+    let dec = if *enc == Encoder::Nvenc { dec } else { Decode::Cpu };
     let mut warnings = Vec::new();
-    let mut args = input_args(info, enc, hwdecode);
+    let mut args = input_args(info, enc, dec);
     let (afc, aout) = audio_args(info, p);
     if let Some(g) = afc { args.extend(["-filter_complex".into(), g]); }
     args.extend(["-map".into(), "0:v:0".into()]);
-    let vf = video_filters(info, p, enc, None);
+    let vf = if dec == Decode::Gpu { gpu_filters(info, p) } else { video_filters(info, p, enc, None) };
     if !vf.is_empty() { args.extend(["-vf".into(), vf.join(",")]); }
     args.extend(video_codec_args(info, p, enc, &mut warnings));
     if p.fps.conform { args.extend(["-fps_mode".into(), "cfr".into()]); }
@@ -282,6 +341,34 @@ pub fn verify(src: &MediaInfo, out: &MediaInfo) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn gpu_pipeline() {
+        // iPhone vertical (rotação 90), SDR 8-bit, só CFR: decodifica na GPU, baixa e gira na CPU.
+        let mut i = iphone(90, "");
+        i.video.as_mut().unwrap().bit_depth = 8;
+        let s = build(&i, &preset("iphone-4k60"), &Encoder::Nvenc, Path::new("o.mp4")).args.join(" ");
+        assert!(s.contains("-hwaccel cuda -hwaccel_output_format cuda"), "{s}");
+        assert!(s.contains("-vf hwdownload,format=nv12,transpose=clock,fps=60000/1001,format=nv12 "), "{s}");
+        // Proxy 25% sem girar: tudo na GPU, sem hwdownload.
+        let mut flat = iphone(0, "");
+        flat.video.as_mut().unwrap().bit_depth = 8;
+        let mut px = preset("proxy"); px.fps.conform = false;
+        let s = build(&flat, &px, &Encoder::Nvenc, Path::new("o.mp4")).args.join(" ");
+        assert!(s.contains("-vf scale_cuda=w=960:h=540:format=nv12 "), "{s}");
+        assert!(!s.contains("hwdownload"), "{s}");
+        // Proxy vertical: escala antes de girar (960x540 deitado → 540x960 em pé).
+        let s = build(&i, &px, &Encoder::Nvenc, Path::new("o.mp4")).args.join(" ");
+        assert!(s.contains("scale_cuda=w=960:h=540:format=nv12,hwdownload,format=nv12,transpose=clock"), "{s}");
+        // HDR 10-bit → 8-bit Rec. 709: mantém p010 até o tone mapping.
+        let mut hp = preset("iphone-4k60"); hp.hdr_to_sdr = true;
+        let s = build(&iphone(90, "HLG"), &hp, &Encoder::Nvenc, Path::new("o.mp4")).args.join(" ");
+        assert!(s.contains("-vf hwdownload,format=p010,transpose=clock,zscale="), "{s}");
+        assert!(s.contains("fps=60000/1001,format=nv12 "), "{s}");
+        // CPU não usa nada disso.
+        let s = build(&i, &preset("iphone-4k60"), &Encoder::Cpu { preset: "ultrafast".into() }, Path::new("o.mp4")).args.join(" ");
+        assert!(!s.contains("hwaccel") && !s.contains("scale_cuda"), "{s}");
+    }
     use crate::probe::AudioInfo;
 
     fn iphone(rotation: u32, hdr: &str) -> MediaInfo {
@@ -325,7 +412,7 @@ mod tests {
     #[test]
     fn iphone_4k60_command() {
         let i = iphone(90, "");
-        let plan = build(&i, &preset("iphone-4k60"), &Encoder::Nvenc, Path::new("/v/out.mp4"));
+        let plan = build_opts(&i, &preset("iphone-4k60"), &Encoder::Nvenc, Path::new("/v/out.mp4"), true);
         let s = plan.args.join(" ");
         assert!(s.contains("-display_rotation 0 -i /v/IMG_0001.MOV"), "{s}");
         assert!(s.contains("-vf transpose=clock,fps=60000/1001,format=yuv420p"), "{s}");
@@ -341,7 +428,7 @@ mod tests {
         let p = preset("iphone-4k60-hdr");
         let vf = video_filters(&i, &p, &Encoder::Nvenc, None).join(",");
         assert_eq!(vf, "transpose=clock,zscale=tin=arib-std-b67:pin=bt2020:min=bt2020nc:rin=tv:t=linear:npl=100,format=gbrpf32le,tonemap=tonemap=hable:desat=0:peak=10,zscale=p=bt709:t=bt709:m=bt709:r=tv,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv,fps=60000/1001,format=yuv420p");
-        let s = build(&i, &p, &Encoder::Nvenc, Path::new("o.mp4")).args.join(" ");
+        let s = build_opts(&i, &p, &Encoder::Nvenc, Path::new("o.mp4"), true).args.join(" ");
         assert!(s.contains("-color_primaries bt709 -color_trc bt709 -colorspace bt709"));
         // Proxy de HDR: diminui antes do tone mapping (mais leve).
         let mut px = preset("proxy"); px.hdr_to_sdr = true;
@@ -353,10 +440,10 @@ mod tests {
     fn ten_bit_and_h264() {
         let i = iphone(0, "");
         let mut p = preset("iphone-4k60"); p.bits = 10;
-        let s = build(&i, &p, &Encoder::Nvenc, Path::new("o.mp4")).args.join(" ");
+        let s = build_opts(&i, &p, &Encoder::Nvenc, Path::new("o.mp4"), true).args.join(" ");
         assert!(s.contains("format=p010le") && s.contains("-profile:v main10"), "{s}");
         p.codec = "h264".into();
-        let plan = build(&i, &p, &Encoder::Nvenc, Path::new("o.mp4"));
+        let plan = build_opts(&i, &p, &Encoder::Nvenc, Path::new("o.mp4"), true);
         assert!(plan.args.join(" ").contains("format=yuv420p"));
         assert_eq!(plan.warnings, vec!["h264-10bit".to_string()]);
     }

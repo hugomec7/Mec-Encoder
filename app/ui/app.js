@@ -54,14 +54,18 @@
     presets: demo.presets,
     queue: demo.queue.map((q) => Object.assign(q, { cfg: clone(demo.presets.find((p) => p.id === q.preset)) })),
     set: Object.assign({ lang: 'en', theme: 'oled', lastDark: 'oled', defaultPreset: demo.presets[0] && demo.presets[0].id,
-      clearWhenDone: true, notify: true, sound: true, foldPresets: false }, demo.settings),
-    sel: REAL ? null : 2, editPreset: null, cmp: false, job: null, playing: false, t: REAL ? 0 : .31,
+      clearWhenDone: true, notify: true, sound: true, foldPresets: false, parallel: 2 }, demo.settings),
+    sel: REAL ? null : 2, picked: new Set(REAL ? [] : [2]), anchor: null, editPreset: null, cmp: false, job: null, playing: false, t: REAL ? 0 : .31,
     open: { video: true }, engine: { status: REAL ? 'checking' : 'nvenc', gpu: REAL ? null : 'NVIDIA GeForce RTX' },
     version: '0.1.0', update: null,
   };
   const presetOf = (id) => S.presets.find((p) => p.id === id);
   const itemOf = (id) => S.queue.find((q) => q.id === id);
   const selItem = () => itemOf(S.sel);
+  // seleção múltipla: S.sel é o vídeo da prévia; S.picked tem todos os selecionados (inclui S.sel)
+  const isPicked = (id) => S.picked.has(id);
+  const pickedItems = () => S.queue.filter((q) => S.picked.has(q.id));
+  function selectOnly(id) { S.sel = id; S.picked = new Set(id == null ? [] : [id]); S.anchor = id; }
   let L = window.MEC_I18N.en;
 
   /* ---------- salvar (no app: %APPDATA%; no navegador: só tema/idioma) ---------- */
@@ -241,10 +245,11 @@
 
   /* ---------- fila ---------- */
   const qList = $('#qList');
+  const runTxt = (q) => Math.round((q.p || 0) * 100) + '%' + (q.speed > 0 ? ` · ${num(q.speed, 1)}×` : '');
   function itemHtml(q, enterIds) {
     const p = presetOf(q.preset) || S.presets[0]; const c = COLORS[p.color] || COLORS.blue; const w = warnings(q);
     const st = q.status === 'done' ? `<span class="state done">${ICONS.check}${L.ready}</span>`
-      : q.status === 'running' ? `<span class="state tnum">${Math.round((q.p || 0) * 100)}%</span>`
+      : q.status === 'running' ? `<span class="state tnum">${runTxt(q)}</span>`
       : q.status === 'err' ? `<span class="state err" title="${esc(q.error || '')}">${L.error}</span>`
       : q.queued ? `<span class="state">${L.busy}</span>`
       : `<span class="state tnum">${fmtMB(estMB(q))}</span>`;
@@ -252,7 +257,7 @@
     const acts = (q.status === 'ready' || q.status === 'err' ? `<button class="a a-render" data-act="render" title="${L.renderThis}">${ICONS.playc}</button>` : '')
       + `<button class="a" data-act="reveal" title="${q.status === 'done' ? L.showOutput : L.showInFolder}">${ICONS.reveal}</button>`
       + (q.status !== 'running' ? `<button class="a" data-act="remove" title="${L.remove}">${ICONS.x}</button>` : '');
-    return `<div class="item ${q.id === S.sel ? 'sel' : ''} ${q.status === 'running' ? 'running' : ''} ${q.status === 'done' ? 'is-done' : ''} ${enterIds.includes(q.id) ? 'enter' : ''}" data-id="${q.id}" style="--d:${Math.min(8, Math.max(0, enterIds.indexOf(q.id))) * 60}ms">
+    return `<div class="item ${isPicked(q.id) ? 'sel' : ''} ${q.id === S.sel && S.picked.size > 1 ? 'primary' : ''} ${q.status === 'running' ? 'running' : ''} ${q.status === 'done' ? 'is-done' : ''} ${enterIds.includes(q.id) ? 'enter' : ''}" data-id="${q.id}" style="--d:${Math.min(8, Math.max(0, enterIds.indexOf(q.id))) * 60}ms">
         <div class="thumb">${thumbHtml(q)}${q.src.hdr ? '<span class="hdr">HDR</span>' : ''}</div>
         <div class="meta">
           <div class="name" title="${esc(q.path || q.file)}">${esc(q.file)}</div>
@@ -286,7 +291,8 @@
     if (REAL) inv('forget', { id }).catch(() => {});
     setTimeout(() => {
       const before = rects();
-      S.queue = S.queue.filter((x) => x.id !== id); if (S.sel === id) S.sel = null;
+      S.queue = S.queue.filter((x) => x.id !== id); S.picked.delete(id);
+      if (S.sel === id) S.sel = S.picked.size ? [...S.picked][0] : null;
       renderAll(); flip(before);
     }, 230);
   }
@@ -305,14 +311,39 @@
   qList.addEventListener('click', (e) => {
     if (drag.justDropped) { drag.justDropped = false; return; }
     const it = e.target.closest('.item');
-    if (!it) { if (S.sel !== null) { S.sel = null; renderAll(true); } return; }
+    if (!it) { if (S.sel !== null || S.picked.size) { selectOnly(null); renderAll(true); } return; }
     const id = +it.dataset.id; const a = e.target.closest('[data-act]');
     if (a) { itemAction(a.dataset.act, id); return; }
-    if (S.sel !== id) { S.sel = id; S.t = 0.15; renderAll(true); }
+    if (e.ctrlKey || e.metaKey) {
+      // Ctrl: liga/desliga este vídeo na seleção
+      if (isPicked(id) && S.picked.size > 1) { S.picked.delete(id); if (S.sel === id) S.sel = [...S.picked][0]; }
+      else { S.picked.add(id); S.sel = id; S.t = 0.15; }
+      S.anchor = id; renderAll(true); return;
+    }
+    if (e.shiftKey && S.anchor != null && itemOf(S.anchor)) {
+      // Shift: seleciona o intervalo
+      const ids = S.queue.map((q) => q.id); const i0 = ids.indexOf(S.anchor); const i1 = ids.indexOf(id);
+      S.picked = new Set(ids.slice(Math.min(i0, i1), Math.max(i0, i1) + 1)); S.sel = id; S.t = 0.15; renderAll(true); return;
+    }
+    if (S.sel !== id || S.picked.size > 1) { selectOnly(id); S.t = 0.15; renderAll(true); }
   });
   qList.addEventListener('contextmenu', (e) => {
     const it = e.target.closest('.item'); if (!it) return;
     const q = itemOf(+it.dataset.id);
+    if (isPicked(q.id) && S.picked.size > 1) {
+      const list = pickedItems(); const n = list.length;
+      openMenu({ x: e.clientX, y: e.clientY }, [
+        { label: L.renderN(n), value: 'render', icon: ICONS.playc },
+        { label: L.presetForN(n), value: 'preset', icon: ICONS.layers || ICONS.playc },
+        { sep: true },
+        { label: L.removeN(n), value: 'remove', icon: ICONS.trash, danger: true },
+      ], (act) => {
+        if (act === 'render') list.forEach((x) => { if (x.status === 'err') { x.status = 'ready'; x.error = null; } renderOne(x.id, true); });
+        if (act === 'remove') list.forEach((x) => removeItem(x.id));
+        if (act === 'preset') openMenu({ x: e.clientX, y: e.clientY }, presetItems(null), (pid) => assignPicked(pid));
+      });
+      return;
+    }
     openMenu({ x: e.clientX, y: e.clientY }, [
       ...(q.status === 'ready' || q.status === 'err' ? [{ label: L.renderThis, value: 'render', icon: ICONS.playc }] : []),
       { label: q.status === 'done' ? L.showOutput : L.showInFolder, value: 'reveal', icon: ICONS.reveal },
@@ -377,7 +408,7 @@
     const done = S.queue.filter((q) => q.status === 'done'); if (!done.length) return;
     done.forEach((q) => { const el = $(`.item[data-id="${q.id}"]`); if (el) { el.style.transition = 'opacity .25s, transform .35s var(--ease)'; el.style.opacity = 0; el.style.transform = 'scale(.96)'; } });
     if (REAL) done.forEach((q) => inv('forget', { id: q.id }).catch(() => {}));
-    setTimeout(() => { const before = rects(); S.queue = S.queue.filter((q) => q.status !== 'done'); if (!selItem()) S.sel = null; renderAll(); flip(before); if (withToast) toast(L.cleared); }, 230);
+    setTimeout(() => { const before = rects(); S.queue = S.queue.filter((q) => q.status !== 'done'); S.picked = new Set([...S.picked].filter((id) => itemOf(id))); if (!selItem()) S.sel = S.picked.size ? [...S.picked][0] : null; renderAll(); flip(before); if (withToast) toast(L.cleared); }, 230);
   }
 
   /* adicionar vídeos */
@@ -391,7 +422,7 @@
     const mk = (i, dir, file, rot, hdr) => ({ id: base + i, dir, file, preset: pid, cfg: clone(presetOf(pid)), status: 'ready', hue: ((base + i) * 47) % 360,
       src: { w: 2160, h: 3840, codec: 'HEVC', bits: 10, fps: '59,93', vfr: true, dur: '00:01:08:20', kbps: 48200, audio: 2, hdr, rot, mb: 410 } });
     const add = [mk(0, 'Day 3', 'IMG_4901.MOV', 0, false), mk(1, 'Day 3', 'IMG_4902.MOV', 0, false), mk(2, 'Day 3/Cam B', 'IMG_4911.MOV', 90, 'HLG')];
-    S.queue.push(...add); S.sel = add[0].id; renderAll(true, add.map((a) => a.id));
+    S.queue.push(...add); selectOnly(add[0].id); renderAll(true, add.map((a) => a.id));
     setTimeout(() => $('#queue').smoothTo(1e6), 60);
     toast(L.folderAdded('Day 3', add.length));
   }
@@ -401,6 +432,11 @@
   $('#bSetAll').onclick = (e) => openMenu(e.currentTarget, presetItems(null), (v) => assignAll(v));
 
   function assign(q, pid) { q.preset = pid; q.cfg = clone(presetOf(pid)); }
+  function assignPicked(pid) {
+    const list = pickedItems().filter((q) => q.status !== 'running'); list.forEach((q) => assign(q, pid)); renderAll();
+    list.forEach((q) => { const b = $(`.item[data-id="${q.id}"] .badge`); if (b) b.classList.add('bump'); });
+    toast(L.assigned(presetOf(pid).name, list.length));
+  }
   function assignAll(pid) {
     const list = pending(); list.forEach((q) => assign(q, pid)); renderAll();
     $$('.item:not(.is-done) .badge').forEach((b) => b.classList.add('bump'));
@@ -446,7 +482,7 @@
     if (select && list[0]) editPreset(list[0].id); else renderAll();
   }
   function editPreset(pid, focusName) {
-    S.sel = null; S.editPreset = pid; S.draft = null; renderAll(true);
+    selectOnly(null); S.editPreset = pid; S.draft = null; renderAll(true);
     if (focusName) setTimeout(() => { const i = $('#presetNameInput'); if (i) { i.focus(); i.select(); } }, 80);
   }
   function newPreset(folder) {
@@ -555,6 +591,7 @@
     }
     const q = selItem();
     if (!q) { if (S.editPreset !== b.dataset.id) { S.editPreset = b.dataset.id; S.draft = null; } renderPresets(); renderInspector(true); return; }
+    if (S.picked.size > 1) { assignPicked(b.dataset.id); return; }
     assign(q, b.dataset.id); renderAll(true);
     const badge = $(`.item[data-id="${q.id}"] .badge`); if (badge) badge.classList.add('bump');
   });
@@ -646,6 +683,7 @@
         savePresets(); renderPresets();
       } else if (t.folder !== undefined) moveToFolder(p.id, t.folder || '');
       else if (t.all) assignAll(P.pid);
+      else if (t.item && isPicked(+t.item.dataset.id) && S.picked.size > 1) assignPicked(P.pid);
       else if (t.item) { const q = itemOf(+t.item.dataset.id); assign(q, P.pid); renderAll(); const bd = $(`.item[data-id="${q.id}"] .badge`); if (bd) bd.classList.add('bump'); toast(L.assigned(p.name, 1)); }
       P.justDropped = true; setTimeout(() => { P.justDropped = false; }, 0);
     }
@@ -830,7 +868,7 @@
     const mod = T.isPreset ? T.dirty : T.preset && !same(c, T.preset);
     $('#inspFor').innerHTML = T.isPreset
       ? `<button class="dotc color-btn" id="bPresetColor" data-menu="1" title="${L.changeColor}" style="--c:${COLORS[c.color] || COLORS.blue}"></button><input id="presetNameInput" class="name-input" value="${esc(c.name)}" spellcheck="false" aria-label="${L.presetName}">`
-      : L.settingsFor;
+      : S.picked.size > 1 ? L.settingsForN(S.picked.size) : L.settingsFor;
     $('#inspFor').classList.toggle('editing', T.isPreset);
     $('#modified').classList.toggle('show', !!mod); $('#bSavePreset').classList.toggle('show', !!mod);
     $('#bSavePreset').textContent = T.isPreset ? L.saveChanges : L.saveToPreset;
@@ -839,7 +877,7 @@
     const dims = src ? outDims(src, c) : null;
     const resHint = !src && c.scale === '1080' ? `<div class="hint">${L.scale1080Hint}</div>` : '';
     const rotTxt = c.rotate ? ` · ↻ ${c.rotate}°` : '';
-    el.innerHTML = (T.isPreset ? `<div class="hint top-hint">${L.presetHint}</div>` : '')
+    el.innerHTML = (T.isPreset ? `<div class="hint top-hint">${L.presetHint}</div>` : S.picked.size > 1 ? `<div class="hint top-hint multi-hint">${L.multiHint(S.picked.size)}</div>` : '')
       + sec('video', L.video, `${codecName(c.codec)} · ${h264 ? 8 : c.bits}-bit · ${scaleTxt(c.scale)}${rotTxt} · ${c.fps.conform ? fpsTxt(c.fps.value) + ' CFR' : c.bitrate.mode === 'manual' ? fmtK(c.bitrate.kbps) : c.bitrate.mode === 'source' ? L.source : L.auto}${c.hdrToSdr ? ' · 709' : ''}`,
         `<div class="group">
           ${row(`${L.resolution}<small class="res-out">${resLabel(c, src)}</small>`, dd('scale', c.scale, [['source', L.source], ['1080', '1080p'], ['50', '50%'], ['25', '25%'], ['custom', L.custom]]))}
@@ -907,6 +945,15 @@
     const suf = c.suffix.on ? c.suffix.text.replace('{codec}', codecName(cfg.codec).replace('.', '')).replace('{preset}', cfg.name || '') : '';
     return (c.subfolder.on ? c.subfolder.text + '\\' : '') + base + suf + '.' + (cfg.container || 'mp4');
   }
+  // copia os campos alterados do vídeo principal para os outros selecionados
+  function spread(from, keys) {
+    if (S.picked.size < 2) return;
+    const get = (o, k) => k.split('.').reduce((a, x) => a[x], o);
+    pickedItems().forEach((q) => {
+      if (q === from || q.status === 'running') return;
+      keys.forEach((k) => { const ks = k.split('.'); let o = q.cfg; ks.slice(0, -1).forEach((x) => { o = o[x]; }); o[ks[ks.length - 1]] = clone(get(from.cfg, k)); });
+    });
+  }
   function set(key, v) {
     const T = target();
     const ks = key.split('.'); let o = T.cfg; ks.slice(0, -1).forEach((k) => { o = o[k]; });
@@ -916,6 +963,7 @@
     if (key === 'audio.channels') T.cfg.audio.tracks = v === 'mono' ? [1, 1] : [1, 2];
     if (key === 'codec' && v === 'h264') T.cfg.bits = 8;
     if (key === 'fpsMode') { delete T.cfg.fpsMode; T.cfg.fps.conform = v === 'cfr'; }
+    if (!T.isPreset) spread(T.q, key === 'fpsMode' ? ['fps.conform'] : [key, ...(key === 'audio.channels' ? ['audio.tracks'] : []), ...(key === 'codec' ? ['bits'] : [])]);
     renderQueue(); renderPresets(); renderInspector(); renderPreview();
   }
   $('#inspIn').addEventListener('click', (e) => {
@@ -926,7 +974,7 @@
     const t = e.target.closest('[data-track]');
     if (t) { const T = target(); const i = +t.dataset.track; const n = T.src ? T.src.audio : 2;
       openMenu(t, [1, 2, 3, 4, 5, 6, 7, 8].slice(0, Math.max(2, n)).map((k) => ({ label: L.track(k), value: k, sel: T.cfg.audio.tracks[i] === k })),
-        (k) => { T.cfg.audio.tracks[i] = k; renderAll(); }); }
+        (k) => { T.cfg.audio.tracks[i] = k; if (!T.isPreset) spread(T.q, ['audio.tracks']); renderAll(); }); }
   });
   $('#inspIn').addEventListener('change', (e) => { const i = e.target.closest('input[data-k]'); if (i) set(i.dataset.k, i.value); });
   $('#outPanel').addEventListener('click', (e) => { const s = e.target.closest('.switch'); if (s) { s.classList.toggle('on'); setTimeout(() => set(s.dataset.k), 180); } });
@@ -970,6 +1018,11 @@
         ${row(L.notify, sw('notify', S.set.notify))}
         ${row(L.gpu, `<span class="val">${engineTxt()}</span>`)}
       </div>
+      <div class="sec-label">${L.performance}</div>
+      <div class="group">
+        ${row(L.parallel, segH('parallel', clamp(+S.set.parallel || 1, 1, 3), [[1, '1'], [2, '2'], [3, '3']]), L.parallelSub)}
+        ${row(L.renderLog, `<button class="field pick" id="bOpenLog">${L.open}</button>`, L.renderLogSub)}
+      </div>
       <div class="group">
         ${row(`${L.version} ${esc(S.version)}`, S.update
           ? `<button class="btn small" id="bSheetUpdate">${L.updateNow} · ${esc(S.update.version)}</button>`
@@ -979,9 +1032,11 @@
       <div class="about">Mec Encoder ${esc(S.version)} · <span>@hugoeditor_</span></div>`;
     $$('#sheetBody .seg').forEach((s) => seg(s, (v) => {
       if (s.dataset.k === 'theme') { setTheme(v); return; }
+      if (s.dataset.k === 'parallel') { S.set.parallel = +v; saveSettings(); return; }
       S.set.lang = v; saveSettings(); applyLang(); renderAll(); renderSheet();
     }));
     $('#bSheetDef').onclick = (e) => openMenu(e.currentTarget, presetItems(S.set.defaultPreset), (v) => { S.set.defaultPreset = v; saveSettings(); renderSheet(); renderQueue(); });
+    $('#bOpenLog').onclick = () => (REAL ? inv('open_log').catch((e) => toast(String(e))) : toast('render.log'));
     const cu = $('#bCheckUpdate'); if (cu) cu.onclick = () => checkUpdate(true);
     const su = $('#bSheetUpdate'); if (su) su.onclick = installUpdate;
   }
@@ -995,13 +1050,16 @@
     $('#bDone').onclick = () => openSheet(false);
   $('#sheetBg').onclick = () => openSheet(false);
   addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') { openSheet(false); closeMenu(); }
+    if (e.key === 'Escape') { openSheet(false); closeMenu(); if (S.picked.size > 1 && !e.target.closest('input')) { selectOnly(S.sel); renderAll(); } }
     if (e.target.closest('input')) return;
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'o') { e.preventDefault(); if (REAL) inv('pick', { folder: e.shiftKey }); }
     if (e.key === ' ' && selItem() && $('#bPlay')) { e.preventDefault(); $('#bPlay').click(); }
     if (e.key === 'ArrowLeft' && selItem()) ctl[e.shiftKey ? 1 : 0].click();
     if (e.key === 'ArrowRight' && selItem()) ctl[e.shiftKey ? 3 : 4].click();
-    if (e.key === 'Delete' && selItem()) removeItem(S.sel);
+    if (e.key === 'Delete' && S.picked.size) pickedItems().forEach((q) => removeItem(q.id));
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a' && S.queue.length) {
+      e.preventDefault(); S.picked = new Set(S.queue.map((q) => q.id)); if (S.sel == null) S.sel = S.queue[0].id; renderAll(true);
+    }
   });
 
   /* ---------- atualização ---------- */
@@ -1049,12 +1107,12 @@
     S.queue.forEach((q) => { if (q.status === 'running') { q.status = 'ready'; q.p = 0; } q.queued = false; });
     S.job = null; renderRenderBtn(); renderQueue();
   }
-  function renderOne(id) {
+  function renderOne(id, quiet) {
     const q = itemOf(id); if (!q || q.status !== 'ready') return;
     if (!S.job) { startJob({ mode: 'single', list: [id] }); return; }
     if (S.job.mode === 'single') { if (!S.job.list.includes(id)) { S.job.list.push(id); q.queued = true; renderQueue(); } }
     else { const before = rects(); const at = S.queue.findIndex((x) => x.status === 'running') + 1; S.queue = S.queue.filter((x) => x !== q); S.queue.splice(at, 0, q); renderQueue(); flip(before); }
-    toast(L.willRenderNext(q.file));
+    if (!quiet) toast(L.willRenderNext(q.file));
   }
   function nextItem(J) {
     if (J.mode === 'queue') return S.queue.find((q) => q.status === 'ready');
@@ -1063,29 +1121,37 @@
   }
   function updateFill() {
     const J = S.job; if (!J || J.mode !== 'queue') return;
-    const cur = S.queue.find((q) => q.status === 'running');
-    const left = S.queue.filter((q) => q.status === 'ready').length + (cur ? 1 - (cur.p || 0) : 0);
+    const left = S.queue.filter((q) => q.status === 'ready').length
+      + S.queue.filter((q) => q.status === 'running').reduce((a, q) => a + 1 - (q.p || 0), 0);
     $('#renderFill').style.setProperty('--p', clamp(1 - left / (J.total || 1), 0, 1));
   }
-  // App: um vídeo por vez, na ordem atual da fila (que pode mudar enquanto renderiza).
+  // App: renderiza na ordem atual da fila (que pode mudar enquanto renderiza),
+  // com até S.set.parallel vídeos ao mesmo tempo.
   async function runLoop() {
     const J = S.job; S.stopping = false; let failed = 0;
-    while (S.job === J) {
-      const q = nextItem(J);
-      if (!q) break;
-      q.status = 'running'; q.queued = false; q.p = 0; q.error = null; renderQueue(); updateFill();
-      try {
-        const r = await inv('render', { id: q.id, cfg: q.cfg });
-        q.status = 'done'; q.p = 1; q.out = r.output; q.outMb = r.size / 1e6;
-        if (r.deleted) toast(L.deletedOrig);
-        if (J.mode === 'single') notify(L.rendered(q.file));
-      } catch (e) {
-        if (S.stopping || S.job !== J) { q.status = 'ready'; q.p = 0; break; }
-        q.status = 'err'; q.error = String(e === 'source-missing' ? L.sourceMissing : e); failed++;
-        notify(L.renderFailed(q.file) + (q.error ? ': ' + q.error.split('\n').pop() : ''), true);
+    const worker = async () => {
+      while (S.job === J) {
+        const q = nextItem(J);
+        if (!q) break;
+        q.status = 'running'; q.queued = false; q.p = 0; q.speed = 0; q.error = null; renderQueue(); updateFill();
+        try {
+          const r = await inv('render', { id: q.id, cfg: q.cfg });
+          q.status = 'done'; q.p = 1; q.out = r.output; q.outMb = r.size / 1e6;
+          if (r.deleted) toast(L.deletedOrig);
+          if (J.mode === 'single') notify(L.rendered(q.file));
+        } catch (e) {
+          if (S.stopping || S.job !== J) { q.status = 'ready'; q.p = 0; break; }
+          q.status = 'err'; q.error = String(e === 'source-missing' ? L.sourceMissing : e); failed++;
+          notify(L.renderFailed(q.file) + (q.error ? ': ' + q.error.split('\n').pop() : ''), true);
+        }
+        renderQueue(); renderInspector(); updateFill();
       }
-      renderQueue(); renderInspector(); updateFill();
-    }
+    };
+    const n = clamp(+S.set.parallel || 1, 1, 3);
+    const workers = [worker()];
+    // os outros entram um pouco depois, para não abrirem todos juntos
+    for (let i = 1; i < n; i++) { await new Promise((r) => setTimeout(r, 400)); if (S.job !== J) break; workers.push(worker()); }
+    await Promise.all(workers);
     if (S.job === J) finishJob(failed);
   }
   // Demo: simulação
@@ -1159,13 +1225,13 @@
       clearTimeout(batchTimer);
       batchTimer = setTimeout(() => {
         const ids = batch; batch = [];
-        if (S.sel == null && firstNew != null) { S.sel = firstNew; S.t = 0.15; }
+        if (S.sel == null && firstNew != null) { selectOnly(firstNew); S.t = 0.15; }
         firstNew = null; renderAll(true, ids);
         setTimeout(() => $('#queue').smoothTo(1e6), 60);
       }, 60);
     });
     on('item-thumb', (p) => { const q = itemOf(p.id); if (!q) return; q.thumb = p.thumb; patchItem(q);
-      if (S.sel === q.id) { const img = $('#pvImg'); if (img && !img.getAttribute('src')) img.src = p.thumb; } });
+      if (S.sel === q.id) $$('.stage .frame img').forEach((img) => { if (!img.getAttribute('src')) img.src = p.thumb; }); });
     on('scan-done', (p) => {
       if (p.error === 'ffmpeg-missing') { toast(L.ffmpegMissing); return; }
       const errs = (p.errors || []).length;
@@ -1175,8 +1241,8 @@
     });
     on('render-progress', (p) => {
       const q = itemOf(p.id); if (!q || q.status !== 'running') return;
-      q.p = p.p; const it = $(`.item[data-id="${q.id}"]`);
-      if (it) { it.querySelector('.prog').style.setProperty('--p', q.p); const st = it.querySelector('.state'); if (st) st.textContent = Math.round(q.p * 100) + '%'; }
+      q.p = p.p; q.speed = p.speed; q.mode = p.mode; const it = $(`.item[data-id="${q.id}"]`);
+      if (it) { it.querySelector('.prog').style.setProperty('--p', q.p); const st = it.querySelector('.state'); if (st) { st.textContent = runTxt(q); st.title = p.mode === 'cpu' ? L.cpuDecode : ''; } }
       updateFill();
     });
     on('drag', (p) => $('#queueCard').classList.toggle('drag-over', !!p.over));
@@ -1191,8 +1257,9 @@
   if (REAL) bootReal();
   else {
     applyTheme(); applyLang();
-    if (qs.get('sel')) S.sel = qs.get('sel') === 'none' ? null : +qs.get('sel');
-    if (qs.get('empty')) { S.queue = []; S.sel = null; }
+    if (qs.get('sel')) selectOnly(qs.get('sel') === 'none' ? null : +qs.get('sel'));
+    if (qs.get('multi')) qs.get('multi').split(',').forEach((id) => S.picked.add(+id));
+    if (qs.get('empty')) { S.queue = []; selectOnly(null); }
     if (qs.get('open')) qs.get('open').split(',').forEach((k) => { S.open[k] = true; });
     if (qs.get('fold')) S.set.foldPresets = true;
     if (qs.get('update')) S.update = { version: '0.2.0' };

@@ -42,7 +42,8 @@ pub struct AppState {
     engine: Arc<Engine>,
     items: Mutex<HashMap<u64, Arc<MediaInfo>>>,
     next_id: AtomicU64,
-    child: Arc<Mutex<Option<Child>>>,
+    /// ffmpeg rodando, por vídeo (pode ter mais de um ao mesmo tempo).
+    children: Arc<Mutex<HashMap<u64, Child>>>,
     cancel: Arc<AtomicBool>,
     latest: Mutex<Option<update::Latest>>,
 }
@@ -213,16 +214,35 @@ fn last_lines(s: &str, n: usize) -> String {
     lines[lines.len().saturating_sub(n)..].join("\n")
 }
 
+type Children = Arc<Mutex<HashMap<u64, Child>>>;
+
+fn kill_all(children: &Children) {
+    for c in children.lock().unwrap().values_mut() { let _ = c.kill(); }
+}
+
+/// Registro simples de cada render (comando, modo, velocidade, erro), em render.log na pasta de dados.
+fn log(app: &AppHandle, text: &str) {
+    use std::io::Write;
+    let path = store::dir(app).join("render.log");
+    if std::fs::metadata(&path).map_or(false, |m| m.len() > 2_000_000) {
+        let _ = std::fs::rename(&path, path.with_extension("old.log"));
+    }
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&path) {
+        let _ = writeln!(f, "[{now}] {text}");
+    }
+}
+
 fn run_ffmpeg(app: &AppHandle, ffmpeg: &PathBuf, plan: &command::Plan, id: u64, duration: f64,
-              slot: &Arc<Mutex<Option<Child>>>, cancel: &Arc<AtomicBool>) -> Result<(), String> {
+              children: &Children, cancel: &Arc<AtomicBool>, mode: &str) -> Result<f64, String> {
     let mut child = tools::command(ffmpeg).args(&plan.args)
         .stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped())
         .spawn().map_err(|e| e.to_string())?;
     let stdout = child.stdout.take().ok_or("no stdout")?;
     let mut stderr = child.stderr.take().ok_or("no stderr")?;
     let err_thread = std::thread::spawn(move || { let mut s = String::new(); let _ = stderr.read_to_string(&mut s); s });
-    *slot.lock().unwrap() = Some(child);
-    if cancel.load(Ordering::SeqCst) { if let Some(c) = slot.lock().unwrap().as_mut() { let _ = c.kill(); } }
+    children.lock().unwrap().insert(id, child);
+    if cancel.load(Ordering::SeqCst) { kill_all(children); }
 
     let mut prog = Progress::default();
     let mut last = Instant::now() - Duration::from_secs(1);
@@ -230,34 +250,44 @@ fn run_ffmpeg(app: &AppHandle, ffmpeg: &PathBuf, plan: &command::Plan, id: u64, 
         if prog.feed(&line) && last.elapsed() > Duration::from_millis(200) {
             last = Instant::now();
             let _ = app.emit("render-progress", json!({
-                "id": id, "p": prog.fraction(duration), "fps": prog.fps, "speed": prog.speed, "eta": prog.eta(duration)
+                "id": id, "p": prog.fraction(duration), "fps": prog.fps, "speed": prog.speed, "eta": prog.eta(duration), "mode": mode
             }));
         }
     }
-    let status = slot.lock().unwrap().take().map(|mut c| c.wait());
+    let status = children.lock().unwrap().remove(&id).map(|mut c| c.wait());
     let err = err_thread.join().unwrap_or_default();
     if cancel.load(Ordering::SeqCst) { return Err("cancelled".into()); }
     match status {
-        Some(Ok(s)) if s.success() => Ok(()),
+        Some(Ok(s)) if s.success() => Ok(prog.speed),
         _ => Err(if err.trim().is_empty() { "ffmpeg failed".into() } else { last_lines(&err, 4) }),
     }
 }
 
 fn do_render(app: &AppHandle, engine: &Engine, info: &MediaInfo, cfg: &Preset, id: u64,
-             slot: &Arc<Mutex<Option<Child>>>, cancel: &Arc<AtomicBool>) -> Result<RenderResult, String> {
+             children: &Children, cancel: &Arc<AtomicBool>) -> Result<RenderResult, String> {
     let ffmpeg = engine.ffmpeg()?;
     let ffprobe = engine.ffprobe()?;
     if !info.path.exists() { return Err("source-missing".into()); }
     let out = command::output_path(&info.path, cfg);
     if let Some(dir) = out.parent() { std::fs::create_dir_all(dir).map_err(|e| e.to_string())?; }
     let enc = engine.encoder.lock().unwrap().clone();
-    let mut plan = command::build(info, cfg, &enc, &out);
-    let mut res = run_ffmpeg(app, &ffmpeg, &plan, id, info.duration, slot, cancel);
-    // Se a decodificação pela GPU falhar (codec que a placa não lê), tenta de novo decodificando pela CPU.
-    if matches!(&res, Err(e) if e != "cancelled") && enc == Encoder::Nvenc {
-        let _ = std::fs::remove_file(&out);
-        plan = command::build_opts(info, cfg, &enc, &out, false);
-        res = run_ffmpeg(app, &ffmpeg, &plan, id, info.duration, slot, cancel);
+    // Com NVENC: 1) tudo na GPU; 2) só decodifica na GPU; 3) decodifica na CPU.
+    // Se um modo falhar (codec que a placa não lê, filtro que falta), tenta o próximo.
+    let modes: &[command::Decode] = if enc == Encoder::Nvenc {
+        &[command::Decode::Gpu, command::Decode::Hw, command::Decode::Cpu]
+    } else { &[command::Decode::Cpu] };
+    let started = Instant::now();
+    let mut plan = command::Plan::default();
+    let mut res: Result<f64, String> = Err("ffmpeg failed".into());
+    for (i, &mode) in modes.iter().enumerate() {
+        plan = command::build_mode(info, cfg, &enc, &out, mode);
+        log(app, &format!("{} | try {} ({}) | ffmpeg {}", info.path.display(), i + 1, mode.name(), plan.args.join(" ")));
+        res = run_ffmpeg(app, &ffmpeg, &plan, id, info.duration, children, cancel, mode.name());
+        match &res {
+            Ok(speed) => { log(app, &format!("{} | ok ({}) | {:.1}s | {:.2}x", info.path.display(), mode.name(), started.elapsed().as_secs_f64(), speed)); break; }
+            Err(e) if e == "cancelled" => { log(app, &format!("{} | cancelled", info.path.display())); break; }
+            Err(e) => { log(app, &format!("{} | failed ({}): {}", info.path.display(), mode.name(), e.replace('\n', " / "))); let _ = std::fs::remove_file(&out); }
+        }
     }
     if let Err(e) = res { let _ = std::fs::remove_file(&out); return Err(e); }
 
@@ -278,10 +308,11 @@ fn do_render(app: &AppHandle, engine: &Engine, info: &MediaInfo, cfg: &Preset, i
 async fn render(app: AppHandle, state: State<'_, AppState>, id: u64, cfg: Preset) -> Result<RenderResult, String> {
     let info = item(&state, id)?;
     let engine = state.engine.clone();
-    let slot = state.child.clone();
+    let children = state.children.clone();
     let cancel = state.cancel.clone();
-    cancel.store(false, Ordering::SeqCst);
-    tauri::async_runtime::spawn_blocking(move || do_render(&app, &engine, &info, &cfg, id, &slot, &cancel))
+    // Só zera o "parar" quando nada está rodando (com vários vídeos ao mesmo tempo).
+    if children.lock().unwrap().is_empty() { cancel.store(false, Ordering::SeqCst); }
+    tauri::async_runtime::spawn_blocking(move || do_render(&app, &engine, &info, &cfg, id, &children, &cancel))
         .await
         .map_err(|e| e.to_string())?
 }
@@ -289,7 +320,7 @@ async fn render(app: AppHandle, state: State<'_, AppState>, id: u64, cfg: Preset
 #[tauri::command]
 fn stop(state: State<'_, AppState>) {
     state.cancel.store(true, Ordering::SeqCst);
-    if let Some(c) = state.child.lock().unwrap().as_mut() { let _ = c.kill(); }
+    kill_all(&state.children);
 }
 
 // ======================================================================
@@ -373,6 +404,14 @@ fn reveal(path: PathBuf) -> Result<(), String> {
     Ok(())
 }
 
+/// Abre o registro de renders (render.log) no Bloco de Notas.
+#[tauri::command]
+fn open_log(app: AppHandle) -> Result<(), String> {
+    let path = store::dir(&app).join("render.log");
+    if !path.exists() { log(&app, "log created"); }
+    std::process::Command::new("notepad.exe").arg(path).spawn().map(|_| ()).map_err(|e| e.to_string())
+}
+
 /// Abre a pasta onde ficam presets.json e settings.json.
 #[tauri::command]
 fn open_data_dir(app: AppHandle) -> Result<(), String> {
@@ -416,7 +455,7 @@ async fn install_update(app: AppHandle, state: State<'_, AppState>) -> Result<()
     let latest = state.latest.lock().unwrap().clone().ok_or("no update")?;
     let app2 = app.clone();
     tauri::async_runtime::spawn_blocking(move || update::install(&app2, &latest)).await.map_err(|e| e.to_string())??;
-    if let Some(c) = state.child.lock().unwrap().as_mut() { let _ = c.kill(); }
+    kill_all(&state.children);
     app.exit(0);
     Ok(())
 }
@@ -445,7 +484,7 @@ fn main() {
                 engine: engine.clone(),
                 items: Mutex::new(HashMap::new()),
                 next_id: AtomicU64::new(1),
-                child: Arc::new(Mutex::new(None)),
+                children: Arc::new(Mutex::new(HashMap::new())),
                 cancel: Arc::new(AtomicBool::new(false)),
                 latest: Mutex::new(None),
             });
@@ -482,7 +521,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             pick, add, forget, preview, waveform, render, stop, get_state, save_presets, save_settings,
-            default_presets, import_enc, export_presets, import_presets, reveal, open_data_dir, open_url, notify, ready, check_update, install_update
+            default_presets, import_enc, export_presets, import_presets, reveal, open_data_dir, open_log, open_url, notify, ready, check_update, install_update
         ])
         .build(tauri::generate_context!())
         .expect("error while building Mec Encoder")
@@ -490,7 +529,7 @@ fn main() {
             if let tauri::RunEvent::Exit = event {
                 if let Some(state) = app.try_state::<AppState>() {
                     state.cancel.store(true, Ordering::SeqCst);
-                    if let Some(c) = state.child.lock().unwrap().as_mut() { let _ = c.kill(); }
+                    kill_all(&state.children);
                 }
             }
         });

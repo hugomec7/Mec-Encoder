@@ -302,3 +302,7 @@
 .field.pick.dis:hover{background:var(--fill)}
 .row .field.pick.dd + .field, .row .field + .field.pick.dd{margin-left:6px}
 .row .lbl .pill-tag{align-self:flex-start;margin:3px 0 1px}
+/* seleção múltipla na fila */
+#qList{user-select:none;-webkit-user-select:none}
+.item.sel.primary{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--blue) 55%,transparent)}
+.multi-hint{color:var(--blue)}
