@@ -143,5 +143,7 @@ jobs:
             gh release create "$TAG" -R "$GITHUB_REPOSITORY" --title "Mec Encoder $VERSION" --notes-file "$NOTES" --target "$GITHUB_SHA" > rel.log 2>&1 || fail
           fi
           gh release upload "$TAG" -R "$GITHUB_REPOSITORY" out/* --clobber > rel.log 2>&1 || fail
+          # o .exe solto de builds antigas não é mais usado
+          gh release delete-asset "$TAG" MecEncoder_x64_portable.exe -R "$GITHUB_REPOSITORY" -y > /dev/null 2>&1 || true
           echo "### Download" >> "$GITHUB_STEP_SUMMARY"
           echo "https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG" >> "$GITHUB_STEP_SUMMARY"
