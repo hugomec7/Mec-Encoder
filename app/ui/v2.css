@@ -87,3 +87,104 @@
 [data-variant="2"] .insp-foot{padding:10px 16px 12px}
 [data-variant="2"] .btn.small.ghost{background:none;color:var(--blue);padding:0 4px}
 [data-variant="2"] .btn.small.ghost:hover{filter:none;opacity:.75}
+
+[data-variant="2"][data-theme="oled"]{--canvas:#000;--side:#000}
+[data-theme="oled"] .frame{box-shadow:0 0 0 .5px rgba(255,255,255,.08)}
+[data-theme="oled"] .sheet{box-shadow:0 0 0 .5px rgba(255,255,255,.14)}
+
+/* ---------- ações do vídeo ao passar o mouse ---------- */
+.item{user-select:none}
+.acts{position:absolute;right:8px;top:50%;transform:translateY(-50%);display:flex;gap:2px;padding:3px;border-radius:99px;
+  background:var(--panel-2);
+  box-shadow:0 2px 10px rgba(0,0,0,.18),0 0 0 .5px var(--stroke-2);
+  opacity:0;pointer-events:none;transform:translateY(-50%) scale(.9);transition:opacity .2s var(--ease),transform .35s var(--spring)}
+.item:hover .acts,.item.hover .acts{opacity:1;pointer-events:auto;transform:translateY(-50%) scale(1)}
+.item:hover .state,.item.hover .state{opacity:0}
+.sorting .acts{display:none}
+.acts .a{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;color:var(--text-2);transition:background .2s,color .2s,transform .3s var(--spring)}
+.acts .a:hover{background:var(--fill-2);color:var(--text)}
+.acts .a:active{transform:scale(.86)}
+.acts .a svg{width:13px;height:13px}
+.acts .a-render{background:var(--blue);color:#fff}
+.acts .a-render:hover{background:var(--blue);color:#fff;filter:brightness(1.1)}
+.acts .a-render svg{width:11px;height:11px;margin-left:1px}
+.item .x{display:none}
+.item.is-done .name{color:var(--text-2)}
+
+/* reordenar */
+.sorting .item{transition:transform .28s var(--ease)}
+.item.lifting{transition:none!important;z-index:5;background:var(--panel-2);cursor:grabbing;
+  box-shadow:0 12px 30px rgba(0,0,0,.28),0 0 0 .5px var(--stroke-2)}
+[data-theme="light"] .item.lifting{background:#fff}
+
+/* arrastar preset */
+.drag-ghost{position:fixed;left:0;top:0;z-index:80;pointer-events:none;display:flex;align-items:center;gap:7px;height:30px;padding:0 13px 0 10px;
+  border-radius:99px;background:var(--menu);backdrop-filter:blur(20px);font-size:12.5px;font-weight:600;
+  box-shadow:0 12px 30px rgba(0,0,0,.3),0 0 0 .5px var(--stroke-2);opacity:0;scale:.8;transition:opacity .15s,scale .3s var(--spring)}
+.drag-ghost.show{opacity:1;scale:1}
+.drag-ghost i{width:8px;height:8px;border-radius:50%;background:var(--c)}
+.dragging-preset,.dragging-preset *{cursor:grabbing!important}
+.item.drop-hover{background:color-mix(in srgb,var(--blue) 16%,transparent)!important;box-shadow:0 0 0 1.5px var(--blue) inset}
+.all-drop{display:grid;grid-template-rows:0fr;transition:grid-template-rows .4s var(--ease);padding:0 8px;flex:none}
+.all-drop-in{overflow:hidden;min-height:0;display:flex;align-items:center;justify-content:center;gap:8px;font-size:12px;font-weight:550;color:var(--text-2);
+  border-radius:12px;border:1.5px dashed var(--stroke-2);height:0;opacity:0;transition:height .4s var(--ease),opacity .3s,border-color .2s,background .2s,color .2s}
+.all-drop-in svg{width:15px;height:15px}
+.dragging-preset .all-drop{grid-template-rows:1fr}
+.dragging-preset .all-drop-in{height:44px;opacity:1;margin-bottom:6px}
+.all-drop.drop-hover .all-drop-in{border-color:var(--blue);background:color-mix(in srgb,var(--blue) 12%,transparent);color:var(--blue)}
+
+/* fila vazia: a área de arrastar ocupa o espaço */
+#queueCard.empty .queue{display:none}
+#queueCard.empty .drop{flex:1;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:14px;margin:0 12px 12px;
+  border:1.5px dashed var(--stroke-2);border-radius:16px}
+#queueCard.empty .drop>svg{width:34px;height:34px;color:var(--text-3)}
+#queueCard.empty .drop-t{align-items:center;gap:4px}
+#queueCard.empty .drop-t b{font-size:14px}
+#queueCard.empty .def-line{margin-top:10px}
+.btn:disabled{opacity:.4;pointer-events:none}
+
+/* prévia sem vídeo */
+.pv-empty{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--text-3);font-size:12.5px}
+.pv-empty svg{width:44px;height:44px;opacity:.7}
+.no-video .pv-empty{display:flex;animation:fadeIn .5s var(--ease)}
+.no-video .frame,.no-video #pvSeg{visibility:hidden}
+.no-video .transport{opacity:.35;pointer-events:none}
+
+/* presets recolhíveis */
+.fold-btn{display:flex;align-items:center;gap:6px;color:var(--text);padding:2px 6px 2px 0;border-radius:8px}
+.fold-btn .chev{width:12px;height:12px;color:var(--text-3);transition:transform .45s var(--spring)}
+.fold-btn.closed .chev{transform:rotate(-90deg)}
+.fold-btn:hover .chev{color:var(--text-2)}
+.card-head .fold-btn{margin-right:auto}
+.fold{display:grid;grid-template-rows:1fr;transition:grid-template-rows .45s var(--ease),opacity .3s var(--ease);flex:none}
+.fold.closed{grid-template-rows:0fr;opacity:0}
+.fold-in{overflow:hidden;min-height:0}
+.top-hint{padding:4px 8px 8px!important;margin:0!important}
+
+/* menu: ícones, separador, ação de perigo */
+.menu hr{border:0;height:1px;background:var(--sep);margin:4px 6px}
+.menu button>svg:first-child{width:14px;height:14px;color:var(--text-2);flex:none}
+.menu button:hover>svg:first-child{color:#fff}
+.menu button.danger{color:var(--red)}
+.menu button.danger:hover{background:var(--red);color:#fff}
+.menu button.danger svg{color:currentColor!important}
+.toast i{background:var(--blue)}
+.toast.ok i{background:var(--green)}
+
+/* rolagem: o conteúdo interno recebe o efeito elástico */
+.smooth{overscroll-behavior:contain}
+.smooth>.sc{will-change:transform}
+#qList{display:flex;flex-direction:column;gap:2px;min-height:100%}
+#inspIn{display:flex;flex-direction:column}
+#sheetBody{display:flex;flex-direction:column;gap:14px}
+[data-variant="2"] .queue,[data-variant="2"] .inspector-body,.sheet-body{display:block}
+
+/* ícone do tema: lua em escuro e OLED, sol no claro */
+:root:not([data-theme="light"]) .theme-btn .sun{transform:rotate(-90deg) scale(.4);opacity:0}
+[data-theme="light"] .theme-btn .sun{transform:none;opacity:1}
+/* cabeçalho da fila sem quebrar linha */
+.card-head>*{white-space:nowrap}
+#queueCard .card-head .link{margin-left:auto}
+#queueCard .card-head .count{overflow:hidden;text-overflow:ellipsis}
+.dragging-preset .acts{display:none}
+.no-video .timeline{--t:0%!important}

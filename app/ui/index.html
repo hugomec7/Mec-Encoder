@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-theme="dark" data-variant="1">
+<html lang="en" data-theme="dark" data-variant="2">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -40,12 +40,14 @@
     <section class="card" id="queueCard">
       <div class="card-head"><h2 id="lQueue"></h2><span class="count" id="qCount"></span>
         <button class="link" id="bClearDone"></button>
-        <button class="add-btn" id="bAdd" title="+"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+        <button class="add-btn" id="bSetAll" data-menu="1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></svg></button>
+        <button class="add-btn" id="bAdd"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
       </div>
-      <div class="queue" id="queue"></div>
+      <div class="all-drop" id="allDrop"><div class="all-drop-in"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></svg><span id="lDropAll"></span></div></div>
+      <div class="queue smooth" id="queue"><div class="sc" id="qList"></div></div>
       <div class="drop" id="drop">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2h7.5A2.5 2.5 0 0 1 21 9.5v8a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z"/><path d="M12 10.5v6M9.5 13l2.5-2.5 2.5 2.5"/></svg>
-        <div class="drop-t"><b id="lDropTitle"></b><span id="lDropSub"></span><span class="def-line"><span id="lNewUse"></span><button class="def-preset" id="bDefPreset"></button></span></div>
+        <div class="drop-t"><b id="lDropTitle"></b><span id="lDropSub"></span><span class="def-line"><span id="lNewUse"></span><button class="def-preset" id="bDefPreset" data-menu="1"></button></span></div>
       </div>
       <div class="queue-foot">
         <div class="totals"><span id="tTotal"></span><span id="tEta">NVENC · RTX</span></div>
@@ -56,17 +58,22 @@
     </section>
 
     <!-- PRÉVIA -->
-    <section class="card preview">
+    <section class="card preview" id="previewCard">
       <div class="pv-top">
         <div class="chips" id="chips"></div>
         <div class="seg" id="pvSeg"><div class="pill"></div><button class="active" data-v="in" id="lOriginal"></button><button data-v="out" id="lResult"></button></div>
       </div>
-      <div class="stage"><div class="frame" id="frame"></div></div>
+      <div class="stage"><div class="frame" id="frame"></div>
+        <div class="pv-empty" id="pvEmpty">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="13" y="5" width="22" height="38" rx="5"/><path d="M21 20.5v7l6-3.5z" fill="currentColor"/></svg>
+          <span id="lPvEmpty"></span>
+        </div>
+      </div>
       <div class="pv-meta" id="pvMeta"></div>
       <div class="transport">
         <div class="timeline" id="timeline"><div class="played"></div><canvas id="wave"></canvas><div class="head"></div></div>
         <div class="controls">
-          <span class="tc tnum" id="tcNow">00:00:41:12</span>
+          <span class="tc tnum" id="tcNow">00:00:00:00</span>
           <div class="mid">
             <button class="ctl" title="←"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3.5L5.5 8l4.5 4.5"/></svg></button>
             <button class="ctl"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M7.6 3.4v9.2L1.8 8zM14.2 3.4v9.2L8.4 8z"/></svg></button>
@@ -74,20 +81,22 @@
             <button class="ctl"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M1.8 3.4v9.2L7.6 8zM8.4 3.4v9.2L14.2 8z"/></svg></button>
             <button class="ctl" title="→"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5L10.5 8 6 12.5"/></svg></button>
           </div>
-          <span class="tc end tnum" id="tcEnd">00:02:15:31</span>
+          <span class="tc end tnum" id="tcEnd">00:00:00:00</span>
         </div>
       </div>
     </section>
 
     <!-- INSPETOR -->
     <section class="card" id="inspector">
-      <div class="card-head"><h2 id="lPresets"></h2><button class="link" id="bManage"></button></div>
-      <div class="presets" id="presets"></div>
-      <div class="preset-desc" id="presetDesc"></div>
+      <div class="card-head"><button class="fold-btn" id="bFoldPresets"><h2 id="lPresets"></h2><svg class="chev" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 4.5L6 7l2.5-2.5"/></svg></button><button class="link" id="bManage"></button></div>
+      <div class="fold" id="presetsFold"><div class="fold-in">
+        <div class="presets" id="presets"></div>
+        <div class="preset-desc" id="presetDesc"></div>
+      </div></div>
       <div class="insp-title"><h3 id="inspFor"></h3><span class="modified" id="modified"><i></i><span id="lModified"></span></span><button class="link" id="bSavePreset"></button></div>
-      <div class="inspector-body" id="insp"></div>
+      <div class="inspector-body smooth" id="insp"><div class="sc" id="inspIn"></div></div>
       <div class="insp-foot">
-        <div class="est"><small id="lEst"></small><b class="tnum" id="est"></b></div>
+        <div class="est" id="estBox"><small id="lEst"></small><b class="tnum" id="est"></b></div>
         <button class="btn small ghost" id="bApplyAll"></button>
       </div>
     </section>
@@ -98,13 +107,13 @@
 <div class="sheet-bg" id="sheetBg"></div>
 <div class="sheet" id="sheet" role="dialog">
   <div class="sheet-head"><h2 id="lSettings"></h2><button class="sheet-done" id="bDone"></button></div>
-  <div class="sheet-body" id="sheetBody"></div>
+  <div class="sheet-body smooth" id="sheetScroll"><div class="sc" id="sheetBody"></div></div>
 </div>
 
-<!-- menu suspenso -->
 <div class="menu" id="menu"></div>
-
+<div class="drag-ghost" id="ghost"></div>
 <div class="toast" id="toast"><i></i><span id="toastTxt"></span></div>
+<audio id="sfxDone" src="sounds/done.mp3" preload="auto"></audio>
 
 <script src="i18n.js"></script>
 <script src="demo.js"></script>

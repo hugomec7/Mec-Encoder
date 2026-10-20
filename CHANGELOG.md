@@ -2,6 +2,39 @@
 
 ## In development · Em desenvolvimento
 
+### Step 1.2: v2 chosen · v2 escolhida
+**English**
+- **v2 is the official layout.**
+- **OLED theme** (pure black), in Settings › Appearance next to System, Light and Dark.
+- **Render a single video**: hover a video and click ▶, or right-click › Render this video. The sound plays when that video is done.
+- **Render queue** plays the sound once, when the whole queue is done.
+- **Reorder the queue** by dragging videos, with spring animation.
+- **Drag a preset onto a video** to change its preset, or onto the “use for all” area that appears at the top of the queue.
+- **Use one preset for all videos**: layers button in the queue header, or right-click a preset.
+- **Show in folder** (hover button or right-click). Finished videos open the converted file.
+- Right-click menu on videos: render, show in folder, move to top, remove.
+- **Collapsible Presets panel**; Video, Audio and the other sections also fold.
+- **Smooth scrolling** with an elastic bounce at the ends.
+- **Works with an empty queue**: you can edit presets with no videos; videos that still use an unchanged preset follow the edits.
+- **Finish sound** with an on/off switch in Settings.
+- Shortcuts: Space plays the preview, Delete removes the selected video, Esc closes menus.
+
+**Português**
+- **A v2 é o layout oficial.**
+- **Tema OLED** (preto puro), em Configurações › Aparência, junto com Sistema, Claro e Escuro.
+- **Renderizar um vídeo só**: passe o mouse no vídeo e clique em ▶, ou botão direito › Renderizar este vídeo. O som toca quando aquele vídeo termina.
+- **Renderizar fila** toca o som uma vez, quando a fila inteira termina.
+- **Reordenar a fila** arrastando os vídeos, com animação de mola.
+- **Arrastar um preset até um vídeo** para trocar o preset dele, ou até a área “usar em todos” que aparece no topo da fila.
+- **Usar um preset em todos os vídeos**: botão de camadas no topo da fila, ou botão direito no preset.
+- **Mostrar na pasta** (botão ao passar o mouse ou botão direito). Vídeos prontos abrem o arquivo convertido.
+- Menu de botão direito nos vídeos: renderizar, mostrar na pasta, mover para o topo, tirar da fila.
+- **Painel de Presets recolhível**; Vídeo, Áudio e as outras seções também recolhem.
+- **Scroll suave** com efeito elástico nas pontas.
+- **Funciona com a fila vazia**: dá para editar os presets sem vídeos; os vídeos que usam o preset sem mudanças acompanham as edições.
+- **Som ao terminar**, com botão para ligar/desligar nas Configurações.
+- Atalhos: Espaço reproduz a prévia, Delete tira o vídeo selecionado, Esc fecha menus.
+
 ### Step 1.1: interface v2
 **English**
 - New **v2 layout**, more minimal: one surface with thin dividers, collapsible settings sections with a one-line summary, compact queue and presets. (v1 is still available while we choose.)

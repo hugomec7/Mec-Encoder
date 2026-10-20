@@ -1,7 +1,16 @@
 // Textos da interface. Inglês é o idioma principal; português é opcional.
 window.MEC_I18N = {
   en: {
-    queue: 'Queue', videos: (n) => `${n} video${n === 1 ? '' : 's'}`, clearDone: 'Clear finished',
+    renderThis: 'Render this video', showInFolder: 'Show in folder', showOutput: 'Show output file', moveTop: 'Move to top', remove: 'Remove from queue',
+    setAll: 'Use a preset for all videos', dropAll: 'Drop here to use for all videos', rendered: (n) => `${n} rendered`,
+    emptyTitle: 'No videos yet', emptySub: 'Drop videos or folders here. You can still edit your presets.',
+    pvEmpty: 'Select a video to preview', editing: 'Preset', presetHint: 'Changes are saved to this preset.',
+    oled: 'OLED', sound: 'Sound when finished', useForAll: 'Use for all videos', setDefault: 'Use for new videos', editPreset: 'Edit preset',
+    willRenderNext: (n) => `${n} will render next`, assigned: (p, n) => `${p} set for ${n} video${n === 1 ? '' : 's'}`,
+    revealToast: 'Opens File Explorer with the file selected', defaultSet: (p) => `New videos will use ${p}`, busy: 'Rendering…',
+    reorderHint: 'Drag to reorder', presetsFold: 'Show or hide presets', setForAllBtn: 'Use for all',
+
+    queue: 'Queue', videos: (n) => `${n} video${n === 1 ? '' : 's'}`, clearDone: 'Clear done',
     dropTitle: 'Drop videos or folders', dropSub: 'Subfolders included', newUse: 'New videos use',
     toRender: (n, s) => `<b>${n}</b> to render · ≈ <b>${s}</b>`,
     render: 'Render queue', stop: 'Stop', ready: 'Done', error: 'Error',
@@ -38,7 +47,16 @@ window.MEC_I18N = {
     stereoL: 'stereo', monoL: 'mono', minimize: 'Minimize', maximize: 'Maximize', close: 'Close',
   },
   pt: {
-    queue: 'Fila', videos: (n) => `${n} vídeo${n === 1 ? '' : 's'}`, clearDone: 'Limpar concluídos',
+    renderThis: 'Renderizar este vídeo', showInFolder: 'Mostrar na pasta', showOutput: 'Mostrar arquivo convertido', moveTop: 'Mover para o topo', remove: 'Tirar da fila',
+    setAll: 'Usar um preset em todos os vídeos', dropAll: 'Solte aqui para usar em todos os vídeos', rendered: (n) => `${n} renderizado`,
+    emptyTitle: 'Nenhum vídeo ainda', emptySub: 'Arraste vídeos ou pastas para cá. Dá para editar os presets mesmo assim.',
+    pvEmpty: 'Selecione um vídeo para ver a prévia', editing: 'Preset', presetHint: 'As mudanças ficam salvas neste preset.',
+    oled: 'OLED', sound: 'Som ao terminar', useForAll: 'Usar em todos os vídeos', setDefault: 'Usar nos vídeos novos', editPreset: 'Editar preset',
+    willRenderNext: (n) => `${n} vai renderizar em seguida`, assigned: (p, n) => `${p} aplicado em ${n} vídeo${n === 1 ? '' : 's'}`,
+    revealToast: 'Abre o Explorador de Arquivos com o arquivo selecionado', defaultSet: (p) => `Vídeos novos vão usar ${p}`, busy: 'Renderizando…',
+    reorderHint: 'Arraste para reordenar', presetsFold: 'Mostrar ou esconder os presets', setForAllBtn: 'Usar em todos',
+
+    queue: 'Fila', videos: (n) => `${n} vídeo${n === 1 ? '' : 's'}`, clearDone: 'Limpar',
     dropTitle: 'Arraste vídeos ou pastas', dropSub: 'Inclui subpastas', newUse: 'Vídeos novos usam',
     toRender: (n, s) => `<b>${n}</b> para renderizar · ≈ <b>${s}</b>`,
     render: 'Renderizar fila', stop: 'Parar', ready: 'Pronto', error: 'Erro',

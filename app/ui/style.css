@@ -65,6 +65,16 @@
   color-scheme:light;
 }
 
+
+/* ---------- tema OLED (preto puro) ---------- */
+[data-theme="oled"]{
+  --bg:#000; --panel:#000; --panel-2:#0A0A0B;
+  --fill:rgba(118,118,128,.18); --fill-2:rgba(118,118,128,.28); --hover:rgba(255,255,255,.045);
+  --stroke:rgba(255,255,255,.06); --stroke-2:rgba(255,255,255,.10); --sep:rgba(255,255,255,.075);
+  --seg-pill:#3A3A3C; --shadow:none; --stage:#000; --menu:rgba(18,18,20,.97);
+  color-scheme:dark;
+}
+
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:var(--font);font-size:13px;
   -webkit-font-smoothing:antialiased;overflow:hidden;user-select:none;-webkit-user-select:none;

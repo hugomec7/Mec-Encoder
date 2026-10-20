@@ -24,6 +24,8 @@
 - **A/V sync**: `aresample=async=1:first_pts=0` on audio, so audio stays aligned after the frame rate change.
 - **Copy metadata**: `-map_metadata 0 -movflags use_metadata_tags` (date, location, camera).
 - **Delete original** only after the render ends without errors and the new file is checked with ffprobe (duration and streams).
+- **Show in folder**: `explorer /select,<file>` through the Tauri opener plugin.
+- **Finish sound** `sounds/done.mp3`; Windows notification (tauri-plugin-notification) when the window is in the background.
 - **Folders**: dropped folders are scanned recursively for video files (`.mov .mp4 .m4v .mxf .mts .avi .mkv`); hidden and system files are skipped.
 
 ### HDR → Rec. 709 (same as HandBrake)

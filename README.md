@@ -13,14 +13,15 @@ Built with **Rust** (Tauri 2) and **FFmpeg**, encoding with **NVIDIA NVENC**.
 - **Output preview** before rendering: rotation, scale and color.
 - **8-bit or 10-bit**, A/V sync, metadata copy, delete original after a verified render.
 - **Presets** you can create, share and import from Shutter Encoder (`.enc`).
-- English and Portuguese, dark and light themes.
+- **Render one video or the whole queue**, reorder by dragging, drag a preset onto a video, show in folder.
+- English and Portuguese; light, dark and OLED themes.
 
 > Work in progress. See the [roadmap](ROADMAP.md) and the [changelog](CHANGELOG.md).
 
 ## Try the interface
 
 Open `app/ui/index.html` in a browser. Without the app it runs in demo mode with sample videos.
-Add `?v=2` to the address to see the more minimal v2 layout, and `?lang=pt` for Portuguese.
+Add `?lang=pt` to the address for Portuguese.
 
 ## Credits
 

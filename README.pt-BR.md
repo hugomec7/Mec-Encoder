@@ -13,14 +13,15 @@ Feito em **Rust** (Tauri 2) com **FFmpeg** e encode por **NVIDIA NVENC**.
 - **Prévia do resultado** antes de renderizar: rotação, escala e cor.
 - **8-bit ou 10-bit**, sincronia A/V, cópia dos metadados, apagar o original só depois do render conferido.
 - **Presets** para criar, compartilhar e importar do Shutter Encoder (`.enc`).
-- Inglês e português, temas escuro e claro.
+- **Renderize um vídeo só ou a fila inteira**, reordene arrastando, arraste um preset até o vídeo, mostrar na pasta.
+- Inglês e português; temas claro, escuro e OLED.
 
 > Em desenvolvimento. Veja o [plano](ROADMAP.md) e as [novidades](CHANGELOG.md).
 
 ## Ver a interface
 
 Abra `app/ui/index.html` no navegador. Sem o app instalado, ela roda em modo demonstração com vídeos de exemplo.
-Coloque `?v=2` no endereço para ver o layout v2, mais minimalista, e `?lang=pt` para português.
+Coloque `?lang=pt` no endereço para ver em português.
 
 ## Créditos
 
