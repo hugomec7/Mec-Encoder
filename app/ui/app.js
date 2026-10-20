@@ -517,7 +517,25 @@
   }
   function editPreset(pid, focusName) {
     selectOnly(null); S.editPreset = pid; S.draft = null; renderAll(true);
-    if (focusName) setTimeout(() => { const i = $('#presetNameInput'); if (i) { i.focus(); i.select(); } }, 80);
+    if (focusName) setTimeout(() => renamePreset(pid), 80);
+  }
+  // Renomear direto na pílula do preset
+  function renamePreset(pid) {
+    const p = presetOf(pid); const b = $(`.preset[data-id="${CSS.escape(pid)}"]`); if (!p || !b) return;
+    const input = document.createElement('input'); input.className = 'preset-input'; input.value = p.name; input.spellcheck = false;
+    input.style.setProperty('--c', COLORS[p.color] || COLORS.blue);
+    b.replaceWith(input); input.focus(); input.select();
+    let done = false;
+    const finish = (ok) => {
+      if (done) return; done = true;
+      const v = input.value.trim();
+      if (ok && v && v !== p.name) { p.name = v; if (S.draft && S.draft.id === pid) S.draft.name = v; S.queue.forEach((q) => { if (q.preset === pid) q.cfg.name = v; }); savePresets(); }
+      renderAll();
+    };
+    input.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') finish(true); if (e.key === 'Escape') finish(false); });
+    input.addEventListener('blur', () => finish(true));
+    input.addEventListener('click', (e) => e.stopPropagation());
+    input.addEventListener('pointerdown', (e) => e.stopPropagation());
   }
   function newPreset(folder) {
     const base = clone(target().preset || S.presets[0]);
@@ -658,7 +676,7 @@
       if (v === 'all') assignAll(pid);
       if (v === 'def') { S.set.defaultPreset = pid; saveSettings(); renderQueue(); toast(L.defaultSet(presetOf(pid).name)); }
       if (v === 'edit') editPreset(pid);
-      if (v === 'rename') editPreset(pid, true);
+      if (v === 'rename') renamePreset(pid);
       if (v === 'color') setTimeout(() => colorMenu(at, pid), 0);
       if (v === 'folder') setTimeout(() => folderMenu(at, pid), 0);
       if (v === 'dup') { const c = clone(presetOf(pid)); c.id = uid(); c.name += ' 2'; addPresets([c], true); }
@@ -900,10 +918,11 @@
     if (!T.cfg) { el.innerHTML = ''; return; }
     const c = T.cfg; const src = T.src;
     const mod = T.isPreset ? T.dirty : T.preset && !same(c, T.preset);
-    $('#inspFor').innerHTML = T.isPreset
-      ? `<button class="dotc color-btn" id="bPresetColor" data-menu="1" title="${L.changeColor}" style="--c:${COLORS[c.color] || COLORS.blue}"></button><input id="presetNameInput" class="name-input" value="${esc(c.name)}" spellcheck="false" aria-label="${L.presetName}">`
+    // Editando um preset: o nome e a cor ficam só nos presets lá em cima (sem repetir aqui).
+    $('#inspFor').innerHTML = T.isPreset ? ''
       : S.picked.size > 1 ? L.settingsForN(S.picked.size) : L.settingsFor;
     $('#inspFor').classList.toggle('editing', T.isPreset);
+    $('.insp-title').classList.toggle('hide', !!T.isPreset && !mod);
     $('#modified').classList.toggle('show', !!mod); $('#bSavePreset').classList.toggle('show', !!mod);
     $('#bSavePreset').textContent = T.isPreset ? L.saveChanges : L.saveToPreset;
     $('#bDiscard').classList.toggle('show', !!(mod && T.isPreset));
@@ -911,7 +930,7 @@
     const dims = src ? outDims(src, c) : null;
     const resHint = !src && c.scale === '1080' ? `<div class="hint">${L.scale1080Hint}</div>` : '';
     const rotTxt = c.rotate ? ` · ↻ ${c.rotate}°` : '';
-    el.innerHTML = (T.isPreset ? `<div class="hint top-hint">${L.presetHint}</div>` : S.picked.size > 1 ? `<div class="hint top-hint multi-hint">${L.multiHint(S.picked.size)}</div>` : '')
+    el.innerHTML = (T.isPreset ? '' : S.picked.size > 1 ? `<div class="hint top-hint multi-hint">${L.multiHint(S.picked.size)}</div>` : '')
       + sec('video', L.video, `${codecName(c.codec)} · ${h264 ? 8 : c.bits}-bit · ${scaleTxt(c.scale)}${rotTxt} · ${c.fps.conform ? fpsTxt(c.fps.value) + ' CFR' : c.bitrate.mode === 'manual' ? fmtK(c.bitrate.kbps) : c.bitrate.mode === 'source' ? L.source : L.auto}${c.hdrToSdr ? ' · 709' : ''}`,
         `<div class="group">
           ${row(`${L.resolution}<small class="res-out">${resLabel(c, src)}</small>`, dd('scale', c.scale, [['source', L.source], ['1080', '1080p'], ['50', '50%'], ['25', '25%'], ['custom', L.custom]]))}
