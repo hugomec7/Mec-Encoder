@@ -27,7 +27,7 @@
 - **Delete original** only after the render ends without errors and the new file is checked with ffprobe (duration and streams).
 - **Show in folder**: `explorer /select,<file>` through the Tauri opener plugin.
 - **Finish sound** `sounds/done.mp3`; Windows notification (tauri-plugin-notification) when the window is in the background.
-- **In-app updates**: each release has `latest.json` (version, notes, SHA-256 of the MSI and of the portable exe). The MSI build runs `msiexec /passive` and reopens; the portable build swaps its own exe. Settings live in `%APPDATA%\\com.hugomec.mecencoder`, so updates never touch them.
+- **In-app updates**: each release has `latest.json` (version, notes, SHA-256 of the MSI and of the portable zip). The MSI build runs `msiexec /passive` and reopens; the portable build extracts the new zip over its folder. Settings live in `%APPDATA%\\com.hugomec.mecencoder`, so updates never touch them.
 - **Folders**: dropped folders are scanned recursively for video files (`.mov .mp4 .m4v .mxf .mts .avi .mkv`); hidden and system files are skipped.
 
 ### HDR → Rec. 709 (same as HandBrake)

@@ -106,7 +106,6 @@ jobs:
           Copy-Item -Recurse app/bin "portable/Mec Encoder/bin"
           Set-Content "portable/Mec Encoder/portable.ini" "Mec Encoder portable. Settings are saved in %APPDATA%\com.hugomec.mecencoder."
           Compress-Archive -Path "portable/Mec Encoder" -DestinationPath "out/MecEncoder_${v}_x64_portable.zip"
-          Copy-Item $exe "out/MecEncoder_x64_portable.exe"
           $base = "https://github.com/${{ github.repository }}/releases/download/v$v"
           $notesFile = "docs/release-notes/$v.md"
           $notes = if (Test-Path $notesFile) { Get-Content $notesFile -Raw } else { "Mec Encoder $v" }
@@ -114,7 +113,7 @@ jobs:
             version  = $v
             notes    = $notes
             msi      = @{ url = "$base/MecEncoder_${v}_x64.msi"; sha256 = (Get-FileHash "out/MecEncoder_${v}_x64.msi" -Algorithm SHA256).Hash.ToLower() }
-            portable = @{ url = "$base/MecEncoder_x64_portable.exe"; sha256 = (Get-FileHash "out/MecEncoder_x64_portable.exe" -Algorithm SHA256).Hash.ToLower() }
+            portable = @{ url = "$base/MecEncoder_${v}_x64_portable.zip"; sha256 = (Get-FileHash "out/MecEncoder_${v}_x64_portable.zip" -Algorithm SHA256).Hash.ToLower() }
           }
           $latest | ConvertTo-Json -Depth 4 | Set-Content -Encoding utf8 out/latest.json
           Get-ChildItem out | Format-Table Name, Length

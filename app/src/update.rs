@@ -107,14 +107,17 @@ pub fn install(app: &AppHandle, latest: &Latest) -> Result<(), String> {
     let tmp: PathBuf = std::env::temp_dir().join("MecEncoderUpdate");
     std::fs::create_dir_all(&tmp).map_err(|e| e.to_string())?;
     if is_portable() {
-        let new_exe = tmp.join("MecEncoder_new.exe");
-        download(app, &latest.portable, &new_exe)?;
+        // Baixa o mesmo .zip da página de releases e extrai por cima da pasta do app.
+        let zip_path = tmp.join(format!("MecEncoder_{}_x64_portable.zip", latest.version));
+        download(app, &latest.portable, &zip_path)?;
+        let dir = exe.parent().ok_or("no app folder")?.to_path_buf();
         let old = exe.with_extension("old");
         let _ = std::fs::remove_file(&old);
         std::fs::rename(&exe, &old).map_err(|e| e.to_string())?;
-        if let Err(e) = std::fs::copy(&new_exe, &exe) {
+        if let Err(e) = extract_portable(&zip_path, &dir, &exe) {
+            let _ = std::fs::remove_file(&exe);
             let _ = std::fs::rename(&old, &exe);
-            return Err(e.to_string());
+            return Err(e);
         }
         detached(&exe.to_string_lossy(), &[])
     } else {
@@ -129,4 +132,25 @@ pub fn install(app: &AppHandle, latest: &Latest) -> Result<(), String> {
         std::fs::write(&script, body).map_err(|e| e.to_string())?;
         detached("cmd.exe", &["/C".into(), script.to_string_lossy().into_owned()])
     }
+}
+
+/// Extrai o zip portátil ("Mec Encoder/...") dentro da pasta do app. O .exe novo vai no lugar do atual.
+fn extract_portable(zip_path: &Path, dir: &Path, exe: &Path) -> Result<(), String> {
+    let file = std::fs::File::open(zip_path).map_err(|e| e.to_string())?;
+    let mut zip = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
+    let mut got_exe = false;
+    for i in 0..zip.len() {
+        let mut entry = zip.by_index(i).map_err(|e| e.to_string())?;
+        if entry.is_dir() { continue; }
+        let Some(name) = entry.enclosed_name() else { continue };
+        // tira a pasta de cima ("Mec Encoder/")
+        let rel: PathBuf = name.components().skip(1).collect();
+        if rel.as_os_str().is_empty() || rel == Path::new("portable.ini") { continue; }
+        let is_exe = rel.extension().map_or(false, |e| e.eq_ignore_ascii_case("exe")) && rel.parent().map_or(true, |p| p.as_os_str().is_empty());
+        let dest = if is_exe { got_exe = true; exe.to_path_buf() } else { dir.join(&rel) };
+        if let Some(parent) = dest.parent() { std::fs::create_dir_all(parent).map_err(|e| e.to_string())?; }
+        let mut out = std::fs::File::create(&dest).map_err(|e| e.to_string())?;
+        std::io::copy(&mut entry, &mut out).map_err(|e| e.to_string())?;
+    }
+    if got_exe { Ok(()) } else { Err("update package has no app".into()) }
 }
