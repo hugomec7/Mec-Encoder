@@ -121,14 +121,16 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -o pipefail
           TAG="v$VERSION"
           NOTES="docs/release-notes/$VERSION.md"
           [ -f "$NOTES" ] || echo "Mec Encoder $VERSION" > "$NOTES"
-          if gh release view "$TAG" > /dev/null 2>&1; then
-            gh release edit "$TAG" --notes-file "$NOTES" --target "$GITHUB_SHA"
+          fail() { echo "::error title=Release::$(tr '\n' ' ' < rel.log | cut -c1-1500)"; exit 1; }
+          if gh release view "$TAG" -R "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release edit "$TAG" -R "$GITHUB_REPOSITORY" --notes-file "$NOTES" > rel.log 2>&1 || fail
           else
-            gh release create "$TAG" --title "Mec Encoder $VERSION" --notes-file "$NOTES" --target "$GITHUB_SHA"
+            gh release create "$TAG" -R "$GITHUB_REPOSITORY" --title "Mec Encoder $VERSION" --notes-file "$NOTES" --target "$GITHUB_SHA" > rel.log 2>&1 || fail
           fi
-          gh release upload "$TAG" out/* --clobber
+          gh release upload "$TAG" -R "$GITHUB_REPOSITORY" out/* --clobber > rel.log 2>&1 || fail
           echo "### Download" >> "$GITHUB_STEP_SUMMARY"
-          echo "https://github.com/${{ github.repository }}/releases/tag/$TAG" >> "$GITHUB_STEP_SUMMARY"
+          echo "https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG" >> "$GITHUB_STEP_SUMMARY"

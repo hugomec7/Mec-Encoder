@@ -357,7 +357,7 @@ svg{display:block}
 .sec-inner{display:flex;flex-direction:column;gap:14px}
 
 /* ---------- menu suspenso ---------- */
-.menu{position:fixed;z-index:70;min-width:200px;max-width:240px;padding:5px;border-radius:12px;background:var(--menu);backdrop-filter:blur(24px);
+.menu{position:fixed;z-index:70;min-width:200px;max-width:300px;padding:5px;border-radius:12px;background:var(--menu);backdrop-filter:blur(24px);
   box-shadow:0 14px 40px rgba(0,0,0,.28),0 0 0 .5px var(--stroke-2);opacity:0;transform:scale(.96) translateY(-4px);transform-origin:top left;
   pointer-events:none;transition:opacity .18s var(--ease),transform .3s var(--spring)}
 .menu.show{opacity:1;transform:none;pointer-events:auto}

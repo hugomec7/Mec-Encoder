@@ -16,7 +16,17 @@ Feito em **Rust** (Tauri 2) com **FFmpeg** e encode por **NVIDIA NVENC**.
 - **Renderize um vídeo só ou a fila inteira**, reordene arrastando, arraste um preset até o vídeo, mostrar na pasta.
 - Inglês e português; temas claro, escuro e OLED.
 
-> Em desenvolvimento. Veja o [plano](ROADMAP.md) e as [novidades](CHANGELOG.md).
+> Builds de teste. Veja o [plano](ROADMAP.md) e as [novidades](CHANGELOG.md).
+
+## Baixar
+
+Baixe a versão mais recente na página [Releases](https://github.com/hugomec7/Mec-Encoder/releases) (Windows 10/11, 64-bit):
+
+- `MecEncoder_x.y.z_x64.msi` — instalador
+- `MecEncoder_x.y.z_x64_portable.zip` — portátil, é só descompactar e abrir o `Mec Encoder.exe`
+
+O FFmpeg já vem junto. O NVENC precisa de placa NVIDIA; sem ela, o Mec Encoder usa a CPU.
+Quando sair uma versão nova, aparece um botão **Atualizar** no topo do app. Presets e configurações continuam (ficam em `%APPDATA%\com.hugomec.mecencoder`).
 
 ## Ver a interface
 
@@ -26,4 +36,4 @@ Coloque `?lang=pt` no endereço para ver em português.
 ## Créditos
 
 Inspirado no [Shutter Encoder](https://github.com/paulpacifico/shutter-encoder), de Paul Pacifico. O Mec Encoder é um app novo e não usa código dele.
-Fonte Inter (SIL Open Font License). Por [@hugoeditor_](https://x.com/hugoeditor_).
+Inclui o [FFmpeg](https://ffmpeg.org) (build GPL do BtbN). Fonte Inter (SIL Open Font License). Por [@hugoeditor_](https://x.com/hugoeditor_).

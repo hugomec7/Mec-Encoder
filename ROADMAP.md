@@ -4,13 +4,14 @@
 
 | # | Step | Etapa | Status |
 |---|---|---|---|
-| 1 | Interface (v1 and v2, dark and light, EN/PT) | Interface (v1 e v2, escuro e claro, EN/PT) | ✅ in review · em revisão |
-| 2 | Engine: ffprobe, FFmpeg command from the preset, NVENC with progress | Motor: ffprobe, comando do FFmpeg a partir do preset, NVENC com progresso | ⏳ |
-| 3 | Queue: per-video preset, folder scan, cancel, Windows notification | Fila: preset por vídeo, leitura de pastas, cancelar, notificação do Windows | ⏳ |
-| 4 | Preview: output frame from the real command + player with audio | Prévia: quadro do resultado pelo comando real + player com áudio | ⏳ |
-| 5 | HDR → Rec. 709 | HDR → Rec. 709 | ⏳ |
-| 6 | Presets: create, edit, import `.enc`, export/share | Presets: criar, editar, importar `.enc`, exportar/compartilhar | ⏳ |
-| 7 | Build: installer + portable on GitHub Actions, bundled FFmpeg | Build: instalador + portátil no GitHub Actions, FFmpeg embutido | ⏳ |
+| 1 | Interface (v2, light/dark/OLED, EN/PT) | Interface (v2, claro/escuro/OLED, EN/PT) | ✅ |
+| 2 | Engine: ffprobe, FFmpeg command from the preset, NVENC with progress | Motor: ffprobe, comando do FFmpeg a partir do preset, NVENC com progresso | ✅ 0.1.0 |
+| 3 | Queue: per-video preset, folder scan, single render, reorder, notifications | Fila: preset por vídeo, pastas, render de um vídeo, reordenar, avisos | ✅ 0.1.0 |
+| 4 | Preview: real output frames + waveform | Prévia: quadros reais do resultado + forma de onda | ✅ 0.1.0 |
+| 4b | Preview playback with sound | Reproduzir a prévia com som | ⏳ |
+| 5 | HDR → Rec. 709 (HandBrake chain) | HDR → Rec. 709 (igual HandBrake) | ✅ 0.1.0 |
+| 6 | Presets: create, rename, delete, import `.enc`, export/import `.json` | Presets: criar, renomear, excluir, importar `.enc`, exportar/importar `.json` | ✅ 0.1.0 |
+| 7 | Build: MSI + portable on GitHub Actions, bundled FFmpeg, in-app updates | Build: MSI + portátil no GitHub Actions, FFmpeg embutido, atualização no app | ✅ 0.1.0 |
 
 ## Technical decisions
 
@@ -26,6 +27,7 @@
 - **Delete original** only after the render ends without errors and the new file is checked with ffprobe (duration and streams).
 - **Show in folder**: `explorer /select,<file>` through the Tauri opener plugin.
 - **Finish sound** `sounds/done.mp3`; Windows notification (tauri-plugin-notification) when the window is in the background.
+- **In-app updates**: each release has `latest.json` (version, notes, SHA-256 of the MSI and of the portable exe). The MSI build runs `msiexec /passive` and reopens; the portable build swaps its own exe. Settings live in `%APPDATA%\\com.hugomec.mecencoder`, so updates never touch them.
 - **Folders**: dropped folders are scanned recursively for video files (`.mov .mp4 .m4v .mxf .mts .avi .mkv`); hidden and system files are skipped.
 
 ### HDR → Rec. 709 (same as HandBrake)

@@ -1,15 +1,22 @@
 // Mec Encoder — lógica da interface
+// Roda de dois jeitos: dentro do app (Tauri, motor de verdade) ou no navegador (modo demonstração).
 (() => {
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const clone = (o) => JSON.parse(JSON.stringify(o));
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const root = document.documentElement;
   const qs = new URLSearchParams(location.search);
+  const TA = window.__TAURI__;
+  const REAL = !!TA;
+  const inv = (cmd, args) => TA.core.invoke(cmd, args);
+  const on = (ev, cb) => TA.event.listen(ev, (e) => cb(e.payload));
 
   const COLORS = { blue: 'var(--blue)', orange: 'var(--orange)', green: 'var(--green)', purple: 'var(--purple)',
     teal: 'var(--teal)', yellow: 'var(--yellow)', pink: 'var(--pink)', indigo: 'var(--indigo)', red: 'var(--red)' };
+  const PALETTE = Object.keys(COLORS);
   const ICONS = {
     phone: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="6.5" y="2.5" width="11" height="19" rx="3"/><path d="M10.5 18.5h3"/></svg>',
     hdr: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor"/></svg>',
@@ -30,30 +37,47 @@
     layers: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2l6 3.3L8 8.6 2 5.3z"/><path d="M2 8.6l6 3.3 6-3.3"/></svg>',
     star: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M8 2.3l1.7 3.6 3.9.4-2.9 2.6.8 3.9L8 10.8l-3.5 2 .8-3.9-2.9-2.6 3.9-.4z"/></svg>',
     edit: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 3l2.5 2.5L6 12.5l-3 .5.5-3z"/></svg>',
+    copy: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><rect x="5" y="5" width="8.5" height="8.5" rx="2"/><path d="M11 5V4a1.5 1.5 0 0 0-1.5-1.5h-5A1.5 1.5 0 0 0 3 4v5.5A1.5 1.5 0 0 0 4.5 11H5"/></svg>',
+    file: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M4 2.5h5l3 3v8H4z"/><path d="M9 2.5v3h3"/></svg>',
+    down: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.5v8M4.5 7L8 10.5 11.5 7M3 13.5h10"/></svg>',
+    up: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10.5v-8M4.5 6L8 2.5 11.5 6M3 13.5h10"/></svg>',
+    reset: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 8A5.5 5.5 0 1 0 4.2 4"/><path d="M3.8 1.5V4.3h2.8"/></svg>',
     play: '<path d="M4.5 2.6v10.8c0 .5.6.8 1 .5l8-5.4a.6.6 0 0 0 0-1l-8-5.4c-.4-.3-1 0-1 .5z"/>',
     pause: '<rect x="3.5" y="2.5" width="3.2" height="11" rx="1"/><rect x="9.3" y="2.5" width="3.2" height="11" rx="1"/>',
   };
 
-  const demo = window.MEC_DEMO || { presets: [], queue: [], settings: {} };
+  const demo = (!REAL && window.MEC_DEMO) || { presets: [], queue: [], settings: {} };
   const S = {
     presets: demo.presets,
     queue: demo.queue.map((q) => Object.assign(q, { cfg: clone(demo.presets.find((p) => p.id === q.preset)) })),
     set: Object.assign({ lang: 'en', theme: 'dark', lastDark: 'dark', defaultPreset: demo.presets[0] && demo.presets[0].id,
-      clearWhenDone: true, notify: true, sound: true }, demo.settings),
-    sel: 2, editPreset: null, pv: 'in', job: null, playing: false, t: .31,
-    open: { video: true }, fold: { presets: false },
+      clearWhenDone: true, notify: true, sound: true, foldPresets: false }, demo.settings),
+    sel: REAL ? null : 2, editPreset: null, pv: 'in', job: null, playing: false, t: REAL ? 0 : .31,
+    open: { video: true }, engine: { status: REAL ? 'checking' : 'nvenc', gpu: REAL ? null : 'NVIDIA GeForce RTX' },
+    version: '0.1.0', update: null,
   };
   const presetOf = (id) => S.presets.find((p) => p.id === id);
   const itemOf = (id) => S.queue.find((q) => q.id === id);
   const selItem = () => itemOf(S.sel);
   let L = window.MEC_I18N.en;
 
-  /* ---------- preferências locais ---------- */
+  /* ---------- salvar (no app: %APPDATA%; no navegador: só tema/idioma) ---------- */
   const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } },
                   set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
-  ['lang', 'theme', 'lastDark'].forEach((k) => { const v = qs.get(k) || store.get('mec.' + k); if (v) S.set[k] = v; });
-  if (store.get('mec.foldPresets') === '1') S.fold.presets = true;
-  root.dataset.variant = qs.get('v') || '2';
+  let tSettings, tPresets;
+  function saveSettings() {
+    if (!REAL) { ['lang', 'theme', 'lastDark'].forEach((k) => store.set('mec.' + k, S.set[k])); store.set('mec.foldPresets', S.set.foldPresets ? '1' : '0'); return; }
+    clearTimeout(tSettings); tSettings = setTimeout(() => inv('save_settings', { settings: S.set }).catch(() => {}), 300);
+  }
+  function savePresets() {
+    if (!REAL) return;
+    clearTimeout(tPresets); tPresets = setTimeout(() => inv('save_presets', { presets: S.presets }).catch((e) => toast(String(e))), 400);
+  }
+  if (!REAL) {
+    ['lang', 'theme', 'lastDark'].forEach((k) => { const v = qs.get(k) || store.get('mec.' + k); if (v) S.set[k] = v; });
+    if (store.get('mec.foldPresets') === '1') S.set.foldPresets = true;
+  }
+  root.dataset.variant = '2';
 
   /* ---------- tema: sistema, claro, escuro, OLED ---------- */
   const mq = matchMedia('(prefers-color-scheme: dark)');
@@ -65,7 +89,7 @@
   mq.addEventListener('change', () => S.set.theme === 'system' && applyTheme(true));
   function setTheme(t) {
     S.set.theme = t; if (t === 'dark' || t === 'oled') S.set.lastDark = t;
-    store.set('mec.theme', t); store.set('mec.lastDark', S.set.lastDark); applyTheme(true);
+    saveSettings(); applyTheme(true);
   }
   $('#bTheme').onclick = () => setTheme(root.dataset.theme === 'light' ? S.set.lastDark : 'light');
 
@@ -78,34 +102,51 @@
       bSavePreset: L.saveToPreset, lEst: L.estSize, lSettings: L.settings, bDone: L.done, lDropAll: L.dropAll, lPvEmpty: L.pvEmpty };
     Object.entries(txt).forEach(([id, t]) => { const el = document.getElementById(id); if (el) el.textContent = t; });
     $('#bMin').title = L.minimize; $('#bMax').title = L.maximize; $('#bClose').title = L.close; $('#bSettings').title = L.settings;
-    $('#bSetAll').title = L.setAll; $('#bFoldPresets').title = L.presetsFold;
-    renderRenderBtn();
+    $('#bSetAll').title = L.setAll; $('#bFoldPresets').title = L.presetsFold; $('#bAdd').title = L.addVideos;
+    renderRenderBtn(); renderUpdateBtn();
   }
 
-  /* ---------- helpers de mídia ---------- */
+  /* ---------- mídia ---------- */
   const secs = (tc) => { const [h, m, s, f] = tc.split(':').map(Number); return h * 3600 + m * 60 + s + f / 60; };
-  const num = (n, d = 1) => n.toLocaleString(S.set.lang === 'pt' ? 'pt-BR' : 'en-US', { maximumFractionDigits: d });
+  const num = (n, d = 1) => Number(n || 0).toLocaleString(S.set.lang === 'pt' ? 'pt-BR' : 'en-US', { maximumFractionDigits: d });
   const fmtMB = (mb) => mb >= 1000 ? num(mb / 1000, 2) + ' GB' : Math.round(mb) + ' MB';
   const fmtK = (k) => num(k / 1000) + ' Mb/s';
   const fpsTxt = (v) => S.set.lang === 'pt' ? String(v).replace('.', ',') : String(v).replace(',', '.');
+  const pad = (n) => String(n).padStart(2, '0');
+  function tc(seconds, fps = 60) {
+    const s = Math.max(0, seconds); const ss = Math.floor(s); const f = Math.floor((s - ss) * Math.round(fps || 60));
+    return [Math.floor(ss / 3600), Math.floor(ss / 60) % 60, ss % 60, f].map(pad).join(':');
+  }
+  const CODECS = { hevc: 'HEVC', h264: 'H.264', prores: 'ProRes', av1: 'AV1', vp9: 'VP9', mpeg2video: 'MPEG-2', dnxhd: 'DNxHD', mjpeg: 'MJPEG' };
+  // MediaInfo do Rust → formato usado pela interface
+  function mapSrc(info) {
+    const v = info.video || {};
+    return {
+      w: v.width, h: v.height, codec: CODECS[v.codec] || String(v.codec || '?').toUpperCase(), bits: v.bitDepth || 8,
+      fps: (v.fps || v.fpsNominal || 0).toFixed(2).replace(/\.?0+$/, ''), fpsNum: v.fps || v.fpsNominal || 60, vfr: !!v.vfr,
+      dur: tc(info.duration, v.fpsNominal || v.fps), durS: info.duration, kbps: v.bitrateKbps || info.bitrateKbps || 0,
+      audio: (info.audio || []).length, hdr: v.hdr || false, rot: v.rotation || 0, mb: (info.sizeBytes || 0) / 1e6,
+    };
+  }
+  const durOf = (q) => q.src.durS || secs(q.src.dur);
   function outDims(src, cfg) {
     let { w, h } = src;
     if (cfg.scale === '50') { w /= 2; h /= 2; } else if (cfg.scale === '25') { w /= 4; h /= 4; }
-    else if (cfg.scale === '1080') { const k = 1080 / Math.min(w, h); w *= k; h *= k; }
-    return { w: Math.round(w / 2) * 2, h: Math.round(h / 2) * 2 };
+    else if (cfg.scale === '1080') { const s = Math.min(w, h); if (s > 1080) { const k = 1080 / s; w *= k; h *= k; } }
+    return { w: Math.max(2, Math.round(w / 2) * 2), h: Math.max(2, Math.round(h / 2) * 2) };
   }
   function videoKbps(src, cfg) {
     if (cfg.bitrate.mode === 'manual') return cfg.bitrate.kbps;
-    if (cfg.bitrate.mode === 'source') return src.kbps;
+    if (cfg.bitrate.mode === 'source') return src.kbps || 20000;
     const o = outDims(src, cfg); return Math.round(o.w * o.h * 60 * 0.07 / 1000 / 100) * 100;
   }
-  const estMB = (q) => (videoKbps(q.src, q.cfg) + (q.cfg.audio.codec === 'copy' ? 256 : q.cfg.audio.kbps)) * secs(q.src.dur) / 8 / 1000;
+  const estMB = (q) => (videoKbps(q.src, q.cfg) + (q.cfg.audio.codec === 'copy' ? 256 : q.cfg.audio.kbps)) * durOf(q) / 8 / 1000;
   const warnings = (q) => (q.src.hdr && !q.cfg.hdrToSdr ? [L.hdrMismatch(q.src.hdr)] : []);
   const codecName = (c) => (c === 'h265' ? 'H.265' : 'H.264');
   const scaleTxt = (s) => (s === 'source' ? L.source : s === '1080' ? '1080p' : s + '%');
   const pending = () => S.queue.filter((q) => q.status !== 'done');
 
-  /* ---------- cena de exemplo (no app real é o quadro do vídeo) ---------- */
+  /* ---------- cena de exemplo (só no modo demonstração) ---------- */
   function scene(hue, vertical) {
     const W = vertical ? 90 : 160, H = vertical ? 160 : 90, g = 'g' + hue + (vertical ? 'v' : 'h');
     const bl = []; let x = -4; let i = 0;
@@ -122,6 +163,7 @@
       <rect y="${H * .74}" width="${W}" height=".6" fill="hsl(${hue + 20},90%,75%)" opacity=".5"/>
     </svg>`;
   }
+  const thumbHtml = (q) => q.thumb ? `<img src="${q.thumb}" alt="">` : REAL ? '<i class="thumb-ph"></i>' : scene(q.hue, q.src.h > q.src.w);
 
   /* ---------- scroll suave com efeito elástico nas pontas ---------- */
   function smooth(el) {
@@ -138,11 +180,11 @@
       if (Math.abs(target - cur) > .3) raf = requestAnimationFrame(step); else { cur = target; inner.style.transform = ''; raf = 0; last = 0; }
     };
     el.addEventListener('wheel', (e) => {
-      if (e.ctrlKey || e.deltaX && Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+      if (e.ctrlKey || (e.deltaX && Math.abs(e.deltaX) > Math.abs(e.deltaY))) return;
       e.preventDefault();
       const d = e.deltaMode === 1 ? e.deltaY * 36 : e.deltaMode === 2 ? e.deltaY * el.clientHeight : e.deltaY;
       if (!raf) cur = target = el.scrollTop;
-      const m = max(); target = clamp(target + d, -120, m + 120);
+      target = clamp(target + d, -120, max() + 120);
       clearTimeout(idle); idle = setTimeout(() => { target = clamp(target, 0, max()); if (!raf) raf = requestAnimationFrame(step); }, 110);
       if (!raf) raf = requestAnimationFrame(step);
     }, { passive: false });
@@ -154,12 +196,13 @@
   /* ---------- menu suspenso / de contexto ---------- */
   const menu = $('#menu'); let menuPick = null;
   function openMenu(at, items, onPick) {
-    menu.innerHTML = items.map((it, i) => it.sep ? '<hr>' : `<button data-i="${i}" class="${it.sel ? 'sel' : ''} ${it.danger ? 'danger' : ''}">${it.color ? `<i style="--c:${it.color}"></i>` : it.icon ? it.icon : ''}<span>${it.label}</span>${it.sel ? ICONS.check : ''}</button>`).join('');
+    menu.innerHTML = items.map((it, i) => it.sep ? '<hr>' : `<button data-i="${i}" class="${it.sel ? 'sel' : ''} ${it.danger ? 'danger' : ''}">${it.color ? `<i style="--c:${it.color}"></i>` : it.icon ? it.icon : ''}<span>${esc(it.label)}</span>${it.sel ? ICONS.check : ''}</button>`).join('');
     const r = at instanceof Element ? at.getBoundingClientRect() : { left: at.x, right: at.x, top: at.y, bottom: at.y };
     const h = items.reduce((a, it) => a + (it.sep ? 9 : 32), 12);
-    menu.style.left = clamp(r.left, 8, innerWidth - 240) + 'px';
-    menu.style.top = (r.bottom + 6 + h > innerHeight ? r.top - 6 - h : r.bottom + (at instanceof Element ? 6 : 2)) + 'px';
-    menu.style.transformOrigin = r.bottom + 6 + h > innerHeight ? 'bottom left' : 'top left';
+    const up = r.bottom + 6 + h > innerHeight;
+    menu.style.left = clamp(r.left, 8, innerWidth - 310) + 'px';
+    menu.style.top = (up ? Math.max(8, r.top - 6 - h) : r.bottom + (at instanceof Element ? 6 : 2)) + 'px';
+    menu.style.transformOrigin = up ? 'bottom left' : 'top left';
     menuPick = (i) => onPick(items[i].value);
     menu.classList.remove('show'); void menu.offsetWidth; menu.classList.add('show');
   }
@@ -167,64 +210,70 @@
   menu.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { closeMenu(); menuPick && menuPick(+b.dataset.i); } });
   document.addEventListener('pointerdown', (e) => { if (!e.target.closest('#menu') && !e.target.closest('[data-menu]')) closeMenu(); });
   document.addEventListener('contextmenu', (e) => { if (!e.target.closest('input')) e.preventDefault(); });
-  const presetItems = (cur) => S.presets.map((p) => ({ label: p.name, value: p.id, color: COLORS[p.color], sel: p.id === cur }));
+  const presetItems = (cur) => S.presets.map((p) => ({ label: p.name, value: p.id, color: COLORS[p.color] || COLORS.blue, sel: p.id === cur }));
 
   /* ---------- fila ---------- */
   const qList = $('#qList');
-  function renderQueue(enterIds = []) {
-    const busy = !!S.job;
-    $('#queueCard').classList.toggle('empty', !S.queue.length);
-    qList.innerHTML = S.queue.map((q) => {
-      const p = presetOf(q.preset); const c = COLORS[p.color]; const w = warnings(q);
-      const st = q.status === 'done' ? `<span class="state done">${ICONS.check}${L.ready}</span>`
-        : q.status === 'running' ? `<span class="state tnum">${Math.round(q.p * 100)}%</span>`
-        : q.queued ? `<span class="state">${L.busy}</span>`
-        : `<span class="state tnum">${fmtMB(estMB(q))}</span>`;
-      const vertical = q.src.h > q.src.w;
-      const dir = q.dir ? `<span class="dir">${ICONS.folder}${q.dir.replace(/\//g, ' › ')}</span>` : '';
-      const acts = (q.status === 'ready' ? `<button class="a a-render" data-act="render" title="${L.renderThis}">${ICONS.playc}</button>` : '')
-        + `<button class="a" data-act="reveal" title="${q.status === 'done' ? L.showOutput : L.showInFolder}">${ICONS.reveal}</button>`
-        + (q.status !== 'running' ? `<button class="a" data-act="remove" title="${L.remove}">${ICONS.x}</button>` : '');
-      return `<div class="item ${q.id === S.sel ? 'sel' : ''} ${q.status === 'running' ? 'running' : ''} ${q.status === 'done' ? 'is-done' : ''} ${enterIds.includes(q.id) ? 'enter' : ''}" data-id="${q.id}" style="--d:${Math.max(0, enterIds.indexOf(q.id)) * 70}ms">
-        <div class="thumb">${scene(q.hue, vertical)}${q.src.hdr ? '<span class="hdr">HDR</span>' : ''}</div>
+  function itemHtml(q, enterIds) {
+    const p = presetOf(q.preset) || S.presets[0]; const c = COLORS[p.color] || COLORS.blue; const w = warnings(q);
+    const st = q.status === 'done' ? `<span class="state done">${ICONS.check}${L.ready}</span>`
+      : q.status === 'running' ? `<span class="state tnum">${Math.round((q.p || 0) * 100)}%</span>`
+      : q.status === 'err' ? `<span class="state err" title="${esc(q.error || '')}">${L.error}</span>`
+      : q.queued ? `<span class="state">${L.busy}</span>`
+      : `<span class="state tnum">${fmtMB(estMB(q))}</span>`;
+    const dir = q.dir ? `<span class="dir">${ICONS.folder}${esc(q.dir.replace(/\//g, ' › '))}</span>` : '';
+    const acts = (q.status === 'ready' || q.status === 'err' ? `<button class="a a-render" data-act="render" title="${L.renderThis}">${ICONS.playc}</button>` : '')
+      + `<button class="a" data-act="reveal" title="${q.status === 'done' ? L.showOutput : L.showInFolder}">${ICONS.reveal}</button>`
+      + (q.status !== 'running' ? `<button class="a" data-act="remove" title="${L.remove}">${ICONS.x}</button>` : '');
+    return `<div class="item ${q.id === S.sel ? 'sel' : ''} ${q.status === 'running' ? 'running' : ''} ${q.status === 'done' ? 'is-done' : ''} ${enterIds.includes(q.id) ? 'enter' : ''}" data-id="${q.id}" style="--d:${Math.min(8, Math.max(0, enterIds.indexOf(q.id))) * 60}ms">
+        <div class="thumb">${thumbHtml(q)}${q.src.hdr ? '<span class="hdr">HDR</span>' : ''}</div>
         <div class="meta">
-          <div class="name">${q.file}</div>
+          <div class="name" title="${esc(q.path || q.file)}">${esc(q.file)}</div>
           <div class="spec">${dir}${q.src.w}×${q.src.h} · ${q.src.codec} · ${fpsTxt(q.src.fps)} fps${q.src.vfr ? ' VFR' : ''}</div>
-          <div class="row2"><span class="badge" style="--c:${c}"><i></i>${p.name}${same(q.cfg, p) ? '' : '*'}</span>
-            ${w.length ? `<span class="warn" title="${w.join('\n')}">${ICONS.warn}</span>` : ''}${st}</div>
+          <div class="row2"><span class="badge" style="--c:${c}"><i></i>${esc(p.name)}${same(q.cfg, p) ? '' : '*'}</span>
+            ${w.length ? `<span class="warn" title="${esc(w.join('\n'))}">${ICONS.warn}</span>` : ''}${st}</div>
         </div>
         <div class="acts">${acts}</div>
         <div class="prog" style="--p:${q.p || 0}"><i></i></div>
       </div>`;
-    }).join('');
+  }
+  function renderQueue(enterIds = []) {
+    $('#queueCard').classList.toggle('empty', !S.queue.length);
+    qList.innerHTML = S.queue.map((q) => itemHtml(q, enterIds)).join('');
     $('#qCount').textContent = S.queue.length ? L.videos(S.queue.length) : '';
     $('#bClearDone').style.visibility = S.queue.some((q) => q.status === 'done') ? '' : 'hidden';
     const pend = pending();
     $('#tTotal').innerHTML = pend.length ? L.toRender(pend.length, fmtMB(pend.reduce((a, q) => a + estMB(q), 0))) : '';
-    const dp = presetOf(S.set.defaultPreset);
-    $('#bDefPreset').innerHTML = dp ? `<i style="--c:${COLORS[dp.color]}"></i>${dp.name}${ICONS.chev}` : '';
-    $('#bRender').disabled = !pend.length && !busy;
+    $('#tEta').textContent = S.engine.status === 'nvenc' ? 'NVENC' : S.engine.status === 'cpu' ? 'CPU' : '';
+    const dp = presetOf(S.set.defaultPreset) || S.presets[0];
+    $('#bDefPreset').innerHTML = dp ? `<i style="--c:${COLORS[dp.color]}"></i>${esc(dp.name)}${ICONS.chev}` : '';
+    $('#bRender').disabled = !S.queue.some((q) => q.status === 'ready' || q.status === 'err') && !S.job;
+  }
+  function patchItem(q) {
+    const el = $(`.item[data-id="${q.id}"]`);
+    if (el) { const t = document.createElement('div'); t.innerHTML = itemHtml(q, []); el.replaceWith(t.firstElementChild); }
   }
 
   function removeItem(id) {
+    const q = itemOf(id); if (!q || q.status === 'running') return;
     const el = $(`.item[data-id="${id}"]`);
     if (el) { el.style.transition = 'opacity .25s, transform .35s var(--ease)'; el.style.opacity = 0; el.style.transform = 'translateX(-14px) scale(.96)'; }
+    if (REAL) inv('forget', { id }).catch(() => {});
     setTimeout(() => {
       const before = rects();
-      S.queue = S.queue.filter((q) => q.id !== id); if (S.sel === id) S.sel = null;
+      S.queue = S.queue.filter((x) => x.id !== id); if (S.sel === id) S.sel = null;
       renderAll(); flip(before);
     }, 230);
   }
   function itemAction(act, id) {
     const q = itemOf(id); if (!q) return;
-    if (act === 'render') renderOne(id);
+    if (act === 'render') { if (q.status === 'err') { q.status = 'ready'; q.error = null; } renderOne(id); }
     else if (act === 'reveal') reveal(q);
     else if (act === 'remove') removeItem(id);
     else if (act === 'top') { const before = rects(); S.queue = [q, ...S.queue.filter((x) => x !== q)]; renderQueue(); flip(before); }
   }
   function reveal(q) {
-    const T = window.__TAURI__;
-    if (T && q.path) T.core.invoke('reveal', { path: q.status === 'done' ? q.outPath : q.path });
+    if (REAL) inv('reveal', { path: q.status === 'done' && q.out ? q.out : q.path }).catch((e) => toast(String(e)));
     else toast(L.revealToast);
   }
 
@@ -234,13 +283,13 @@
     if (!it) { if (S.sel !== null) { S.sel = null; renderAll(true); } return; }
     const id = +it.dataset.id; const a = e.target.closest('[data-act]');
     if (a) { itemAction(a.dataset.act, id); return; }
-    if (S.sel !== id) { S.sel = id; renderAll(true); }
+    if (S.sel !== id) { S.sel = id; S.t = 0.15; renderAll(true); }
   });
   qList.addEventListener('contextmenu', (e) => {
     const it = e.target.closest('.item'); if (!it) return;
     const q = itemOf(+it.dataset.id);
     openMenu({ x: e.clientX, y: e.clientY }, [
-      ...(q.status === 'ready' ? [{ label: L.renderThis, value: 'render', icon: ICONS.playc }] : []),
+      ...(q.status === 'ready' || q.status === 'err' ? [{ label: L.renderThis, value: 'render', icon: ICONS.playc }] : []),
       { label: q.status === 'done' ? L.showOutput : L.showInFolder, value: 'reveal', icon: ICONS.reveal },
       { label: L.moveTop, value: 'top', icon: ICONS.top },
       { sep: true },
@@ -264,7 +313,7 @@
   const drag = { justDropped: false };
   qList.addEventListener('pointerdown', (e) => {
     const it = e.target.closest('.item'); if (!it || e.button !== 0 || e.target.closest('button')) return;
-    Object.assign(drag, { el: it, id: +it.dataset.id, y0: e.clientY, on: false, pid: e.pointerId });
+    Object.assign(drag, { el: it, id: +it.dataset.id, y0: e.clientY, on: false });
   });
   addEventListener('pointermove', (e) => {
     if (!drag.el) return;
@@ -298,12 +347,19 @@
     drag.el = null; drag.on = false;
   });
 
-  $('#bClearDone').onclick = () => {
+  $('#bClearDone').onclick = () => clearDone(true);
+  function clearDone(withToast) {
     const done = S.queue.filter((q) => q.status === 'done'); if (!done.length) return;
     done.forEach((q) => { const el = $(`.item[data-id="${q.id}"]`); if (el) { el.style.transition = 'opacity .25s, transform .35s var(--ease)'; el.style.opacity = 0; el.style.transform = 'scale(.96)'; } });
-    setTimeout(() => { const before = rects(); S.queue = S.queue.filter((q) => q.status !== 'done'); if (!selItem()) S.sel = null; renderAll(); flip(before); toast(L.cleared); }, 230);
-  };
+    if (REAL) done.forEach((q) => inv('forget', { id: q.id }).catch(() => {}));
+    setTimeout(() => { const before = rects(); S.queue = S.queue.filter((q) => q.status !== 'done'); if (!selItem()) S.sel = null; renderAll(); flip(before); if (withToast) toast(L.cleared); }, 230);
+  }
 
+  /* adicionar vídeos */
+  function addMenu(at) {
+    openMenu(at, [{ label: L.addVideos, value: 'files', icon: ICONS.file }, { label: L.addFolder, value: 'folder', icon: ICONS.folder }],
+      (v) => (REAL ? inv('pick', { folder: v === 'folder' }).catch((e) => toast(String(e))) : addFolder()));
+  }
   // Demo: simula arrastar uma pasta. No app, o Rust percorre a pasta e as subpastas atrás de vídeos.
   function addFolder() {
     const pid = S.set.defaultPreset; const base = Math.max(0, ...S.queue.map((q) => q.id)) + 1;
@@ -314,9 +370,10 @@
     setTimeout(() => $('#queue').smoothTo(1e6), 60);
     toast(L.folderAdded('Day 3', add.length));
   }
-  $('#drop').addEventListener('click', (e) => { if (!e.target.closest('#bDefPreset')) addFolder(); });
-  $('#bAdd').onclick = addFolder;
-  $('#bDefPreset').onclick = (e) => openMenu(e.currentTarget, presetItems(S.set.defaultPreset), (v) => { S.set.defaultPreset = v; renderQueue(); renderSheetIfOpen(); });
+  $('#drop').addEventListener('click', (e) => { if (!e.target.closest('#bDefPreset')) addMenu(e.currentTarget.querySelector('svg') || e.currentTarget); });
+  $('#bAdd').dataset.menu = '1';
+  $('#bAdd').onclick = (e) => addMenu(e.currentTarget);
+  $('#bDefPreset').onclick = (e) => openMenu(e.currentTarget, presetItems(S.set.defaultPreset), (v) => { S.set.defaultPreset = v; saveSettings(); renderQueue(); renderSheetIfOpen(); });
   $('#bSetAll').onclick = (e) => openMenu(e.currentTarget, presetItems(null), (v) => assignAll(v));
 
   function assign(q, pid) { q.preset = pid; q.cfg = clone(presetOf(pid)); }
@@ -328,27 +385,75 @@
 
   /* ---------- presets ---------- */
   function describe(p) {
-    const parts = [codecName(p.codec) + ' ' + p.bits + '-bit', p.scale === 'source' ? L.sourceRes : scaleTxt(p.scale),
+    const parts = [codecName(p.codec) + ' ' + (p.codec === 'h264' ? 8 : p.bits) + '-bit', p.scale === 'source' ? L.sourceRes : scaleTxt(p.scale),
       p.bitrate.mode === 'manual' ? fmtK(p.bitrate.kbps) + ' ' + p.bitrate.rc.toUpperCase() : p.bitrate.mode === 'source' ? L.bitrateSrc : L.bitrateAuto,
       p.fps.conform ? fpsTxt(p.fps.value) + ' fps CFR' : null, p.hdrToSdr ? 'HDR → 709' : null,
       p.audio.codec === 'copy' ? L.audioCopied : `AAC ${p.audio.channels === 'stereo' ? L.stereoL : L.monoL}`].filter(Boolean);
-    return `<b>${p.name}:</b> ${parts.join(' · ')}`;
+    return `<b>${esc(p.name)}:</b> ${parts.join(' · ')}`;
   }
   function renderPresets() {
     const t = target();
     $('#presets').innerHTML = S.presets.map((p) =>
-      `<button class="preset ${t.preset && t.preset.id === p.id ? 'sel' : ''}" data-id="${p.id}" style="--c:${COLORS[p.color]}"><span class="ic">${ICONS[p.icon]}</span>${p.name}</button>`
-    ).join('') + `<button class="preset add"><span class="ic">${ICONS.plus}</span>${L.newPreset}</button>`;
+      `<button class="preset ${t.preset && t.preset.id === p.id ? 'sel' : ''}" data-id="${p.id}" style="--c:${COLORS[p.color] || COLORS.blue}"><span class="ic">${ICONS[p.icon] || ICONS.camera}</span>${esc(p.name)}</button>`
+    ).join('') + `<button class="preset add" data-menu="1"><span class="ic">${ICONS.plus}</span>${L.newPreset}</button>`;
     $('#presetDesc').innerHTML = t.preset ? describe(t.preset) : '';
-    $('#presetsFold').classList.toggle('closed', S.fold.presets);
-    $('#bFoldPresets').classList.toggle('closed', S.fold.presets);
+    $('#presetsFold').classList.toggle('closed', !!S.set.foldPresets);
+    $('#bFoldPresets').classList.toggle('closed', !!S.set.foldPresets);
   }
-  $('#bFoldPresets').onclick = () => { S.fold.presets = !S.fold.presets; store.set('mec.foldPresets', S.fold.presets ? '1' : '0'); renderPresets(); };
+  $('#bFoldPresets').onclick = () => { S.set.foldPresets = !S.set.foldPresets; saveSettings(); renderPresets(); };
+
+  function uid() { return 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+  function addPresets(list, select) {
+    list.forEach((p, i) => { p.id = presetOf(p.id) ? uid() : (p.id || uid()); if (!COLORS[p.color]) p.color = PALETTE[(S.presets.length + i) % PALETTE.length]; S.presets.push(p); });
+    savePresets();
+    if (select && list[0]) editPreset(list[0].id); else renderAll();
+  }
+  function editPreset(pid, focusName) {
+    S.sel = null; S.editPreset = pid; renderAll(true);
+    if (focusName) setTimeout(() => { const i = $('#presetNameInput'); if (i) { i.focus(); i.select(); } }, 80);
+  }
+  function newPreset() {
+    const base = clone(target().preset || S.presets[0]);
+    Object.assign(base, { id: uid(), name: L.newPresetName, color: PALETTE[S.presets.length % PALETTE.length] });
+    addPresets([base], false); editPreset(base.id, true);
+  }
+  function deletePreset(pid) {
+    if (S.presets.length <= 1) { toast(L.cantDeleteLast); return; }
+    const p = presetOf(pid); S.presets = S.presets.filter((x) => x.id !== pid);
+    const fallback = S.presets[0].id;
+    S.queue.forEach((q) => { if (q.preset === pid) q.preset = fallback; });
+    if (S.set.defaultPreset === pid) { S.set.defaultPreset = fallback; saveSettings(); }
+    if (S.editPreset === pid) S.editPreset = null;
+    savePresets(); renderAll(); toast(L.presetDeleted(p.name));
+  }
+  function importEnc() { if (!REAL) { toast(L.soon); return; } inv('import_enc').then((l) => { if (l.length) { addPresets(l, true); toast(L.presetsImported(l.length)); } }).catch((e) => toast(String(e))); }
+  function importJson() { if (!REAL) { toast(L.soon); return; } inv('import_presets').then((l) => { if (l.length) { addPresets(l, true); toast(L.presetsImported(l.length)); } }).catch((e) => toast(String(e))); }
+  function exportPresets() { if (!REAL) { toast(L.soon); return; } inv('export_presets', { presets: S.presets }).then((ok) => ok && toast(L.presetsExported)).catch((e) => toast(String(e))); }
+  async function restoreDefaults() {
+    const defs = REAL ? await inv('default_presets') : clone(demo.presets);
+    const have = new Set(S.presets.map((p) => p.id));
+    defs.filter((p) => !have.has(p.id)).forEach((p) => S.presets.push(p));
+    savePresets(); renderAll(); toast(L.presetsImported(defs.length));
+  }
+  $('#bManage').dataset.menu = '1';
+  $('#bManage').onclick = (e) => openMenu(e.currentTarget, [
+    { label: L.newPresetMenu, value: 'new', icon: ICONS.plus },
+    { label: L.importEnc, value: 'enc', icon: ICONS.down },
+    { label: L.importJson, value: 'json', icon: ICONS.down },
+    { label: L.exportPresets, value: 'export', icon: ICONS.up },
+    { sep: true },
+    { label: L.restoreDefaults, value: 'defaults', icon: ICONS.reset },
+  ], (v) => ({ new: newPreset, enc: importEnc, json: importJson, export: exportPresets, defaults: restoreDefaults }[v]()));
+
   const pressPreset = { justDropped: false };
   $('#presets').addEventListener('click', (e) => {
     if (pressPreset.justDropped) { pressPreset.justDropped = false; return; }
     const b = e.target.closest('.preset'); if (!b) return;
-    if (b.classList.contains('add')) { toast(L.soon); return; }
+    if (b.classList.contains('add')) {
+      openMenu(b, [{ label: L.newPresetMenu, value: 'new', icon: ICONS.plus }, { label: L.importEnc, value: 'enc', icon: ICONS.down }],
+        (v) => (v === 'new' ? newPreset() : importEnc()));
+      return;
+    }
     const q = selItem();
     if (!q) { S.editPreset = b.dataset.id; renderPresets(); renderInspector(true); return; }
     assign(q, b.dataset.id); renderAll(true);
@@ -360,10 +465,17 @@
       { label: L.useForAll, value: 'all', icon: ICONS.layers },
       { label: L.setDefault, value: 'def', icon: ICONS.star },
       { label: L.editPreset, value: 'edit', icon: ICONS.edit },
+      { label: L.rename, value: 'rename', icon: ICONS.edit },
+      { label: L.duplicate, value: 'dup', icon: ICONS.copy },
+      { sep: true },
+      { label: L.deletePreset, value: 'del', icon: ICONS.trash, danger: true },
     ], (v) => {
       if (v === 'all') assignAll(pid);
-      if (v === 'def') { S.set.defaultPreset = pid; renderQueue(); toast(L.defaultSet(presetOf(pid).name)); }
-      if (v === 'edit') { S.sel = null; S.editPreset = pid; renderAll(true); }
+      if (v === 'def') { S.set.defaultPreset = pid; saveSettings(); renderQueue(); toast(L.defaultSet(presetOf(pid).name)); }
+      if (v === 'edit') editPreset(pid);
+      if (v === 'rename') editPreset(pid, true);
+      if (v === 'dup') { const c = clone(presetOf(pid)); c.id = uid(); c.name += ' 2'; addPresets([c], true); }
+      if (v === 'del') deletePreset(pid);
     });
   });
 
@@ -376,9 +488,9 @@
   addEventListener('pointermove', (e) => {
     const P = pressPreset; if (!P.b) return;
     if (!P.on) {
-      if (Math.hypot(e.clientX - P.x0, e.clientY - P.y0) < 6) return;
+      if (Math.hypot(e.clientX - P.x0, e.clientY - P.y0) < 6 || !S.queue.length) return;
       P.on = true; const p = presetOf(P.pid);
-      ghost.innerHTML = `<i style="--c:${COLORS[p.color]}"></i>${p.name}`; ghost.classList.add('show');
+      ghost.innerHTML = `<i style="--c:${COLORS[p.color]}"></i>${esc(p.name)}`; ghost.classList.add('show');
       root.classList.add('dragging-preset'); closeMenu();
     }
     ghost.style.transform = `translate(${e.clientX + 12}px,${e.clientY + 10}px)`;
@@ -402,10 +514,25 @@
 
   /* ---------- prévia ---------- */
   const chip = (txt, c, ico) => `<span class="chip ${c ? 'hl' : ''}" ${c ? `style="--c:${c}"` : ''}>${ico || ''}${txt}</span>`;
+  let pvTimer = 0; let pvKey = ''; let pvSeq = 0;
+  function requestPreview(q, out) {
+    if (!REAL) return;
+    const t = durOf(q) * S.t; const key = JSON.stringify([q.id, out, Math.round(t * 30), out ? q.cfg : 0]);
+    if (key === pvKey) return; pvKey = key;
+    clearTimeout(pvTimer);
+    pvTimer = setTimeout(() => {
+      const seq = ++pvSeq; $('#frame').classList.add('loading');
+      inv('preview', { id: q.id, cfg: q.cfg, t, output: out, max: 960 }).then((img) => {
+        if (seq !== pvSeq) return;
+        const el = $('#pvImg'); if (el) el.src = img;
+        $('#frame').classList.remove('loading');
+      }).catch(() => { if (seq === pvSeq) $('#frame').classList.remove('loading'); });
+    }, 70);
+  }
   function renderPreview(anim) {
     const q = selItem(); const fr = $('#frame'); const ch = $('#chips');
     $('#previewCard').classList.toggle('no-video', !q);
-    if (!q) { fr.innerHTML = ''; ch.innerHTML = ''; $('#pvMeta').innerHTML = ''; $('#tcEnd').textContent = '00:00:00:00'; return; }
+    if (!q) { fr.innerHTML = ''; ch.innerHTML = ''; $('#pvMeta').innerHTML = ''; $('#tcEnd').textContent = '00:00:00:00'; pvKey = ''; drawWave(); return; }
     const out = S.pv === 'out'; const o = outDims(q.src, q.cfg); const vertical = q.src.h > q.src.w;
     const c = [];
     if (!out) {
@@ -415,7 +542,7 @@
       if (q.src.rot) c.push(chip(`${q.src.rot}°`, COLORS.teal, ICONS.rot));
       c.push(chip(L.audioTracks(q.src.audio)));
     } else {
-      c.push(chip(`${o.w}×${o.h}`), chip(`${codecName(q.cfg.codec)} ${q.cfg.bits}-bit · NVENC`),
+      c.push(chip(`${o.w}×${o.h}`), chip(`${codecName(q.cfg.codec)} ${q.cfg.codec === 'h264' ? 8 : q.cfg.bits}-bit · ${S.engine.status === 'cpu' ? 'CPU' : 'NVENC'}`),
         q.cfg.fps.conform ? chip(`${fpsTxt(q.cfg.fps.value)} fps ${L.constant}`, COLORS.green) : chip(`${fpsTxt(q.src.fps)} fps`));
       if (q.src.hdr) c.push(q.cfg.hdrToSdr ? chip('Rec. 709', COLORS.green) : chip(L.hdrKept, COLORS.orange));
       c.push(chip(`≈ ${fmtMB(estMB(q))}`));
@@ -423,18 +550,29 @@
     ch.innerHTML = c.join('');
     $('#pvMeta').innerHTML = c.join('<span class="dot">·</span>');
     if (anim) [ch, $('#pvMeta')].forEach((el) => { el.classList.remove('swap'); void el.offsetWidth; el.classList.add('swap'); });
-    const washed = q.src.hdr && (!out || !q.cfg.hdrToSdr);
-    fr.style.aspectRatio = vertical ? '9/16' : '16/9';
+    fr.style.aspectRatio = `${q.src.w}/${q.src.h}`;
     fr.style.height = vertical ? '100%' : 'auto'; fr.style.width = vertical ? 'auto' : '100%';
+    const keepImg = REAL && $('#pvImg') && fr.dataset.id === String(q.id);
     fr.className = 'frame' + (out ? ' out' : '');
-    fr.innerHTML = scene(q.hue, vertical)
-      + `<div class="grade" style="${washed ? 'opacity:1;background:rgba(170,170,185,.16);mix-blend-mode:screen' : 'opacity:0'}"></div>`
-      + `<span class="tag"><i></i>${out ? L.result : L.original}</span>`
-      + `<span class="res tnum">${out ? `${o.w}×${o.h}` : `${q.src.w}×${q.src.h}`}</span>`
-      + (q.src.rot ? `<div class="rot-note">${ICONS.rot}${out ? L.rotOut(q.src.rot) : L.rotIn(q.src.rot)}</div>` : '');
-    fr.querySelector('svg.scene').style.filter = washed ? 'saturate(.6) contrast(.82) brightness(1.04)' : 'none';
+    fr.dataset.id = q.id;
+    const rot = q.src.rot ? `<div class="rot-note">${ICONS.rot}${out ? L.rotOut(q.src.rot) : L.rotIn(q.src.rot)}</div>` : '';
+    if (REAL) {
+      if (!keepImg) fr.innerHTML = `${q.thumb ? `<img id="pvImg" src="${q.thumb}" alt="">` : '<img id="pvImg" alt="">'}<i class="pv-spin"></i>${rot}`;
+      else { const n = fr.querySelector('.rot-note'); if (n) n.outerHTML = rot || ''; else if (rot) fr.insertAdjacentHTML('beforeend', rot); }
+      requestPreview(q, out);
+    } else {
+      const washed = q.src.hdr && (!out || !q.cfg.hdrToSdr);
+      fr.innerHTML = scene(q.hue, vertical)
+        + `<div class="grade" style="${washed ? 'opacity:1;background:rgba(170,170,185,.16);mix-blend-mode:screen' : 'opacity:0'}"></div>` + rot;
+      fr.querySelector('svg.scene').style.filter = washed ? 'saturate(.6) contrast(.82) brightness(1.04)' : 'none';
+    }
     if (anim) { fr.classList.remove('flip'); void fr.offsetWidth; fr.classList.add('flip'); }
-    $('#tcEnd').textContent = q.src.dur; setT(S.t);
+    $('#tcEnd').textContent = q.src.dur; setT(S.t, true);
+    if (REAL && q.wave === undefined) {
+      q.wave = null;
+      inv('waveform', { id: q.id, bars: 600 }).then((w) => { q.wave = w; if (selItem() === q) drawWave(); }).catch(() => { q.wave = []; });
+    }
+    drawWave();
   }
 
   /* segmentado com pílula que desliza */
@@ -448,7 +586,7 @@
       if (instant) { void pill.offsetWidth; pill.style.transition = ''; }
     };
     el.onclick = (e) => {
-      const b = e.target.closest('button'); if (!b || b.classList.contains('active')) return;
+      const b = e.target.closest('button'); if (!b || b.classList.contains('active') || b.disabled) return;
       el.querySelectorAll('button').forEach((x) => x.classList.toggle('active', x === b));
       place(b); onChange && onChange(b.dataset.v);
     };
@@ -456,13 +594,24 @@
   }
   seg($('#pvSeg'), (v) => { S.pv = v; renderPreview(true); });
 
-  /* forma de onda */
+  /* forma de onda (no app vem do áudio de verdade) */
   function drawWave() {
     const cv = $('#wave'); const r = cv.getBoundingClientRect(); if (!r.width) return; const dpr = devicePixelRatio || 1;
     cv.width = r.width * dpr; cv.height = r.height * dpr;
     const g = cv.getContext('2d'); g.scale(dpr, dpr);
-    g.fillStyle = getComputedStyle(root).getPropertyValue('--wave').trim(); let seed = 7;
-    const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    g.fillStyle = getComputedStyle(root).getPropertyValue('--wave').trim();
+    const q = selItem();
+    if (REAL) {
+      const w = q && q.wave; if (!w || !w.length) return;
+      const n = Math.floor((r.width - 4) / 3);
+      for (let i = 0; i < n; i++) {
+        const v = w[Math.floor(i / n * w.length)] / 255; const a = Math.max(1.5, v * (r.height - 10));
+        g.beginPath(); g.roundRect(2 + i * 3, (r.height - a) / 2, 2, a, 1); g.fill();
+      }
+      return;
+    }
+    if (!q) return;
+    let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
     for (let x = 2; x < r.width - 2; x += 3) {
       const env = .35 + .65 * Math.abs(Math.sin(x / 41) * Math.cos(x / 97));
       const a = Math.max(1.5, env * (rnd() * .7 + .3) * (r.height - 10));
@@ -470,23 +619,30 @@
     }
   }
   const tl = $('#timeline');
-  function setT(t) {
+  function setT(t, quiet) {
     S.t = clamp(t, 0, 1); tl.style.setProperty('--t', S.t * 100 + '%');
     const q = selItem(); if (!q) { $('#tcNow').textContent = '00:00:00:00'; return; }
-    const s = secs(q.src.dur) * S.t; const f = Math.floor((s % 1) * 60); const ss = Math.floor(s);
-    $('#tcNow').textContent = [Math.floor(ss / 3600), Math.floor(ss / 60) % 60, ss % 60, f].map((n) => String(n).padStart(2, '0')).join(':');
+    $('#tcNow').textContent = tc(durOf(q) * S.t, q.src.fpsNum || 60);
+    if (!quiet && REAL) requestPreview(q, S.pv === 'out');
   }
   tl.addEventListener('pointerdown', (e) => {
     if (!selItem()) return;
     const r = tl.getBoundingClientRect(); const mv = (ev) => setT((ev.clientX - r.left) / r.width);
     mv(e); tl.setPointerCapture(e.pointerId); tl.onpointermove = mv; tl.onpointerup = () => { tl.onpointermove = null; };
   });
+  const ctl = $$('.controls .ctl');
+  const stepBy = (s) => { const q = selItem(); if (q) setT(S.t + s / durOf(q)); };
+  ctl[0].onclick = () => { const q = selItem(); if (q) stepBy(-1 / (q.src.fpsNum || 60)); };
+  ctl[1].onclick = () => stepBy(-5);
+  ctl[3].onclick = () => stepBy(5);
+  ctl[4].onclick = () => { const q = selItem(); if (q) stepBy(1 / (q.src.fpsNum || 60)); };
   let playRaf;
   $('#bPlay').onclick = () => {
     if (!selItem()) return;
+    if (REAL) { toast(L.playbackSoon); return; }
     S.playing = !S.playing; $('#playIco').innerHTML = S.playing ? ICONS.pause : ICONS.play;
     cancelAnimationFrame(playRaf);
-    if (S.playing) { let last = performance.now(); const dur = secs(selItem().src.dur);
+    if (S.playing) { let last = performance.now(); const dur = durOf(selItem());
       const step = (now) => { setT(S.t + (now - last) / 1000 / dur); last = now; if (S.t < 1 && S.playing) playRaf = requestAnimationFrame(step); };
       playRaf = requestAnimationFrame(step); }
   };
@@ -499,7 +655,7 @@
     return { q: null, cfg: p, src: null, preset: p, isPreset: true };
   }
   const sw = (key, on, red) => `<button class="switch ${on ? 'on' : ''} ${red ? 'red' : ''}" data-k="${key}"></button>`;
-  const segH = (key, val, opts) => `<div class="seg" data-k="${key}"><div class="pill"></div>${opts.map(([v, t]) => `<button data-v="${v}" class="${String(v) === String(val) ? 'active' : ''}">${t}</button>`).join('')}</div>`;
+  const segH = (key, val, opts) => `<div class="seg" data-k="${key}"><div class="pill"></div>${opts.map(([v, t, dis]) => `<button data-v="${v}" class="${String(v) === String(val) ? 'active' : ''}" ${dis ? 'disabled' : ''}>${t}</button>`).join('')}</div>`;
   const row = (lbl, ctl, sub, cls = '') => `<div class="row ${cls}"><span class="lbl">${lbl}${sub ? `<small>${sub}</small>` : ''}</span>${ctl}</div>`;
   const sec = (id, title, summary, body, extra = '') => `<div class="sec ${S.open[id] ? 'open' : ''}" data-sec="${id}">
       <button class="sec-head"><span class="sec-t">${title}</span>${extra}<span class="sec-sum">${summary}</span>${ICONS.chev}</button>
@@ -507,23 +663,30 @@
   const trackBtn = (i, n) => `<button class="field pick" data-menu="1" data-track="${i}">${L.track(n)}${ICONS.chev}</button>`;
 
   function renderInspector(anim) {
-    const T = target(); const el = $('#inspIn'); const c = T.cfg; const src = T.src;
-    const mod = !T.isPreset && !same(c, T.preset);
-    $('#inspFor').innerHTML = T.isPreset ? `${L.editing} · <span style="color:${COLORS[T.preset.color]}">${T.preset.name}</span>` : L.settingsFor;
-    $('#modified').classList.toggle('show', mod); $('#bSavePreset').classList.toggle('show', mod);
-    const a = c.audio; const o = c.output;
+    const T = target(); const el = $('#inspIn');
+    if (!T.cfg) { el.innerHTML = ''; return; }
+    const c = T.cfg; const src = T.src;
+    const mod = !T.isPreset && T.preset && !same(c, T.preset);
+    $('#inspFor').innerHTML = T.isPreset
+      ? `<span class="dotc" style="--c:${COLORS[T.preset.color] || COLORS.blue}"></span><input id="presetNameInput" class="name-input" value="${esc(T.preset.name)}" spellcheck="false" aria-label="${L.presetName}">`
+      : L.settingsFor;
+    $('#inspFor').classList.toggle('editing', T.isPreset);
+    $('#modified').classList.toggle('show', !!mod); $('#bSavePreset').classList.toggle('show', !!mod);
+    const a = c.audio; const o = c.output; const h264 = c.codec === 'h264';
+    const dims = src ? outDims(src, c) : null;
+    const resHint = src ? `<div class="hint">${L.outputRes}: <b>${dims.w} × ${dims.h}</b></div>` : c.scale === '1080' ? `<div class="hint">${L.scale1080Hint}</div>` : '';
     el.innerHTML = (T.isPreset ? `<div class="hint top-hint">${L.presetHint}</div>` : '')
-      + sec('video', L.video, `${codecName(c.codec)} · ${c.bits}-bit · ${scaleTxt(c.scale)} · ${c.bitrate.mode === 'manual' ? fmtK(c.bitrate.kbps) : c.bitrate.mode === 'source' ? L.source : L.auto}`,
+      + sec('video', L.video, `${codecName(c.codec)} · ${h264 ? 8 : c.bits}-bit · ${scaleTxt(c.scale)} · ${c.bitrate.mode === 'manual' ? fmtK(c.bitrate.kbps) : c.bitrate.mode === 'source' ? L.source : L.auto}`,
         `<div class="group">
           ${row(L.codec, segH('codec', c.codec, [['h264', 'H.264'], ['h265', 'H.265']]))}
-          ${row(L.bitDepth, segH('bits', c.bits, [[8, '8-bit'], [10, '10-bit']]))}
+          ${row(L.bitDepth, segH('bits', h264 ? 8 : c.bits, [[8, '8-bit'], [10, '10-bit', h264]]))}
           ${row(L.resolution, segH('scale', c.scale, [['source', L.source], ['1080', '1080p'], ['50', '50%'], ['25', '25%']]))}
           ${row(L.bitrate, segH('bitrate.mode', c.bitrate.mode, [['auto', L.auto], ['source', L.source], ['manual', L.manual]]))}
           <div class="collapse ${c.bitrate.mode === 'manual' ? '' : 'closed'}" style="max-height:60px">
             ${row(L.value, `<div class="field"><input class="tnum" data-k="bitrate.kbps" value="${num(c.bitrate.kbps, 0)}"><span>kb/s</span></div>${segH('bitrate.rc', c.bitrate.rc, [['cbr', 'CBR'], ['vbr', 'VBR']])}`)}
           </div>
           ${row(L.maxQuality, sw('maxQuality', c.maxQuality), L.maxQualitySub)}
-        </div>${c.bitrate.mode === 'source' && src ? `<div class="hint">${L.sameBitrate(fmtK(src.kbps))}</div>` : ''}`)
+        </div>${resHint}${h264 && c.bits === 10 ? `<div class="hint">${L.h264no10}</div>` : ''}${c.bitrate.mode === 'source' && src ? `<div class="hint">${L.sameBitrate(fmtK(src.kbps))}</div>` : ''}`)
       + sec('fps', L.frameRate, c.fps.conform ? `${fpsTxt(c.fps.value)} CFR` : L.source,
         `<div class="group">
           ${row(L.cfr, sw('fps.conform', c.fps.conform), L.cfrSub)}
@@ -537,17 +700,17 @@
       + sec('audio', L.audio, a.codec === 'copy' ? L.copy : `AAC · ${a.channels === 'stereo' ? L.stereo : L.mono}`,
         `<div class="group">
           ${row(L.codec, segH('audio.codec', a.codec, [['aac', 'AAC'], ['copy', L.copy]]))}
-          ${row(L.channels, segH('audio.channels', a.channels, [['stereo', L.stereo], ['mono', L.mono]]))}
-          ${row(L.tracks, `<div class="val">${a.channels === 'stereo' ? trackBtn(0, a.tracks[0]) + trackBtn(1, a.tracks[1]) : trackBtn(0, a.tracks[0])}</div>`, a.channels === 'stereo' ? L.tracksStereo : L.tracksMono)}
+          ${a.codec === 'aac' ? row(L.channels, segH('audio.channels', a.channels, [['stereo', L.stereo], ['mono', L.mono]])) : ''}
+          ${a.codec === 'aac' ? row(L.tracks, `<div class="val">${a.channels === 'stereo' ? trackBtn(0, a.tracks[0]) + trackBtn(1, a.tracks[1]) : trackBtn(0, a.tracks[0])}</div>`, a.channels === 'stereo' ? L.tracksStereo : L.tracksMono) : ''}
           ${a.codec === 'aac' ? row(L.quality, `<span class="val tnum">${a.kbps} kb/s · 48 kHz</span>`) : ''}
         </div>`)
-      + sec('output', L.output, [o.suffix.on ? o.suffix.text : null, o.subfolder.on ? o.subfolder.text + '\\' : null, o.deleteSource ? L.deleteSrc : null].filter(Boolean).join(' · ') || L.sameFolder,
+      + sec('output', L.output, [o.suffix.on ? o.suffix.text : null, o.subfolder.on ? o.subfolder.text + '\\' : null, o.deleteSource ? L.deleteSrc : null].filter(Boolean).map(esc).join(' · ') || L.sameFolder,
         `<div class="group">
-          ${row(L.suffix, `<div class="field ${o.suffix.on ? '' : 'off'}"><input data-k="output.suffix.text" value="${o.suffix.text}" class="txt"></div>${sw('output.suffix.on', o.suffix.on)}`)}
-          ${row(L.subfolder, `<div class="field ${o.subfolder.on ? '' : 'off'}"><input data-k="output.subfolder.text" value="${o.subfolder.text}" class="txt"></div>${sw('output.subfolder.on', o.subfolder.on)}`)}
+          ${row(L.suffix, `<div class="field ${o.suffix.on ? '' : 'off'}"><input data-k="output.suffix.text" value="${esc(o.suffix.text)}" class="txt" spellcheck="false"></div>${sw('output.suffix.on', o.suffix.on)}`)}
+          ${row(L.subfolder, `<div class="field ${o.subfolder.on ? '' : 'off'}"><input data-k="output.subfolder.text" value="${esc(o.subfolder.text)}" class="txt" spellcheck="false"></div>${sw('output.subfolder.on', o.subfolder.on)}`)}
           ${row(L.deleteSrc, sw('output.deleteSource', o.deleteSource, true), L.deleteSrcSub, o.deleteSource ? 'danger' : '')}
-          ${row(L.dest, `<span class="val">${L.sameFolder}${ICONS.chev}</span>`)}
-        </div><div class="hint">${L.savesAs(outName(T.q ? T.q.file : 'IMG_0001.MOV', c))}</div>`)
+          ${row(L.dest, `<span class="val">${L.sameFolder}</span>`)}
+        </div><div class="hint">${L.savesAs(esc(outName(T.q ? T.q.file : 'IMG_0001.MOV', c)))}</div>`)
       + sec('adv', L.advanced, [c.avSync ? L.avSync : null, c.metadata ? L.metadata : null].filter(Boolean).join(' · ') || '—',
         `<div class="group">
           ${row(L.avSync, sw('avSync', c.avSync), L.avSyncSub)}
@@ -558,22 +721,26 @@
     if (T.q) $('#est').textContent = '≈ ' + fmtMB(estMB(T.q));
     $('#bApplyAll').textContent = T.isPreset ? L.setForAllBtn : L.applyAll;
     $('#bApplyAll').disabled = !pending().length;
+    const ni = $('#presetNameInput');
+    if (ni) ni.onchange = () => { const v = ni.value.trim(); if (v) { T.preset.name = v; savePresets(); renderQueue(); renderPresets(); } };
     if (anim) { el.classList.remove('swap'); void el.offsetWidth; el.classList.add('swap'); }
   }
   function outName(file, cfg) {
     const c = cfg.output; const base = file.replace(/\.[^.]+$/, '');
-    const suf = c.suffix.on ? c.suffix.text.replace('{codec}', codecName(cfg.codec).replace('.', '')) : '';
-    return (c.subfolder.on ? c.subfolder.text + '\\' : '') + base + suf + '.' + cfg.container;
+    const suf = c.suffix.on ? c.suffix.text.replace('{codec}', codecName(cfg.codec).replace('.', '')).replace('{preset}', cfg.name || '') : '';
+    return (c.subfolder.on ? c.subfolder.text + '\\' : '') + base + suf + '.' + (cfg.container || 'mp4');
   }
   function set(key, v) {
     const T = target();
     // ao editar o preset, os vídeos que ainda usam o preset sem mudanças acompanham
-    const followers = T.isPreset ? S.queue.filter((q) => q.status !== 'done' && q.preset === T.preset.id && same(q.cfg, T.preset)) : [];
+    const followers = T.isPreset ? S.queue.filter((q) => q.status !== 'done' && q.status !== 'running' && q.preset === T.preset.id && same(q.cfg, T.preset)) : [];
     const ks = key.split('.'); let o = T.cfg; ks.slice(0, -1).forEach((k) => { o = o[k]; });
     const last = ks[ks.length - 1];
-    o[last] = typeof o[last] === 'boolean' ? !o[last] : typeof o[last] === 'number' ? Number(String(v).replace(/\D/g, '')) : v;
+    o[last] = typeof o[last] === 'boolean' ? !o[last] : typeof o[last] === 'number' ? Number(String(v).replace(/\D/g, '')) || 0 : v;
     if (key === 'audio.channels') T.cfg.audio.tracks = v === 'mono' ? [1, 1] : [1, 2];
+    if (key === 'codec' && v === 'h264') T.cfg.bits = 8;
     followers.forEach((q) => { q.cfg = clone(T.preset); });
+    if (T.isPreset) savePresets();
     renderQueue(); renderPresets(); renderInspector(); renderPreview();
   }
   $('#inspIn').addEventListener('click', (e) => {
@@ -583,21 +750,25 @@
     if (h) { const box = h.parentElement; const id = box.dataset.sec; S.open[id] = !S.open[id]; box.classList.toggle('open', S.open[id]); return; }
     const t = e.target.closest('[data-track]');
     if (t) { const T = target(); const i = +t.dataset.track; const n = T.src ? T.src.audio : 2;
-      openMenu(t, [1, 2, 3, 4].slice(0, Math.max(2, n)).map((k) => ({ label: L.track(k), value: k, sel: T.cfg.audio.tracks[i] === k })),
-        (k) => { T.cfg.audio.tracks[i] = k; renderAll(); }); }
+      openMenu(t, [1, 2, 3, 4, 5, 6, 7, 8].slice(0, Math.max(2, n)).map((k) => ({ label: L.track(k), value: k, sel: T.cfg.audio.tracks[i] === k })),
+        (k) => { T.cfg.audio.tracks[i] = k; if (T.isPreset) savePresets(); renderAll(); }); }
   });
   $('#inspIn').addEventListener('change', (e) => { const i = e.target.closest('input[data-k]'); if (i) set(i.dataset.k, i.value); });
-  $('#bSavePreset').onclick = () => { const q = selItem(); const p = presetOf(q.preset); Object.assign(p, clone(q.cfg), { id: p.id, name: p.name, icon: p.icon, color: p.color }); renderAll(); toast(L.presetSaved(p.name)); };
+  $('#bSavePreset').onclick = () => { const q = selItem(); const p = presetOf(q.preset); Object.assign(p, clone(q.cfg), { id: p.id, name: p.name, icon: p.icon, color: p.color }); savePresets(); renderAll(); toast(L.presetSaved(p.name)); };
   $('#bApplyAll').onclick = () => {
     const T = target();
     if (T.isPreset) { assignAll(T.preset.id); return; }
-    pending().forEach((x) => { x.preset = T.q.preset; x.cfg = clone(T.q.cfg); }); renderAll(); toast(L.appliedAll);
+    pending().forEach((x) => { if (x.status !== 'running') { x.preset = T.q.preset; x.cfg = clone(T.q.cfg); } }); renderAll(); toast(L.appliedAll);
   };
-  $('#bManage').onclick = () => toast(L.soon);
 
   /* ---------- configurações ---------- */
+  function engineTxt() {
+    const e = S.engine;
+    if (e.status === 'nvenc') return e.gpu ? `${esc(e.gpu)} · NVENC` : L.engineNvenc;
+    return { cpu: L.engineCpu, missing: L.engineMissing }[e.status] || L.engineChecking;
+  }
   function renderSheet() {
-    const dp = presetOf(S.set.defaultPreset);
+    const dp = presetOf(S.set.defaultPreset) || S.presets[0];
     $('#sheetBody').innerHTML = `
       <div class="group">
         ${row(L.language, segH('lang', S.set.lang, [['en', 'English'], ['pt', 'Português']]))}
@@ -605,23 +776,31 @@
       </div>
       <div class="sec-label">${L.general}</div>
       <div class="group">
-        ${row(L.newVideosUse, `<button class="field pick" data-menu="1" id="bSheetDef"><i class="dotc" style="--c:${dp ? COLORS[dp.color] : 'var(--text-3)'}"></i>${dp ? dp.name : ''}${ICONS.chev}</button>`)}
+        ${row(L.newVideosUse, `<button class="field pick" data-menu="1" id="bSheetDef"><i class="dotc" style="--c:${dp ? COLORS[dp.color] : 'var(--text-3)'}"></i>${dp ? esc(dp.name) : ''}${ICONS.chev}</button>`)}
         ${row(L.clearWhenDone, sw('clearWhenDone', S.set.clearWhenDone))}
         ${row(L.sound, sw('sound', S.set.sound))}
         ${row(L.notify, sw('notify', S.set.notify))}
-        ${row(L.gpu, `<span class="val">NVIDIA NVENC</span>`)}
+        ${row(L.gpu, `<span class="val">${engineTxt()}</span>`)}
       </div>
-      <div class="about">Mec Encoder 0.1.0 · <span>@hugoeditor_</span></div>`;
+      <div class="group">
+        ${row(`${L.version} ${esc(S.version)}`, S.update
+          ? `<button class="btn small" id="bSheetUpdate">${L.updateNow} · ${esc(S.update.version)}</button>`
+          : `<button class="field pick" id="bCheckUpdate">${L.checkUpdates}</button>`)}
+      </div>
+      <div class="hint">${L.dataSaved}</div>
+      <div class="about">Mec Encoder ${esc(S.version)} · <span>@hugoeditor_</span></div>`;
     $$('#sheetBody .seg').forEach((s) => seg(s, (v) => {
       if (s.dataset.k === 'theme') { setTheme(v); return; }
-      S.set.lang = v; store.set('mec.lang', v); applyLang(); renderAll(); renderSheet();
+      S.set.lang = v; saveSettings(); applyLang(); renderAll(); renderSheet();
     }));
-    $('#bSheetDef').onclick = (e) => openMenu(e.currentTarget, presetItems(S.set.defaultPreset), (v) => { S.set.defaultPreset = v; renderSheet(); renderQueue(); });
+    $('#bSheetDef').onclick = (e) => openMenu(e.currentTarget, presetItems(S.set.defaultPreset), (v) => { S.set.defaultPreset = v; saveSettings(); renderSheet(); renderQueue(); });
+    const cu = $('#bCheckUpdate'); if (cu) cu.onclick = () => checkUpdate(true);
+    const su = $('#bSheetUpdate'); if (su) su.onclick = installUpdate;
   }
   const renderSheetIfOpen = () => root.classList.contains('sheet-open') && renderSheet();
   $('#sheetBody').addEventListener('click', (e) => {
     const s = e.target.closest('.switch'); if (!s) return;
-    s.classList.toggle('on'); S.set[s.dataset.k] = s.classList.contains('on');
+    s.classList.toggle('on'); S.set[s.dataset.k] = s.classList.contains('on'); saveSettings();
     if (s.dataset.k === 'sound' && S.set.sound) playDone();
   });
   const openSheet = (on) => { if (on) renderSheet(); root.classList.toggle('sheet-open', on); };
@@ -631,29 +810,54 @@
   addEventListener('keydown', (e) => {
     if (e.key === 'Escape') { openSheet(false); closeMenu(); }
     if (e.target.closest('input')) return;
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'o') { e.preventDefault(); if (REAL) inv('pick', { folder: e.shiftKey }); }
     if (e.key === ' ' && selItem()) { e.preventDefault(); $('#bPlay').click(); }
+    if (e.key === 'ArrowLeft' && selItem()) ctl[e.shiftKey ? 1 : 0].click();
+    if (e.key === 'ArrowRight' && selItem()) ctl[e.shiftKey ? 3 : 4].click();
     if (e.key === 'Delete' && selItem()) removeItem(S.sel);
   });
 
-  /* ---------- render (simulado no modo demo) ----------
+  /* ---------- atualização ---------- */
+  function renderUpdateBtn() {
+    const b = $('#bUpdate'); if (!b) return;
+    b.hidden = !S.update;
+    if (S.update) b.querySelector('span').textContent = S.updating != null ? L.updating(S.updating) : L.updateAvail(S.update.version);
+  }
+  async function checkUpdate(manual) {
+    if (!REAL) { if (manual) toast(L.upToDate); return; }
+    try { S.update = await inv('check_update'); } catch { S.update = null; }
+    renderUpdateBtn(); renderSheetIfOpen();
+    if (manual && !S.update) toast(L.upToDate);
+  }
+  function installUpdate() {
+    if (!S.update || S.updating != null) return;
+    S.updating = 0; renderUpdateBtn();
+    inv('install_update').catch((e) => { S.updating = null; renderUpdateBtn(); toast(String(e)); });
+  }
+  $('#bUpdate').onclick = (e) => openMenu(e.currentTarget, [
+    { label: L.updateNow, value: 'now', icon: ICONS.down }, { label: L.later, value: 'later', icon: ICONS.x }],
+    (v) => v === 'now' && installUpdate());
+  $('#bUpdate').dataset.menu = '1';
+
+  /* ---------- render ----------
      "Renderizar fila": avisa uma vez, quando a fila inteira termina.
      Render de um vídeo só: avisa quando aquele vídeo termina. */
   const sfx = $('#sfxDone');
   function playDone() { try { sfx.currentTime = 0; const p = sfx.play(); if (p) p.catch(() => {}); } catch {} }
-  function notify(msg) {
-    toast(msg, true);
-    if (S.set.sound) playDone();
-    // No app: notificação do Windows (tauri-plugin-notification) quando a janela não estiver em foco.
+  function notify(msg, isError) {
+    toast(msg, !isError);
+    if (S.set.sound && !isError) playDone();
+    if (REAL && S.set.notify && !document.hasFocus()) inv('notify', { title: 'Mec Encoder', body: msg }).catch(() => {});
   }
   function renderRenderBtn() {
-    const b = $('#bRender'); const run = S.job && S.job.mode === 'queue';
+    const b = $('#bRender');
     b.classList.toggle('stop', !!S.job);
     $('#renderTxt').textContent = S.job ? L.stop : L.render;
-    if (!run) $('#renderFill').style.setProperty('--p', 0);
+    if (!S.job) $('#renderFill').style.setProperty('--p', 0);
   }
-  let timer = null;
-  function startJob(job) { S.job = job; renderRenderBtn(); renderQueue(); clearInterval(timer); timer = setInterval(tick, 120); }
+  function startJob(job) { S.job = job; renderRenderBtn(); renderQueue(); if (REAL) runLoop(); else { clearInterval(timer); timer = setInterval(tick, 120); } }
   function stopJob() {
+    if (REAL) { S.stopping = true; inv('stop').catch(() => {}); }
     clearInterval(timer); timer = null;
     S.queue.forEach((q) => { if (q.status === 'running') { q.status = 'ready'; q.p = 0; } q.queued = false; });
     S.job = null; renderRenderBtn(); renderQueue();
@@ -665,38 +869,60 @@
     else { const before = rects(); const at = S.queue.findIndex((x) => x.status === 'running') + 1; S.queue = S.queue.filter((x) => x !== q); S.queue.splice(at, 0, q); renderQueue(); flip(before); }
     toast(L.willRenderNext(q.file));
   }
+  function nextItem(J) {
+    if (J.mode === 'queue') return S.queue.find((q) => q.status === 'ready');
+    while (J.list.length) { const c = itemOf(J.list.shift()); if (c && c.status === 'ready') return c; }
+    return null;
+  }
+  function updateFill() {
+    const J = S.job; if (!J || J.mode !== 'queue') return;
+    const cur = S.queue.find((q) => q.status === 'running');
+    const left = S.queue.filter((q) => q.status === 'ready').length + (cur ? 1 - (cur.p || 0) : 0);
+    $('#renderFill').style.setProperty('--p', clamp(1 - left / (J.total || 1), 0, 1));
+  }
+  // App: um vídeo por vez, na ordem atual da fila (que pode mudar enquanto renderiza).
+  async function runLoop() {
+    const J = S.job; S.stopping = false; let failed = 0;
+    while (S.job === J) {
+      const q = nextItem(J);
+      if (!q) break;
+      q.status = 'running'; q.queued = false; q.p = 0; q.error = null; renderQueue(); updateFill();
+      try {
+        const r = await inv('render', { id: q.id, cfg: q.cfg });
+        q.status = 'done'; q.p = 1; q.out = r.output; q.outMb = r.size / 1e6;
+        if (r.deleted) toast(L.deletedOrig);
+        if (J.mode === 'single') notify(L.rendered(q.file));
+      } catch (e) {
+        if (S.stopping || S.job !== J) { q.status = 'ready'; q.p = 0; break; }
+        q.status = 'err'; q.error = String(e === 'source-missing' ? L.sourceMissing : e); failed++;
+        notify(L.renderFailed(q.file) + (q.error ? ': ' + q.error.split('\n').pop() : ''), true);
+      }
+      renderQueue(); renderInspector(); updateFill();
+    }
+    if (S.job === J) finishJob(failed);
+  }
+  // Demo: simulação
+  let timer = null;
   function tick() {
     const J = S.job; if (!J) return;
     let cur = S.queue.find((q) => q.status === 'running');
-    if (!cur) {
-      if (J.mode === 'queue') cur = S.queue.find((q) => q.status === 'ready');
-      else { while (J.list.length && !cur) { const c = itemOf(J.list.shift()); if (c && c.status === 'ready') cur = c; } }
-      if (!cur) { finishJob(); return; }
-      cur.status = 'running'; cur.queued = false; cur.p = 0; renderQueue();
-    }
+    if (!cur) { cur = nextItem(J); if (!cur) { finishJob(0); return; } cur.status = 'running'; cur.queued = false; cur.p = 0; renderQueue(); }
     cur.p = Math.min(1, cur.p + .035);
-    if (cur.p >= 1) {
-      cur.status = 'done'; renderQueue(); renderInspector();
-      if (J.mode === 'single') notify(L.rendered(cur.file));
-    } else {
-      const it = $(`.item[data-id="${cur.id}"]`);
-      if (it) { it.querySelector('.prog').style.setProperty('--p', cur.p); it.querySelector('.state').textContent = Math.round(cur.p * 100) + '%'; }
-    }
-    if (J.mode === 'queue') {
-      const tot = J.total || 1; const left = S.queue.filter((q) => q.status === 'ready').length + (S.queue.some((q) => q.status === 'running') ? 1 - cur.p : 0);
-      $('#renderFill').style.setProperty('--p', clamp(1 - left / tot, 0, 1));
-    }
+    if (cur.p >= 1) { cur.status = 'done'; renderQueue(); renderInspector(); if (J.mode === 'single') notify(L.rendered(cur.file)); }
+    else { const it = $(`.item[data-id="${cur.id}"]`); if (it) { it.querySelector('.prog').style.setProperty('--p', cur.p); it.querySelector('.state').textContent = Math.round(cur.p * 100) + '%'; } }
+    updateFill();
   }
-  function finishJob() {
+  function finishJob(failed) {
     const J = S.job; clearInterval(timer); timer = null; S.job = null; renderRenderBtn();
-    if (J.mode === 'queue') {
+    if (J && J.mode === 'queue') {
       notify(L.queueDone);
-      if (S.set.clearWhenDone) setTimeout(() => $('#bClearDone').click(), 1600);
+      if (S.set.clearWhenDone && !failed) setTimeout(() => clearDone(false), 1600);
     }
     renderQueue();
   }
   $('#bRender').onclick = () => {
     if (S.job) { stopJob(); return; }
+    S.queue.forEach((q) => { if (q.status === 'err') { q.status = 'ready'; q.error = null; } });
     const n = S.queue.filter((q) => q.status === 'ready').length; if (!n) return;
     startJob({ mode: 'queue', total: n });
   };
@@ -704,31 +930,91 @@
   /* ---------- toast ---------- */
   let tt; function toast(t, ok) {
     $('#toastTxt').textContent = t; const el = $('#toast'); el.classList.toggle('ok', !!ok);
-    el.classList.remove('show'); void el.offsetWidth; el.classList.add('show'); clearTimeout(tt); tt = setTimeout(() => el.classList.remove('show'), 2600);
+    el.classList.remove('show'); void el.offsetWidth; el.classList.add('show'); clearTimeout(tt); tt = setTimeout(() => el.classList.remove('show'), 3000);
   }
 
   function renderAll(anim, enterIds) { renderQueue(enterIds); renderPresets(); renderPreview(anim); renderInspector(anim); }
 
-  /* ---------- início ---------- */
-  applyTheme(); applyLang();
-  if (qs.get('sel')) S.sel = qs.get('sel') === 'none' ? null : +qs.get('sel');
-  if (qs.get('empty')) { S.queue = []; S.sel = null; }
-  if (qs.get('open')) qs.get('open').split(',').forEach((k) => { S.open[k] = true; });
-  if (qs.get('fold')) S.fold.presets = true;
-  renderAll(); setT(S.t);
-  requestAnimationFrame(drawWave);
-  addEventListener('resize', drawWave);
-  if (qs.get('pv') === 'out') $('#pvSeg button[data-v="out"]').click();
-  if (qs.get('sheet')) openSheet(true);
-  if (qs.get('folder')) setTimeout(addFolder, 300);
-  if (qs.get('run')) setTimeout(() => $('#bRender').click(), 50);
-  if (qs.get('hover')) setTimeout(() => { const el = $(`.item[data-id="${qs.get('hover')}"]`); if (el) el.classList.add('hover'); }, 100);
-  if (qs.get('ctx')) setTimeout(() => { const el = $(`.item[data-id="${qs.get('ctx')}"]`); if (el) { const r = el.getBoundingClientRect(); el.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: r.left + 150, clientY: r.top + 40 })); } }, 150);
-
-  // janela (Tauri)
-  const TA = window.__TAURI__;
-  if (TA) {
+  /* ---------- janela ---------- */
+  let closeArmed = 0;
+  if (REAL) {
     const w = TA.window.getCurrentWindow();
-    $('#bClose').onclick = () => w.close(); $('#bMin').onclick = () => w.minimize(); $('#bMax').onclick = () => w.toggleMaximize();
+    $('#bMin').onclick = () => w.minimize();
+    $('#bMax').onclick = () => w.toggleMaximize();
+    $('#bClose').onclick = () => {
+      if (S.job && Date.now() - closeArmed > 3000) { closeArmed = Date.now(); toast(L.quitWhileRendering); return; }
+      if (S.job) inv('stop').catch(() => {});
+      w.close();
+    };
   }
+
+  /* ---------- início ---------- */
+  async function bootReal() {
+    try {
+      const st = await inv('get_state');
+      S.presets = st.presets || [];
+      if (st.settings && typeof st.settings === 'object') Object.assign(S.set, st.settings);
+      if (!presetOf(S.set.defaultPreset) && S.presets[0]) S.set.defaultPreset = S.presets[0].id;
+      S.engine = Object.assign(S.engine, st.engine); S.version = st.version;
+      if (!st.engine.ffmpeg) S.engine.status = 'missing';
+    } catch (e) { console.error(e); }
+    applyTheme(); applyLang(); renderAll();
+    requestAnimationFrame(() => inv('ready').catch(() => {}));
+    if (S.engine.status === 'missing') toast(L.ffmpegMissing);
+
+    let batch = []; let batchTimer = 0; let firstNew = null;
+    on('scan-start', (p) => { if (p.count > 2) toast(L.scanning(p.count)); });
+    on('item-added', (p) => {
+      const pid = presetOf(S.set.defaultPreset) ? S.set.defaultPreset : S.presets[0].id;
+      const q = { id: p.id, path: p.path, file: p.file, dir: p.dir, src: mapSrc(p.info), preset: pid, cfg: clone(presetOf(pid)), status: 'ready', thumb: null };
+      S.queue.push(q); batch.push(q.id); if (firstNew == null) firstNew = q.id;
+      clearTimeout(batchTimer);
+      batchTimer = setTimeout(() => {
+        const ids = batch; batch = [];
+        if (S.sel == null && firstNew != null) { S.sel = firstNew; S.t = 0.15; }
+        firstNew = null; renderAll(true, ids);
+        setTimeout(() => $('#queue').smoothTo(1e6), 60);
+      }, 60);
+    });
+    on('item-thumb', (p) => { const q = itemOf(p.id); if (!q) return; q.thumb = p.thumb; patchItem(q);
+      if (S.sel === q.id) { const img = $('#pvImg'); if (img && !img.getAttribute('src')) img.src = p.thumb; } });
+    on('scan-done', (p) => {
+      if (p.error === 'ffmpeg-missing') { toast(L.ffmpegMissing); return; }
+      const errs = (p.errors || []).length;
+      if (!p.added) toast(errs ? L.unreadable(errs) : L.noVideosFound);
+      else if (p.root) toast(L.folderAdded(p.root, p.added) + (errs ? ' · ' + L.unreadable(errs) : ''), true);
+      else toast(L.added(p.added) + (errs ? ' · ' + L.unreadable(errs) : ''), true);
+    });
+    on('render-progress', (p) => {
+      const q = itemOf(p.id); if (!q || q.status !== 'running') return;
+      q.p = p.p; const it = $(`.item[data-id="${q.id}"]`);
+      if (it) { it.querySelector('.prog').style.setProperty('--p', q.p); const st = it.querySelector('.state'); if (st) st.textContent = Math.round(q.p * 100) + '%'; }
+      updateFill();
+    });
+    on('drag', (p) => $('#queueCard').classList.toggle('drag-over', !!p.over));
+    on('engine', (p) => {
+      Object.assign(S.engine, p); renderQueue(); renderSheetIfOpen();
+      if (p.status === 'cpu') toast(L.cpuWarn);
+    });
+    on('update-progress', (p) => { if (p.total) { S.updating = Math.round(p.done / p.total * 100); renderUpdateBtn(); } });
+    setTimeout(() => checkUpdate(false), 4000);
+  }
+
+  if (REAL) bootReal();
+  else {
+    applyTheme(); applyLang();
+    if (qs.get('sel')) S.sel = qs.get('sel') === 'none' ? null : +qs.get('sel');
+    if (qs.get('empty')) { S.queue = []; S.sel = null; }
+    if (qs.get('open')) qs.get('open').split(',').forEach((k) => { S.open[k] = true; });
+    if (qs.get('fold')) S.set.foldPresets = true;
+    if (qs.get('update')) S.update = { version: '0.2.0' };
+    renderAll(); setT(S.t, true);
+    requestAnimationFrame(drawWave);
+    if (qs.get('pv') === 'out') $('#pvSeg button[data-v="out"]').click();
+    if (qs.get('sheet')) openSheet(true);
+    if (qs.get('folder')) setTimeout(addFolder, 300);
+    if (qs.get('run')) setTimeout(() => $('#bRender').click(), 50);
+    renderUpdateBtn();
+  }
+  addEventListener('resize', drawWave);
 })();

@@ -1,6 +1,42 @@
 # Changelog · Novidades
 
-## In development · Em desenvolvimento
+## 0.1.0 — first test build · primeira build de teste
+
+**English**
+- Converts with **NVIDIA NVENC** (H.265 / H.264, 8 or 10-bit). Without an NVIDIA card it falls back to the CPU and tells you.
+- **Drop videos or whole folders** (subfolders included) from File Explorer, or use **+**.
+- **Queue where each video has its own preset**; reorder by dragging, drag a preset onto a video, render one video or the whole queue.
+- **Preview with real frames**: Original / Output shows the rotation, scale and color the render will produce. Drag the timeline to check any frame. Real audio waveform.
+- **iPhone rotation fixed**: rotation is applied explicitly, so files never come out sideways.
+- **Constant frame rate** (e.g. 59.94), **1080p by the shorter side** (vertical stays vertical), 50% / 25% proxies.
+- **HDR (HLG/PQ) → Rec. 709** with the same filter chain HandBrake uses.
+- Audio: AAC stereo/mono with track mapping (two mics → left/right), or copy. A/V sync, metadata copy.
+- Suffix, subfolder and **delete original** (only after the new file is checked; it goes to the Recycle Bin).
+- **Presets**: create, rename, duplicate, delete, import Shutter Encoder `.enc`, export/import `.json`.
+- **Show in folder**, finish sound, Windows notification when the app is in the background.
+- **Updates inside the app**: when a new version is published, an “Update” button appears at the top. Presets and settings are kept.
+- English and Portuguese; light, dark and OLED themes.
+
+Known limits: video playback with sound in the preview comes later (frames and timeline already work).
+
+**Português**
+- Converte com **NVIDIA NVENC** (H.265 / H.264, 8 ou 10-bit). Sem placa NVIDIA, usa a CPU e avisa.
+- **Arraste vídeos ou pastas inteiras** (com subpastas) do Explorador de Arquivos, ou use o **+**.
+- **Fila em que cada vídeo tem o próprio preset**; reordene arrastando, arraste um preset até o vídeo, renderize um vídeo só ou a fila inteira.
+- **Prévia com quadros reais**: Original / Resultado mostra a rotação, a escala e a cor que o render vai gerar. Arraste a linha do tempo para ver qualquer quadro. Forma de onda do áudio de verdade.
+- **Rotação do iPhone resolvida**: a rotação é aplicada de forma explícita, o arquivo nunca sai deitado.
+- **Frame rate constante** (ex.: 59,94), **1080p pelo lado menor** (vertical continua vertical), proxies 50% / 25%.
+- **HDR (HLG/PQ) → Rec. 709** com a mesma sequência de filtros do HandBrake.
+- Áudio: AAC estéreo/mono com escolha de faixas (dois microfones → esquerdo/direito), ou cópia. Sincronia A/V, cópia de metadados.
+- Sufixo, subpasta e **apagar o original** (só depois de conferir o arquivo novo; vai para a Lixeira).
+- **Presets**: criar, renomear, duplicar, excluir, importar `.enc` do Shutter Encoder, exportar/importar `.json`.
+- **Mostrar na pasta**, som ao terminar, notificação do Windows quando o app está em segundo plano.
+- **Atualização dentro do app**: quando sair versão nova, aparece um botão “Atualizar” no topo. Presets e configurações continuam.
+- Inglês e português; temas claro, escuro e OLED.
+
+Limitação conhecida: reproduzir o vídeo com som na prévia chega depois (quadros e linha do tempo já funcionam).
+
+## Design steps · Etapas de design
 
 ### Step 1.2: v2 chosen · v2 escolhida
 **English**
