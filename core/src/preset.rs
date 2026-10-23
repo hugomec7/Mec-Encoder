@@ -31,6 +31,8 @@ pub struct Audio {
     /// Faixas de origem, começando em 1. Estéreo: [esquerdo, direito]. Mono: [faixa].
     pub tracks: Vec<u32>,
     pub kbps: u32,
+    /// Taxa de amostragem do AAC: 44100 ou 48000.
+    pub rate: u32,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -55,11 +57,13 @@ pub struct Preset {
     pub name: String,
     pub icon: String,
     pub color: String,
-    /// "h264" ou "h265".
+    /// "h264", "h265" ou "source" (o mesmo do arquivo).
     pub codec: String,
-    /// 8 ou 10.
+    /// 8, 10 ou 0 (o mesmo do arquivo).
     pub bits: u8,
-    /// "mp4" ou "mov".
+    /// Croma: "420", "422" ou "source".
+    pub chroma: String,
+    /// "mp4", "mov" ou "source" (a mesma extensão do arquivo).
     pub container: String,
     /// "source", "1080" (lado menor = 1080), "50" ou "25" (%).
     pub scale: String,
@@ -87,7 +91,7 @@ impl Default for Fps {
     fn default() -> Self { Self { conform: false, value: "59.94".into() } }
 }
 impl Default for Audio {
-    fn default() -> Self { Self { codec: "aac".into(), channels: "stereo".into(), tracks: vec![1, 2], kbps: 256 } }
+    fn default() -> Self { Self { codec: "aac".into(), channels: "stereo".into(), tracks: vec![1, 2], kbps: 256, rate: 48000 } }
 }
 impl Default for Toggle {
     fn default() -> Self { Self { on: false, text: String::new() } }
@@ -101,7 +105,7 @@ impl Default for Preset {
     fn default() -> Self {
         Self {
             id: "preset".into(), name: "Preset".into(), icon: "phone".into(), color: "blue".into(),
-            codec: "h265".into(), bits: 8, container: "mp4".into(), scale: "source".into(), rotate: 0, custom_w: 0, custom_h: 0, folder: String::new(),
+            codec: "h265".into(), bits: 8, chroma: "420".into(), container: "mp4".into(), scale: "source".into(), rotate: 0, custom_w: 0, custom_h: 0, folder: String::new(),
             bitrate: Bitrate::default(), max_quality: false, fps: Fps::default(), hdr_to_sdr: false,
             audio: Audio::default(), output: Output::default(), av_sync: true, metadata: true,
         }
@@ -130,7 +134,7 @@ impl Preset {
                 ..raw.clone() },
             Preset { id: "meta-15".into(), name: "Meta HDR".into(), color: "pink".into(), hdr_to_sdr: true,
                 bitrate: Bitrate { mode: "source".into(), kbps: 15_000, rc: "cbr".into() }, fps: Fps { conform: true, value: "29.97".into() },
-                audio: Audio { codec: "copy".into(), channels: "mono".into(), tracks: vec![1, 1], kbps: 256 },
+                audio: Audio { codec: "copy".into(), channels: "mono".into(), tracks: vec![1, 1], kbps: 256, rate: 48000 },
                 output: Output { delete_source: true, ..Output::default() }, ..raw },
         ]
     }

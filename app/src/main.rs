@@ -268,28 +268,47 @@ fn do_render(app: &AppHandle, engine: &Engine, info: &MediaInfo, cfg: &Preset, i
     let ffmpeg = engine.ffmpeg()?;
     let ffprobe = engine.ffprobe()?;
     if !info.path.exists() { return Err("source-missing".into()); }
+    // Troca as opções "Original" (codec, croma, profundidade, fps, formato) pelos valores deste arquivo.
+    let cfg = &command::resolve(info, cfg);
     let out = command::output_path(&info.path, cfg);
     if let Some(dir) = out.parent() { std::fs::create_dir_all(dir).map_err(|e| e.to_string())?; }
     let enc = engine.encoder.lock().unwrap().clone();
+    // RTX 50 (Blackwell) lê e grava 4:2:2 e H.264 10-bit; as RTX 20/30/40 não.
+    let blackwell = engine.gpu.lock().unwrap().as_deref().map_or(false, command::gpu_reads_422);
+    let gpu_reads = info.video.as_ref().map_or(false, |v| command::nvdec_supported(v, blackwell));
+    // Bitrate alto (ex.: 200 Mb/s): o preset do x264 pesa pouco na qualidade e muito na velocidade.
+    let cpu_enc = Encoder::Cpu { preset: if cfg.max_quality { "fast" } else { "veryfast" }.into() };
+    use command::Decode::{Cpu as DCpu, Gpu as DGpu, Hw as DHw};
+    // Tentativas em ordem; se uma falhar (codec que a placa não lê, filtro que falta), vai para a próxima.
     // Com NVENC: 1) tudo na GPU; 2) só decodifica na GPU; 3) decodifica na CPU.
-    // Se um modo falhar (codec que a placa não lê, filtro que falta), tenta o próximo.
-    // Vídeo que a placa não lê (ex.: 4:2:2 da FX30 numa RTX 30/40) vai direto para a CPU. RTX 50 lê 4:2:2.
-    let gpu_422 = engine.gpu.lock().unwrap().as_deref().map_or(false, command::gpu_reads_422);
-    let gpu_reads = info.video.as_ref().map_or(false, |v| command::nvdec_supported(v, gpu_422));
-    let modes: &[command::Decode] = if enc == Encoder::Nvenc && gpu_reads {
-        &[command::Decode::Gpu, command::Decode::Hw, command::Decode::Cpu]
-    } else { &[command::Decode::Cpu] };
+    let attempts: Vec<(Encoder, command::Decode)> = if enc != Encoder::Nvenc {
+        vec![(enc.clone(), DCpu)]
+    } else if command::needs_ext_encoder(cfg) {
+        // 4:2:2 / H.264 10-bit ("igual ao XAVC"): pela placa só na RTX 50; senão o x264/x265 grava.
+        if blackwell {
+            let mut v = Vec::new();
+            if gpu_reads { v.push((Encoder::Nvenc, DHw)); }
+            v.push((Encoder::Nvenc, DCpu));
+            v.push((cpu_enc.clone(), DCpu));
+            v
+        } else { vec![(cpu_enc.clone(), DCpu)] }
+    } else if gpu_reads {
+        vec![(Encoder::Nvenc, DGpu), (Encoder::Nvenc, DHw), (Encoder::Nvenc, DCpu)]
+    } else {
+        vec![(Encoder::Nvenc, DCpu)]
+    };
     let started = Instant::now();
     let mut plan = command::Plan::default();
     let mut res: Result<f64, String> = Err("ffmpeg failed".into());
-    for (i, &mode) in modes.iter().enumerate() {
-        plan = command::build_mode(info, cfg, &enc, &out, mode);
-        log(app, &format!("{} | try {} ({}) | ffmpeg {}", info.path.display(), i + 1, mode.name(), plan.args.join(" ")));
-        res = run_ffmpeg(app, &ffmpeg, &plan, id, info.duration, children, cancel, mode.name());
+    for (i, (e, mode)) in attempts.iter().enumerate() {
+        let name = if *e == Encoder::Nvenc { mode.name() } else { "cpu-encode" };
+        plan = command::build_mode(info, cfg, e, &out, *mode);
+        log(app, &format!("{} | try {} ({}) | ffmpeg {}", info.path.display(), i + 1, name, plan.args.join(" ")));
+        res = run_ffmpeg(app, &ffmpeg, &plan, id, info.duration, children, cancel, name);
         match &res {
-            Ok(speed) => { log(app, &format!("{} | ok ({}) | {:.1}s | {:.2}x", info.path.display(), mode.name(), started.elapsed().as_secs_f64(), speed)); break; }
+            Ok(speed) => { log(app, &format!("{} | ok ({}) | {:.1}s | {:.2}x", info.path.display(), name, started.elapsed().as_secs_f64(), speed)); break; }
             Err(e) if e == "cancelled" => { log(app, &format!("{} | cancelled", info.path.display())); break; }
-            Err(e) => { log(app, &format!("{} | failed ({}): {}", info.path.display(), mode.name(), e.replace('\n', " / "))); let _ = std::fs::remove_file(&out); }
+            Err(e) => { log(app, &format!("{} | failed ({}): {}", info.path.display(), name, e.replace('\n', " / "))); let _ = std::fs::remove_file(&out); }
         }
     }
     if let Err(e) = res { let _ = std::fs::remove_file(&out); return Err(e); }

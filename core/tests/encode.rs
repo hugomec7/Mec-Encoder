@@ -128,3 +128,35 @@ fn fx30_422_10bit_rotated() {
     assert_eq!(ov.pix_fmt, "yuv420p10le");
     let _ = std::fs::remove_dir_all(&d);
 }
+
+/// "Igual ao XAVC": FX30 com tudo em Original sai H.264 4:2:2 10-bit, em pé, .mp4 com PCM "twos" e o timecode da câmera.
+#[test]
+fn fx30_like_xavc() {
+    let (Some(ff), Some(fp)) = (tool("ffmpeg"), tool("ffprobe")) else { eprintln!("sem ffmpeg, pulando"); return };
+    let d = dir("xavc");
+    let base = d.join("base.mov");
+    let ok = Command::new(&ff).args(["-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=s=640x360:r=60000/1001:d=2",
+        "-f", "lavfi", "-i", "sine=f=440:sample_rate=48000:d=2", "-af", "pan=stereo|c0=c0|c1=c0",
+        "-pix_fmt", "yuv422p10le", "-c:v", "libx264", "-profile:v", "high422", "-preset", "ultrafast", "-c:a", "pcm_s16be",
+        "-timecode", "07:51:07:46"]).arg(&base).status().unwrap().success();
+    if !ok { eprintln!("libx264 sem 4:2:2 10-bit, pulando"); return; }
+    let src = d.join("C0579.MP4");
+    assert!(Command::new(&ff).args(["-v", "error", "-y", "-display_rotation", "90", "-i"]).arg(&base)
+        .args(["-map", "0", "-c", "copy", "-f", "mov", "-brand", "mp42"]).arg(&src).status().unwrap().success());
+    let info = probe(&fp, &src).unwrap();
+    assert_eq!(info.timecode, "07:51:07:46");
+    let mut p = Preset::defaults().into_iter().find(|p| p.id == "iphone-4k60").unwrap();
+    p.codec = "source".into(); p.bits = 0; p.chroma = "source".into(); p.container = "source".into(); p.fps.value = "source".into();
+    p.audio.codec = "copy".into(); p.output.suffix = mec_core::preset::Toggle { on: true, text: "_x".into() };
+    let out = output_path(&src, &mec_core::command::resolve(&info, &p));
+    assert!(out.to_string_lossy().ends_with("C0579_x.mp4"), "{}", out.display());
+    run(&ff, &build(&info, &p, &Encoder::Cpu { preset: "ultrafast".into() }, &out).args);
+    let o = probe(&fp, &out).unwrap();
+    let ov = o.video.as_ref().unwrap();
+    assert_eq!((ov.codec.as_str(), ov.pix_fmt.as_str(), ov.width, ov.height, ov.rotation), ("h264", "yuv422p10le", 360, 640, 0));
+    assert_eq!(o.audio[0].codec, "pcm_s16be");
+    assert_eq!(o.timecode, "07:51:07:46");
+    let tag = Command::new(&fp).args(["-v", "error", "-select_streams", "a:0", "-show_entries", "stream=codec_tag_string", "-of", "csv=p=0"]).arg(&out).output().unwrap();
+    assert_eq!(String::from_utf8_lossy(&tag.stdout).trim(), "twos");
+    let _ = std::fs::remove_dir_all(&d);
+}

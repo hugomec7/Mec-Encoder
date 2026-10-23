@@ -56,6 +56,9 @@ pub struct MediaInfo {
     pub bitrate_kbps: u32,
     pub video: Option<VideoInfo>,
     pub audio: Vec<AudioInfo>,
+    /// Timecode do primeiro quadro (ex.: "07:51:07:46"), vazio se o arquivo não tiver.
+    /// Na Sony FX30 vem da trilha de metadados (rtmd).
+    pub timecode: String,
 }
 
 impl MediaInfo {
@@ -123,6 +126,7 @@ pub fn parse_flat(text: &str) -> MediaInfo {
     for n in ids {
         let s = &streams[&n];
         let g = |k: &str| s.get(k).map(String::as_str).unwrap_or("");
+        if info.timecode.is_empty() && !g("tags.timecode").is_empty() { info.timecode = g("tags.timecode").to_string(); }
         let attached = g("disposition.attached_pic") == "1";
         match g("codec_type") {
             "video" if info.video.is_none() && !attached => {
@@ -168,6 +172,7 @@ pub fn parse_flat(text: &str) -> MediaInfo {
             _ => {}
         }
     }
+    if info.timecode.is_empty() { if let Some(t) = format.get("tags.timecode") { info.timecode = t.clone(); } }
     if let Some(v) = info.video.as_mut() {
         if v.bitrate_kbps == 0 { v.bitrate_kbps = info.bitrate_kbps.saturating_sub(info.audio.len() as u32 * 256); }
     }

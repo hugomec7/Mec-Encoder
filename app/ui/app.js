@@ -149,7 +149,15 @@
   }
   // valor que vai sair (resolve as opções "Original"); null = depende do arquivo
   const fpsOut = (c, src) => (c.fps.value === 'source' ? (src ? srcFps(src) : null) : c.fps.value);
-  const bitsOut = (c, src) => (c.codec === 'h264' ? 8 : c.bits ? c.bits : src ? (src.bits >= 10 ? 10 : 8) : null);
+  const bitsOut = (c, src) => (c.bits ? c.bits : src ? (src.bits >= 10 ? 10 : 8) : null);
+  // codec / croma / formato "Original" (igual ao motor)
+  const srcIs264 = (src) => (src.codecId ? src.codecId === 'h264' : /264|AVC|XAVC S(?!\w)/i.test(src.codec));
+  const codecOut = (c, src) => (c.codec === 'source' ? (src ? (srcIs264(src) ? 'h264' : 'h265') : null) : c.codec);
+  const chromaOut = (c, src) => { const v = c.chroma || '420'; return v === 'source' ? (src ? (/422|p210|nv16/.test(src.pix || '') || src.chroma === '422' ? '422' : '420') : null) : v; };
+  const extOut = (c, file) => { const v = c.container || 'mp4'; return v === 'source' ? (/\.mov$/i.test(file || '') ? 'mov' : 'mp4') : v; };
+  const isBlackwell = () => /RTX\s*(PRO\s*)?5\d{3}|BLACKWELL/i.test(S.engine.gpu || '');
+  // vai pelo x264/x265 (CPU) porque a NVENC desta placa não grava 4:2:2 nem H.264 10-bit?
+  const cpuEncode = (c, src) => S.engine.status === 'nvenc' && !isBlackwell() && (chromaOut(c, src) === '422' || (codecOut(c, src) === 'h264' && bitsOut(c, src) === 10));
   const bitsTxt = (c, src) => { const b = bitsOut(c, src); return b ? b + '-bit' : L.sourceBits; };
   const fpsCfrTxt = (c, src) => { const f = fpsOut(c, src); return (f ? fpsTxt(f) : L.source) + ' CFR'; };
   const pad = (n) => String(n).padStart(2, '0');
@@ -166,6 +174,8 @@
       fps: (v.fps || v.fpsNominal || 0).toFixed(2).replace(/\.?0+$/, ''), fpsNum: v.fps || v.fpsNominal || 60, fpsNom: v.fpsNominal || 0, vfr: !!v.vfr,
       dur: tc(info.duration, v.fpsNominal || v.fps), durS: info.duration, kbps: v.bitrateKbps || info.bitrateKbps || 0,
       audio: (info.audio || []).length, hdr: v.hdr || false, rot: v.rotation || 0, mb: (info.sizeBytes || 0) / 1e6,
+      codecId: v.codec || '', pix: v.pixFmt || '', ext: String(info.path || '').split('.').pop().toLowerCase(), tc: info.timecode || '',
+      pcm: (info.audio || []).some((a) => String(a.codec).startsWith('pcm_')),
     };
   }
   const durOf = (q) => q.src.durS || secs(q.src.dur);
@@ -187,7 +197,7 @@
   }
   const estMB = (q) => (videoKbps(q.src, q.cfg) + (q.cfg.audio.codec === 'copy' ? 256 : q.cfg.audio.kbps)) * durOf(q) / 8 / 1000;
   const warnings = (q) => (q.src.hdr && !q.cfg.hdrToSdr ? [L.hdrMismatch(q.src.hdr)] : []);
-  const codecName = (c) => (c === 'h265' ? 'H.265' : 'H.264');
+  const codecName = (c) => (c === 'h265' ? 'H.265' : c === 'h264' ? 'H.264' : L.source);
   const scaleTxt = (s) => (s === 'source' ? L.source : s === '1080' ? '1080p' : s === 'custom' ? L.custom : s + '%');
   const pending = () => S.queue.filter((q) => q.status !== 'done');
 
@@ -505,7 +515,7 @@
 
   /* ---------- presets ---------- */
   function describe(p) {
-    const parts = [codecName(p.codec) + ' ' + bitsTxt(p, null), p.scale === 'source' ? L.sourceRes : scaleTxt(p.scale),
+    const parts = [codecName(p.codec) + ' ' + bitsTxt(p, null) + ((p.chroma || '420') === '420' ? '' : ' ' + (p.chroma === '422' ? '4:2:2' : L.sourceChroma)), p.scale === 'source' ? L.sourceRes : scaleTxt(p.scale),
       p.bitrate.mode === 'manual' ? fmtK(p.bitrate.kbps) + ' ' + p.bitrate.rc.toUpperCase() : p.bitrate.mode === 'source' ? L.bitrateSrc : L.bitrateAuto,
       p.fps.conform ? fpsCfrTxt(p, null) : null, p.hdrToSdr ? 'HDR → 709' : null,
       p.audio.codec === 'copy' ? L.audioCopied : `AAC ${p.audio.channels === 'stereo' ? L.stereoL : L.monoL}`].filter(Boolean);
@@ -823,7 +833,7 @@
     const o = outDims(q.src, q.cfg); const c = [];
     // informação de como o vídeo VAI FICAR
     const cfr = q.cfg.fps.conform;
-    c.push(chip(`${o.w}×${o.h}`), chip(`${codecName(q.cfg.codec)} ${bitsTxt(q.cfg, q.src)}`),
+    c.push(chip(`${o.w}×${o.h}`), chip(`${codecName(codecOut(q.cfg, q.src))} ${bitsTxt(q.cfg, q.src)}${chromaOut(q.cfg, q.src) === '422' ? ' 4:2:2' : ''}`, cpuEncode(q.cfg, q.src) ? COLORS.orange : null),
       cfr ? chip(`${fpsTxt(fpsOut(q.cfg, q.src))} fps CFR`, COLORS.green) : chip(`${fpsTxt(q.src.fps)} fps ${q.src.vfr ? 'VFR' : ''}`.trim()));
     if (q.src.hdr) c.push(q.cfg.hdrToSdr ? chip('Rec. 709', COLORS.green) : chip(L.hdrKept, COLORS.orange));
     if (q.cfg.rotate) c.push(chip(`${q.cfg.rotate}°`, COLORS.teal, ICONS.rot));
@@ -957,7 +967,7 @@
     const resHint = !src && c.scale === '1080' ? `<div class="hint">${L.scale1080Hint}</div>` : '';
     const rotTxt = c.rotate ? ` · ↻ ${c.rotate}°` : '';
     el.innerHTML = (T.isPreset ? '' : S.picked.size > 1 ? `<div class="hint top-hint multi-hint">${L.multiHint(S.picked.size)}</div>` : '')
-      + sec('video', L.video, `${codecName(c.codec)} · ${bitsTxt(c, src)} · ${scaleTxt(c.scale)}${rotTxt} · ${c.fps.conform ? fpsCfrTxt(c, src) : c.bitrate.mode === 'manual' ? fmtK(c.bitrate.kbps) : c.bitrate.mode === 'source' ? L.source : L.auto}${c.hdrToSdr ? ' · 709' : ''}`,
+      + sec('video', L.video, `${codecName(codecOut(c, src) || c.codec)} · ${bitsTxt(c, src)}${chromaOut(c, src) === '422' ? ' 4:2:2' : ''} · ${scaleTxt(c.scale)}${rotTxt} · ${c.fps.conform ? fpsCfrTxt(c, src) : c.bitrate.mode === 'manual' ? fmtK(c.bitrate.kbps) : c.bitrate.mode === 'source' ? L.source : L.auto}${c.hdrToSdr ? ' · 709' : ''}`,
         `<div class="group">
           ${row(`${L.resolution}<small class="res-out">${resLabel(c, src)}</small>`, dd('scale', c.scale, [['source', L.source], ['1080', '1080p'], ['50', '50%'], ['25', '25%'], ['custom', L.custom]]))}
           <div class="collapse ${c.scale === 'custom' ? '' : 'closed'}" style="max-height:60px">
@@ -967,20 +977,22 @@
           <div class="collapse ${c.bitrate.mode === 'manual' ? '' : 'closed'}" style="max-height:60px">
             ${row(L.value, `<div class="field"><input class="tnum" data-k="bitrate.kbps" value="${num(c.bitrate.kbps, 0)}"><span>kb/s</span></div>${dd('bitrate.rc', c.bitrate.rc, [['cbr', 'CBR'], ['vbr', 'VBR']])}`)}
           </div>
-          ${row(L.codec, dd('codec', c.codec, [['h264', 'H.264'], ['h265', 'H.265']]))}
-          ${row(L.bitDepth + (!h264 && !c.bits && src ? `<small class="res-out">${bitsOut(c, src)}-bit</small>` : ''), dd('bits', h264 ? 8 : c.bits, [[0, L.source, h264], [8, '8-bit'], [10, '10-bit', h264]]))}
+          ${row(L.codec + (c.codec === 'source' && src ? `<small class="res-out">${codecName(codecOut(c, src))}</small>` : ''), dd('codec', c.codec, [['source', L.source], ['h264', 'H.264'], ['h265', 'H.265']]))}
+          ${row(L.bitDepth + (!c.bits && src ? `<small class="res-out">${bitsOut(c, src)}-bit</small>` : ''), dd('bits', c.bits, [[0, L.source], [8, '8-bit'], [10, '10-bit']]))}
+          ${row(L.chroma + ((c.chroma || '420') === 'source' && src ? `<small class="res-out">${chromaOut(c, src) === '422' ? '4:2:2' : '4:2:0'}</small>` : ''), dd('chroma', c.chroma || '420', [['source', L.source], ['420', '4:2:0'], ['422', '4:2:2']]))}
           ${row(L.fps + (c.fps.value === 'source' && c.fps.conform && src ? `<small class="res-out">${fpsTxt(srcFps(src))} fps</small>` : ''), dd('fps.value', c.fps.conform ? c.fps.value : 'source', [['source', L.source], ...FPS_OPTS]))}
           ${row(L.fpsMode, segH('fpsMode', c.fps.conform ? 'cfr' : 'vfr', [['vfr', 'VFR'], ['cfr', 'CFR']]))}
           ${row(L.rotate, dd('rotate', c.rotate || 0, [[0, L.rotNone], [90, L.rotCw], [180, '180°'], [270, L.rotCcw]]))}
           ${row(L.maxQuality, sw('maxQuality', c.maxQuality))}
           ${row(`<span class="lbl-i">${L.hdr}<span class="info" tabindex="0" aria-label="${esc(L.hdrSub)}" data-tip="${esc(L.hdrSub)}">${ICONS.info}</span></span>` + (src && src.hdr ? `<span class="pill-tag" style="--c:${COLORS.yellow}">${L.detected(src.hdr)}</span>` : ''), sw('hdrToSdr', c.hdrToSdr))}
-        </div>${resHint}${h264 && (c.bits === 10 || (c.bits === 0 && src && src.bits >= 10)) ? `<div class="hint">${L.h264no10}</div>` : ''}${src && src.hdr && !c.hdrToSdr ? `<div class="hint warn-t">${L.hdrWarn}</div>` : ''}`)
+        </div>${resHint}${cpuEncode(c, src) ? `<div class="hint warn-t">${L.cpuEncodeWarn}</div>` : ''}${src && src.hdr && !c.hdrToSdr ? `<div class="hint warn-t">${L.hdrWarn}</div>` : ''}`)
       + sec('audio', L.audio, a.codec === 'copy' ? L.copy : `AAC · ${a.channels === 'stereo' ? L.stereo : L.mono}`,
         `<div class="group">
           ${row(L.codec, dd('audio.codec', a.codec, [['aac', 'AAC'], ['copy', L.copy]]))}
           ${a.codec === 'aac' ? row(L.channels, dd('audio.channels', a.channels, [['stereo', L.stereo], ['mono', L.mono]])) : ''}
           ${a.codec === 'aac' ? row(L.tracks, `<div class="val">${a.channels === 'stereo' ? trackBtn(0, a.tracks[0]) + trackBtn(1, a.tracks[1]) : trackBtn(0, a.tracks[0])}</div>`, a.channels === 'stereo' ? L.tracksStereo : L.tracksMono) : ''}
-          ${a.codec === 'aac' ? row(L.quality, `<span class="val tnum">${a.kbps} kb/s · 48 kHz</span>`) : ''}
+          ${a.codec === 'aac' ? row(L.quality, dd('audio.kbps', a.kbps || 256, [[128, '128 kb/s'], [192, '192 kb/s'], [256, '256 kb/s'], [320, '320 kb/s']])) : ''}
+          ${a.codec === 'aac' ? row(L.sampleRate, dd('audio.rate', a.rate === 44100 ? 44100 : 48000, [[44100, '44,1 kHz'], [48000, '48 kHz']])) : ''}
         </div>`)
       + sec('adv', L.advanced, [c.avSync ? L.avSync : null, c.metadata ? L.metadata : null].filter(Boolean).join(' · ') || '—',
         `<div class="group">
@@ -989,10 +1001,7 @@
         </div>`);
     renderOutput(T);
     $$('.seg', el).forEach((s) => seg(s, (v) => set(s.dataset.k, v)));
-    $$('[data-dd]', el).forEach((b) => { b.onclick = () => {
-      const k = b.dataset.dd; const d = DD[k];
-      openMenu(b, d.opts.filter((o) => !o[2]).map(([v, t]) => ({ label: t, value: v, sel: String(v) === String(d.val) })), (v) => { if (String(v) !== String(d.val)) set(k, v); });
-    }; });
+    wireDD(el);
     $('#estBox').style.visibility = T.q ? '' : 'hidden';
     if (T.q) $('#est').textContent = '≈ ' + fmtMB(estMB(T.q));
     $('#bApplyAll').textContent = T.isPreset ? L.setForAllBtn : L.applyAll;
@@ -1003,6 +1012,12 @@
     if (anim) { el.classList.remove('swap'); void el.offsetWidth; el.classList.add('swap'); }
   }
   /* Saída: fica embaixo da fila, perto do botão de renderizar */
+  function wireDD(root) {
+    $$('[data-dd]', root).forEach((b) => { b.onclick = () => {
+      const k = b.dataset.dd; const d = DD[k];
+      openMenu(b, d.opts.filter((o) => !o[2]).map(([v, t]) => ({ label: t, value: v, sel: String(v) === String(d.val) })), (v) => { if (String(v) !== String(d.val)) set(k, v); });
+    }; });
+  }
   function renderOutput(T) {
     const c = T.cfg; const o = c.output; const box = $('#outPanel');
     const sum = [o.suffix.on ? o.suffix.text : null, o.subfolder.on ? o.subfolder.text + '\\' : null].filter(Boolean).map(esc).join(' · ') || L.sameFolder;
@@ -1010,8 +1025,10 @@
       <div class="group">
         ${row(L.suffix, `<div class="field ${o.suffix.on ? '' : 'off'}"><input data-k="output.suffix.text" value="${esc(o.suffix.text)}" class="txt" spellcheck="false"></div>${sw('output.suffix.on', o.suffix.on)}`)}
         ${row(L.subfolder, `<div class="field ${o.subfolder.on ? '' : 'off'}"><input data-k="output.subfolder.text" value="${esc(o.subfolder.text)}" class="txt" spellcheck="false"></div>${sw('output.subfolder.on', o.subfolder.on)}`)}
+        ${row(L.format + (c.container === 'source' && T.q ? `<small class="res-out">.${extOut(c, T.q.file)}</small>` : ''), dd('container', c.container || 'mp4', [['source', L.source], ['mp4', 'MP4'], ['mov', 'MOV']]))}
         ${row(L.deleteSrc, sw('output.deleteSource', o.deleteSource, true), '', o.deleteSource ? 'danger' : '')}
       </div>`;
+    wireDD(box);
   }
   // texto da resolução final ao lado de "Resolução"
   function resLabel(c, src) {
@@ -1021,8 +1038,8 @@
   }
   function outName(file, cfg) {
     const c = cfg.output; const base = file.replace(/\.[^.]+$/, '');
-    const suf = c.suffix.on ? c.suffix.text.replace('{codec}', codecName(cfg.codec).replace('.', '')).replace('{preset}', cfg.name || '') : '';
-    return (c.subfolder.on ? c.subfolder.text + '\\' : '') + base + suf + '.' + (cfg.container || 'mp4');
+    const suf = c.suffix.on ? c.suffix.text.replace('{codec}', codecName(codecOut(cfg, (target().src)) || 'h265').replace('.', '')).replace('{preset}', cfg.name || '') : '';
+    return (c.subfolder.on ? c.subfolder.text + '\\' : '') + base + suf + '.' + extOut(cfg, file);
   }
   // copia os campos alterados do vídeo principal para os outros selecionados
   function spread(from, keys) {
@@ -1040,10 +1057,9 @@
     o[last] = typeof o[last] === 'boolean' ? !o[last] : typeof o[last] === 'number' ? Number(String(v).replace(/\D/g, '')) || 0 : v;
     if (key === 'customW' || key === 'customH') o[last] = Math.min(16384, Number(String(v).replace(/\D/g, '')) || 0);
     if (key === 'audio.channels') T.cfg.audio.tracks = v === 'mono' ? [1, 1] : [1, 2];
-    if (key === 'codec' && v === 'h264') T.cfg.bits = 8;
     if (key === 'fpsMode') { delete T.cfg.fpsMode; T.cfg.fps.conform = v === 'cfr'; }
     if (key === 'fps.value' && v !== 'source') T.cfg.fps.conform = true;
-    if (!T.isPreset) spread(T.q, key === 'fpsMode' ? ['fps.conform'] : [key, ...(key === 'audio.channels' ? ['audio.tracks'] : []), ...(key === 'codec' ? ['bits'] : []), ...(key === 'fps.value' ? ['fps.conform'] : [])]);
+    if (!T.isPreset) spread(T.q, key === 'fpsMode' ? ['fps.conform'] : [key, ...(key === 'audio.channels' ? ['audio.tracks'] : []), ...(key === 'fps.value' ? ['fps.conform'] : [])]);
     renderQueue(); renderPresets(); renderInspector(); renderPreview();
   }
   $('#inspIn').addEventListener('click', (e) => {
@@ -1324,7 +1340,7 @@
     on('render-progress', (p) => {
       const q = itemOf(p.id); if (!q || q.status !== 'running') return;
       q.p = p.p; q.speed = p.speed; q.mode = p.mode; q.eta = p.eta; const it = $(`.item[data-id="${q.id}"]`);
-      if (it) { it.querySelector('.prog').style.setProperty('--p', q.p); const st = it.querySelector('.state'); if (st) { st.textContent = runTxt(q); st.title = p.mode === 'cpu' ? L.cpuDecode : ''; } }
+      if (it) { it.querySelector('.prog').style.setProperty('--p', q.p); const st = it.querySelector('.state'); if (st) { st.textContent = runTxt(q); st.title = p.mode === 'cpu' ? L.cpuDecode : p.mode === 'cpu-encode' ? L.cpuEnc : ''; } }
       updateFill();
     });
     on('drag', (p) => $('#queueCard').classList.toggle('drag-over', !!p.over));

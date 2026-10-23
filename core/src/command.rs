@@ -67,10 +67,16 @@ pub fn resolve(info: &MediaInfo, p: &Preset) -> Preset {
     if let Some(v) = info.video.as_ref() {
         if r.bits == 0 { r.bits = if v.bit_depth >= 10 { 10 } else { 8 }; }
         if r.fps.value == "source" || r.fps.value.is_empty() { r.fps.value = source_fps(v); }
+        if r.codec == "source" { r.codec = if v.codec == "h264" { "h264" } else { "h265" }.into(); }
+        if r.chroma == "source" { r.chroma = if v.pix_fmt.contains("422") || v.pix_fmt.starts_with("p210") || v.pix_fmt.starts_with("nv16") { "422" } else { "420" }.into(); }
     } else {
         if r.bits == 0 { r.bits = 8; }
         if r.fps.value == "source" { r.fps.value = "59.94".into(); }
+        if r.codec == "source" { r.codec = "h265".into(); }
+        if r.chroma == "source" { r.chroma = "420".into(); }
     }
+    if r.chroma != "422" { r.chroma = "420".into(); }
+    if r.container == "source" { r.container = source_container(&info.path).into(); }
     r
 }
 
@@ -99,10 +105,27 @@ fn hdr_chain(v: &VideoInfo) -> Vec<String> {
     ]
 }
 
-fn effective_bits(p: &Preset) -> u8 { if p.codec == "h264" { 8 } else if p.bits >= 10 { 10 } else { 8 } }
+fn effective_bits(p: &Preset) -> u8 { if p.bits >= 10 { 10 } else { 8 } }
+fn is422(p: &Preset) -> bool { p.chroma == "422" }
+
+/// "Original" no formato: .mov continua .mov; o resto (.mp4, .mts, .mxf...) vira .mp4.
+pub fn source_container(src: &Path) -> &'static str {
+    match src.extension().and_then(|e| e.to_str()).map(|e| e.to_ascii_lowercase()).as_deref() { Some("mov") => "mov", _ => "mp4" }
+}
+
+/// A NVENC das RTX 20/30/40 não grava 4:2:2 nem H.264 10-bit (só as RTX 50). Passe o preset já resolvido.
+pub fn needs_ext_encoder(p: &Preset) -> bool { is422(p) || (p.codec == "h264" && effective_bits(p) == 10) }
 
 fn pix_fmt(p: &Preset, enc: &Encoder) -> &'static str {
-    match (effective_bits(p), enc) { (10, Encoder::Nvenc) => "p010le", (10, _) => "yuv420p10le", _ => "yuv420p" }
+    match (effective_bits(p), is422(p), enc) {
+        (10, true, Encoder::Nvenc) => "p210le",
+        (_, true, Encoder::Nvenc) => "nv16",
+        (10, true, _) => "yuv422p10le",
+        (_, true, _) => "yuv422p",
+        (10, false, Encoder::Nvenc) => "p010le",
+        (10, false, _) => "yuv420p10le",
+        _ => "yuv420p",
+    }
 }
 
 /// Filtros de vídeo. `preview_fit`: limita o lado maior (prévia) e pula o frame rate.
@@ -133,7 +156,13 @@ pub fn video_filters(info: &MediaInfo, p: &Preset, enc: &Encoder, preview: Optio
     let (cw, ch) = coded(v);
     let hdr = p.hdr_to_sdr && !v.hdr.is_empty();
     // HDR mantém 10-bit até o tone mapping.
-    let planar = if hdr || effective_bits(p) == 10 { "yuv420p10le" } else { "yuv420p" };
+    let deep = hdr || effective_bits(p) == 10;
+    // 4:2:2 deitado não pode ser girado direto (o croma ficaria 4:4:0): gira em 4:4:4 e volta para 4:2:2 no fim.
+    let planar = match (is422(p), rot % 180 == 90, deep) {
+        (true, true, true) => "yuv444p10le", (true, true, false) => "yuv444p",
+        (true, false, true) => "yuv422p10le", (true, false, false) => "yuv422p",
+        (false, _, true) => "yuv420p10le", (false, _, false) => "yuv420p",
+    };
     let src_planar = v.pix_fmt.is_empty() || v.pix_fmt == planar;
     if (pw, ph) != (cw, ch) || !src_planar {
         let size = if (pw, ph) != (cw, ch) { format!("{pw}:{ph}:flags=bicubic:") } else { String::new() };
@@ -174,11 +203,10 @@ pub fn gpu_reads_422(gpu_name: &str) -> bool {
     n.contains("BLACKWELL") || n.split(|c: char| !c.is_ascii_alphanumeric()).any(|w| w.len() == 4 && w.starts_with('5') && w.chars().all(|c| c.is_ascii_digit()) && n.contains("RTX"))
 }
 
-fn video_codec_args(info: &MediaInfo, p: &Preset, enc: &Encoder, warnings: &mut Vec<String>) -> Vec<String> {
+fn video_codec_args(info: &MediaInfo, p: &Preset, enc: &Encoder, _warnings: &mut Vec<String>) -> Vec<String> {
     let v = info.video.as_ref();
     let mut a: Vec<String> = Vec::new();
     let h265 = p.codec != "h264";
-    if !h265 && p.bits >= 10 { warnings.push("h264-10bit".into()); }
     let ten = effective_bits(p) == 10;
     let proxy = p.scale != "source";
     let kbps = match p.bitrate.mode.as_str() {
@@ -195,7 +223,9 @@ fn video_codec_args(info: &MediaInfo, p: &Preset, enc: &Encoder, warnings: &mut 
         Encoder::Nvenc => {
             a.extend(["-c:v".into(), if h265 { "hevc_nvenc" } else { "h264_nvenc" }.into()]);
             a.extend(["-preset".into(), if p.max_quality { "p7" } else { "p5" }.into(), "-tune".into(), "hq".into()]);
-            a.extend(["-profile:v".into(), if !h265 { "high" } else if ten { "main10" } else { "main" }.into()]);
+            let prof = match (h265, is422(p), ten) { (true, true, _) => "rext", (true, _, true) => "main10", (true, _, _) => "main",
+                (false, true, _) => "high422", (false, _, true) => "high10", _ => "high" };
+            a.extend(["-profile:v".into(), prof.into()]);
             match kbps {
                 Some(k) => {
                     let cbr = p.bitrate.rc == "cbr";
@@ -207,7 +237,8 @@ fn video_codec_args(info: &MediaInfo, p: &Preset, enc: &Encoder, warnings: &mut 
         }
         Encoder::Cpu { preset } => {
             a.extend(["-c:v".into(), if h265 { "libx265" } else { "libx264" }.into(), "-preset".into(), preset.clone()]);
-            a.extend(["-profile:v".into(), if !h265 { "high" } else if ten { "main10" } else { "main" }.into()]);
+            // 4:2:2 e H.264 10-bit: o x264/x265 escolhe o perfil certo pelo formato de pixel.
+            if !is422(p) && !(ten && !h265) { a.extend(["-profile:v".into(), if !h265 { "high" } else if ten { "main10" } else { "main" }.into()]); }
             if h265 { a.extend(["-x265-params".into(), "log-level=error".into()]); }
             match kbps {
                 Some(k) => rate(&mut a, p.bitrate.rc == "cbr", k),
@@ -248,7 +279,7 @@ fn audio_args(info: &MediaInfo, p: &Preset) -> (Option<String>, Vec<String>) {
         }
     };
     let kbps = if p.audio.kbps > 0 { p.audio.kbps } else { 256 };
-    (Some(graph), vec!["-map".into(), "[aout]".into(), "-c:a".into(), "aac".into(), "-b:a".into(), format!("{kbps}k"), "-ar".into(), "48000".into()])
+    (Some(graph), vec!["-map".into(), "[aout]".into(), "-c:a".into(), "aac".into(), "-b:a".into(), format!("{kbps}k"), "-ar".into(), (if p.audio.rate == 44100 { 44100 } else { 48000 }).to_string()])
 }
 
 fn codec_tag(p: &Preset) -> &'static str { if p.codec == "h264" { "H264" } else { "H265" } }
@@ -265,7 +296,7 @@ pub fn output_path(src: &Path, p: &Preset) -> PathBuf {
     let suffix = if p.output.suffix.on {
         clean(&p.output.suffix.text.replace("{codec}", codec_tag(p)).replace("{preset}", &p.name))
     } else { String::new() };
-    let ext = if p.container == "mov" { "mov" } else { "mp4" };
+    let ext = match p.container.as_str() { "mov" => "mov", "source" => source_container(src), _ => "mp4" };
     let mut out = dir.join(format!("{stem}{suffix}.{ext}"));
     let mut i = 2;
     while out.exists() || out == src {
@@ -364,11 +395,18 @@ pub fn build_mode(info: &MediaInfo, p: &Preset, enc: &Encoder, output: &Path, de
         args.extend(["-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709", "-color_range", "tv"].map(String::from));
     }
     args.extend(aout);
+    // Timecode da câmera (ex.: FX30 07:51:07:46), para sincronizar no editor.
+    if p.metadata && !info.timecode.is_empty() { args.extend(["-timecode".into(), info.timecode.clone()]); }
     if p.metadata {
         args.extend(["-map_metadata".into(), "0".into(), "-movflags".into(), "use_metadata_tags+faststart".into()]);
     } else {
         args.extend(["-map_metadata".into(), "-1".into(), "-movflags".into(), "+faststart".into()]);
     }
+    // PCM copiado num .mp4: grava como a Sony grava (PCM "twos", marca mp42), e não no "ipcm" novo.
+    let mp4 = output.extension().and_then(|e| e.to_str()).map_or(true, |e| !e.eq_ignore_ascii_case("mov"));
+    let pcm_copy = p.audio.codec == "copy" && info.audio.iter().any(|a| a.codec.starts_with("pcm_"));
+    if mp4 && pcm_copy { args.extend(["-f", "mov", "-brand", "mp42"].map(String::from)); }
+    else if mp4 && p.metadata && !info.timecode.is_empty() { args.extend(["-write_tmcd".into(), "1".into()]); }
     args.extend(["-max_muxing_queue_size", "4096", "-progress", "pipe:1", "-nostats", "-y"].map(String::from));
     args.push(output.to_string_lossy().into_owned());
     let (width, height) = info.video.as_ref().map_or((0, 0), |v| out_dims(v, p));
@@ -400,6 +438,32 @@ pub fn verify(src: &MediaInfo, out: &MediaInfo) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn like_xavc() {
+        // FX30: H.264 4:2:2 10-bit em pé (270), PCM, timecode. Tudo em Original.
+        let mut i = iphone(270, "");
+        { let v = i.video.as_mut().unwrap(); v.codec = "h264".into(); v.pix_fmt = "yuv422p10le".into(); v.bit_depth = 10; v.fps = 59.94006; v.fps_nominal = 59.94006; v.vfr = false; }
+        i.path = PathBuf::from("/v/C0579.MP4");
+        i.audio = vec![AudioInfo { index: 1, codec: "pcm_s16be".into(), channels: 2, sample_rate: 48000 }];
+        i.timecode = "07:51:07:46".into();
+        let mut p = preset("iphone-4k60");
+        p.codec = "source".into(); p.bits = 0; p.chroma = "source".into(); p.container = "source".into(); p.fps.value = "source".into();
+        p.audio.codec = "copy".into();
+        let r = resolve(&i, &p);
+        assert_eq!((r.codec.as_str(), r.bits, r.chroma.as_str(), r.container.as_str(), r.fps.value.as_str()), ("h264", 10, "422", "mp4", "59.94"));
+        assert!(needs_ext_encoder(&r));
+        let out = output_path(&i.path, &r);
+        assert!(out.to_string_lossy().ends_with(".mp4"));
+        let s = build_mode(&i, &p, &Encoder::Cpu { preset: "fast".into() }, &out, Decode::Cpu).args.join(" ");
+        assert!(s.contains("-vf scale=threads=0,format=yuv444p10le,transpose=cclock,fps=60000/1001,scale=threads=0,format=yuv422p10le "), "{s}");
+        assert!(s.contains("-c:v libx264") && s.contains("-c:a copy") && s.contains("-timecode 07:51:07:46") && s.contains("-f mov -brand mp42"), "{s}");
+        // Na RTX 50, NVENC 4:2:2 10-bit
+        let s = build_mode(&i, &p, &Encoder::Nvenc, &out, Decode::Hw).args.join(" ");
+        assert!(s.contains("format=p210le") && s.contains("-c:v h264_nvenc") && s.contains("-profile:v high422"), "{s}");
+        // .MOV do iPhone em Original continua .mov
+        assert!(output_path(Path::new("/v/IMG_1.MOV"), &p).to_string_lossy().ends_with(".mov"));
+    }
 
     #[test]
     fn source_options() {
@@ -542,9 +606,9 @@ mod tests {
         let s = build_opts(&i, &p, &Encoder::Nvenc, Path::new("o.mp4"), true).args.join(" ");
         assert!(s.contains("format=p010le") && s.contains("-profile:v main10"), "{s}");
         p.codec = "h264".into();
-        let plan = build_opts(&i, &p, &Encoder::Nvenc, Path::new("o.mp4"), true);
-        assert!(plan.args.join(" ").contains("format=yuv420p"));
-        assert_eq!(plan.warnings, vec!["h264-10bit".to_string()]);
+        assert!(needs_ext_encoder(&p));
+        let s = build_opts(&i, &p, &Encoder::Cpu { preset: "fast".into() }, Path::new("o.mp4"), false).args.join(" ");
+        assert!(s.contains("format=yuv420p10le") && s.contains("libx264") && !s.contains("-profile:v"), "{s}");
     }
 
     #[test]
