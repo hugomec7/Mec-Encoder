@@ -207,10 +207,13 @@
     }
     return { w: Math.max(2, Math.round(w / 2) * 2), h: Math.max(2, Math.round(h / 2) * 2) };
   }
+  const autoLevel = (c) => c.bitrate.level || (c.scale === 'source' ? 'high' : 'light');
   function videoKbps(src, cfg) {
     if (cfg.bitrate.mode === 'manual') return cfg.bitrate.kbps;
     if (cfg.bitrate.mode === 'source') return src.kbps || 20000;
-    const o = outDims(src, cfg); return Math.round(o.w * o.h * 60 * 0.07 / 1000 / 100) * 100;
+    // Auto: o nível muda bastante o tamanho (Alta ≈ 100%, Equilibrada ≈ 60%, Leve ≈ 35%)
+    const k = { high: 1, balanced: 0.6, light: 0.35 }[autoLevel(cfg)] || 1;
+    const o = outDims(src, cfg); return Math.round(o.w * o.h * 60 * 0.07 * k / 1000 / 100) * 100;
   }
   const isAudioP = (c) => c && c.kind === 'audio';
   const ACODEC = { wav: 'WAV', mp3: 'MP3', aac: 'AAC', flac: 'FLAC', copy: null };
@@ -1045,16 +1048,13 @@
     const top = (T.isPreset ? '' : S.picked.size > 1 ? `<div class="hint top-hint multi-hint">${L.multiHint(S.picked.size)}</div>` : '');
     if (isAudioP(c)) el.innerHTML = top + audioInspector(c, src) + sec('adv', L.advanced, c.metadata ? L.metadata : '—', `<div class="group">${row(L.metadata, sw('metadata', c.metadata), L.metadataSub)}</div>`);
     else el.innerHTML = top
-      + sec('video', L.video, `${codecName(codecOut(c, src) || c.codec)} · ${bitsTxt(c, src)}${chromaOut(c, src) === '422' ? ' 4:2:2' : ''} · ${scaleTxt(c.scale)}${rotTxt} · ${c.fps.conform ? fpsCfrTxt(c, src) : c.bitrate.mode === 'manual' ? fmtK(c.bitrate.kbps) : c.bitrate.mode === 'source' ? L.source : L.auto}${c.hdrToSdr ? ' · 709' : ''}`,
+      + sec('video', L.video, `${codecName(codecOut(c, src) || c.codec)} · ${bitsTxt(c, src)}${chromaOut(c, src) === '422' ? ' 4:2:2' : ''} · ${scaleTxt(c.scale)}${rotTxt} · ${c.fps.conform ? fpsCfrTxt(c, src) : c.bitrate.mode === 'manual' ? fmtK(c.bitrate.kbps) : c.bitrate.mode === 'source' ? L.source : { high: L.autoHigh, balanced: L.autoBalanced, light: L.autoLight }[autoLevel(c)]}${c.hdrToSdr ? ' · 709' : ''}`,
         `<div class="group">
           ${row(`${L.resolution}<small class="res-out">${resLabel(c, src)}</small>`, dd('scale', c.scale, [['source', L.source], ['1080', '1080p'], ['50', '50%'], ['25', '25%'], ['custom', L.custom]]))}
           <div class="collapse ${c.scale === 'custom' ? '' : 'closed'}" style="max-height:60px">
             ${row(L.size, `<div class="field"><input class="tnum" data-k="customW" value="${c.customW || ''}" placeholder="auto"><span>W</span></div><span class="times">×</span><div class="field"><input class="tnum" data-k="customH" value="${c.customH || ''}" placeholder="auto"><span>H</span></div>`)}
           </div>
-          ${row(L.bitrate, dd('bitrate.mode', c.bitrate.mode, [['auto', L.auto], ['source', L.source], ['manual', L.manual]]))}
-          <div class="collapse ${c.bitrate.mode === 'auto' ? '' : 'closed'}" style="max-height:60px">
-            ${row(L.level, dd('bitrate.level', c.bitrate.level || (c.scale === 'source' ? 'high' : 'light'), [['high', L.lvHigh], ['balanced', L.lvBalanced], ['light', L.lvLight]]))}
-          </div>
+          ${row(`<span class="lbl-i">${L.bitrate}<span class="info" tabindex="0" aria-label="${esc(L.bitrateTip)}" data-tip="${esc(L.bitrateTip)}">${ICONS.info}</span></span>`, dd('bitrateSel', c.bitrate.mode === 'auto' ? 'auto:' + autoLevel(c) : c.bitrate.mode, [['source', L.source], ['auto:high', L.autoHigh], ['auto:balanced', L.autoBalanced], ['auto:light', L.autoLight], ['manual', L.manual]]))}
           <div class="collapse ${c.bitrate.mode === 'manual' ? '' : 'closed'}" style="max-height:60px">
             ${row(L.value, `<div class="field"><input class="tnum" data-k="bitrate.kbps" value="${num(c.bitrate.kbps, 0)}"><span>kb/s</span></div>${dd('bitrate.rc', c.bitrate.rc, [['cbr', 'CBR'], ['vbr', 'VBR']])}`)}
           </div>
@@ -1138,9 +1138,10 @@
     o[last] = typeof o[last] === 'boolean' ? !o[last] : typeof o[last] === 'number' ? Number(String(v).replace(/\D/g, '')) || 0 : v;
     if (key === 'customW' || key === 'customH') o[last] = Math.min(16384, Number(String(v).replace(/\D/g, '')) || 0);
     if (key === 'audio.channels') T.cfg.audio.tracks = v === 'mono' ? [1, 1] : [1, 2];
+    if (key === 'bitrateSel') { delete T.cfg.bitrateSel; const [m, lv] = String(v).split(':'); T.cfg.bitrate.mode = m; if (lv) T.cfg.bitrate.level = lv; }
     if (key === 'fpsMode') { delete T.cfg.fpsMode; T.cfg.fps.conform = v === 'cfr'; }
     if (key === 'fps.value' && v !== 'source') T.cfg.fps.conform = true;
-    if (!T.isPreset) spread(T.q, key === 'fpsMode' ? ['fps.conform'] : [key, ...(key === 'audio.channels' ? ['audio.tracks'] : []), ...(key === 'fps.value' ? ['fps.conform'] : [])]);
+    if (!T.isPreset) spread(T.q, key === 'bitrateSel' ? ['bitrate.mode', 'bitrate.level'] : key === 'fpsMode' ? ['fps.conform'] : [key, ...(key === 'audio.channels' ? ['audio.tracks'] : []), ...(key === 'fps.value' ? ['fps.conform'] : [])]);
     renderQueue(); renderPresets(); renderInspector(); renderPreview();
   }
   $('#inspIn').addEventListener('click', (e) => {
