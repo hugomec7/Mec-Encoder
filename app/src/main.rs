@@ -153,6 +153,15 @@ fn add(app: AppHandle, paths: Vec<PathBuf>) { add_paths(app, paths); }
 #[tauri::command]
 fn forget(state: State<'_, AppState>, id: u64) { state.items.lock().unwrap().remove(&id); }
 
+/// Mais uma cópia do mesmo arquivo na fila (para renderizar com outro preset). Devolve o id novo.
+#[tauri::command]
+fn duplicate(state: State<'_, AppState>, id: u64) -> Result<u64, String> {
+    let info = item(&state, id)?;
+    let new_id = state.next_id.fetch_add(1, Ordering::SeqCst);
+    state.items.lock().unwrap().insert(new_id, info);
+    Ok(new_id)
+}
+
 // ======================================================================
 // Prévia
 // ======================================================================
@@ -570,7 +579,7 @@ fn main() {
             }
         })
         .invoke_handler(tauri::generate_handler![
-            pick, add, forget, preview, waveform, render, stop, get_state, save_presets, save_settings,
+            pick, add, forget, duplicate, preview, waveform, render, stop, get_state, save_presets, save_settings,
             default_presets, import_enc, export_presets, import_presets, reveal, open_data_dir, open_log, open_url, notify, ready, check_update, install_update
         ])
         .build(tauri::generate_context!())

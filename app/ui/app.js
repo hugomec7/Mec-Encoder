@@ -18,6 +18,8 @@
     teal: 'var(--teal)', yellow: 'var(--yellow)', pink: 'var(--pink)', indigo: 'var(--indigo)', red: 'var(--red)' };
   const PALETTE = Object.keys(COLORS);
   const ICONS = {
+    again: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 8a5 5 0 1 1-1.6-3.7"/><path d="M13 2.8v2.8h-2.8"/></svg>',
+    dup: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><rect x="5.2" y="5.2" width="8" height="8" rx="1.8"/><path d="M10.8 5.2V4a1.6 1.6 0 0 0-1.6-1.6H4A1.6 1.6 0 0 0 2.4 4v5.2A1.6 1.6 0 0 0 4 10.8h1.2"/></svg>',
     note: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 12.2V3.4l7-1.4v8.6"/><circle cx="4.3" cy="12.2" r="1.8" fill="currentColor"/><circle cx="11.3" cy="10.6" r="1.8" fill="currentColor"/></svg>',
     info: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="8" cy="8" r="6.3"/><path d="M8 7.3v3.9"/><circle cx="8" cy="5" r=".4" fill="currentColor"/></svg>',
     clock: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="6"/><path d="M8 4.8V8l2.2 1.4"/></svg>',
@@ -305,7 +307,11 @@
 
   /* ---------- menu suspenso / de contexto ---------- */
   const menu = $('#menu'); let menuPick = null;
+  let menuOwner = null;
   function openMenu(at, items, onPick) {
+    // clicar de novo na mesma caixa fecha o menu
+    if (at instanceof Element && menuOwner === at && menu.classList.contains('show')) { closeMenu(); return; }
+    menuOwner = at instanceof Element ? at : null;
     menu.innerHTML = items.map((it, i) => it.sep ? '<hr>' : `<button data-i="${i}" class="${it.sel ? 'sel' : ''} ${it.danger ? 'danger' : ''}">${it.color ? `<i style="--c:${it.color}"></i>` : it.icon ? it.icon : ''}<span>${esc(it.label)}</span>${it.sel ? ICONS.check : ''}</button>`).join('');
     const r = at instanceof Element ? at.getBoundingClientRect() : { left: at.x, right: at.x, top: at.y, bottom: at.y };
     const h = items.reduce((a, it) => a + (it.sep ? 9 : 32), 12);
@@ -316,7 +322,7 @@
     menuPick = (i) => onPick(items[i].value);
     menu.classList.remove('show'); void menu.offsetWidth; menu.classList.add('show');
   }
-  const closeMenu = () => menu.classList.remove('show');
+  const closeMenu = () => { menu.classList.remove('show'); menuOwner = null; };
   menu.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { closeMenu(); menuPick && menuPick(+b.dataset.i); } });
   document.addEventListener('pointerdown', (e) => { if (!e.target.closest('#menu') && !e.target.closest('[data-menu]')) closeMenu(); });
   document.addEventListener('contextmenu', (e) => { if (!e.target.closest('input')) e.preventDefault(); });
@@ -369,6 +375,7 @@
       : `<span class="state tnum">${fmtMB(estMB(q))}</span>`;
     const dir = q.dir ? `<span class="dir">${ICONS.folder}${esc(q.dir.replace(/\//g, ' › '))}</span>` : '';
     const acts = (q.status === 'ready' || q.status === 'err' ? `<button class="a a-render" data-act="render" title="${L.renderThis}">${ICONS.playc}</button>` : '')
+      + (q.status === 'done' ? `<button class="a" data-act="again" title="${L.renderAgain}">${ICONS.again}</button>` : '')
       + `<button class="a" data-act="reveal" title="${q.status === 'done' ? L.showOutput : L.showInFolder}">${ICONS.reveal}</button>`
       + (q.status !== 'running' ? `<button class="a" data-act="remove" title="${L.remove}">${ICONS.x}</button>` : '');
     return `<div class="item ${isPicked(q.id) ? 'sel' : ''} ${q.id === S.sel && S.picked.size > 1 ? 'primary' : ''} ${q.status === 'running' ? 'running' : ''} ${q.status === 'done' ? 'is-done' : ''} ${enterIds.includes(q.id) ? 'enter' : ''}" data-id="${q.id}" style="--d:${Math.min(8, Math.max(0, enterIds.indexOf(q.id))) * 60}ms">
@@ -387,7 +394,7 @@
     $('#queueCard').classList.toggle('empty', !S.queue.length);
     qList.innerHTML = S.queue.map((q) => itemHtml(q, enterIds)).join('');
     $('#qCount').textContent = S.queue.length ? L.videos(S.queue.length) : '';
-    $('#bClearDone').style.visibility = S.queue.some((q) => q.status === 'done') ? '' : 'hidden';
+    $('#bClearDone').style.visibility = S.queue.length ? '' : 'hidden';
     const pend = pending();
     renderFoot();
     $('#tEta').textContent = S.engine.status === 'nvenc' ? 'NVENC' : S.engine.status === 'cpu' ? 'CPU' : '';
@@ -410,9 +417,24 @@
       renderAll(); flip(before);
     }, 230);
   }
+  // Renderizar de novo (ex.: testar outra configuração). O arquivo anterior fica; o novo ganha " (2)".
+  function renderAgain(q) {
+    Object.assign(q, { status: 'ready', p: 0, took: 0, speed: 0, eta: null, out: null, error: null, t0: 0 });
+    renderQueue(); renderOne(q.id);
+  }
+  // Duplicar na fila: o mesmo arquivo, para renderizar com outro preset e comparar
+  async function duplicateItem(q) {
+    let id = Math.max(0, ...S.queue.map((x) => x.id)) + 1;
+    if (REAL) { try { id = await inv('duplicate', { id: q.id }); } catch (e) { toast(String(e)); return; } }
+    const c = Object.assign(clone({ ...q, thumb: null, wave: undefined }), { id, status: 'ready', p: 0, took: 0, out: null, error: null, queued: false, thumb: q.thumb, wave: q.wave });
+    const before = rects();
+    S.queue.splice(S.queue.indexOf(q) + 1, 0, c); selectOnly(id); renderAll(true, [id]); flip(before);
+  }
   function itemAction(act, id) {
     const q = itemOf(id); if (!q) return;
     if (act === 'render') { if (q.status === 'err') { q.status = 'ready'; q.error = null; } renderOne(id); }
+    else if (act === 'again') renderAgain(q);
+    else if (act === 'dup') duplicateItem(q);
     else if (act === 'reveal') reveal(q);
     else if (act === 'remove') removeItem(id);
     else if (act === 'top') { const before = rects(); S.queue = [q, ...S.queue.filter((x) => x !== q)]; renderQueue(); flip(before); }
@@ -460,6 +482,8 @@
     }
     openMenu({ x: e.clientX, y: e.clientY }, [
       ...(q.status === 'ready' || q.status === 'err' ? [{ label: L.renderThis, value: 'render', icon: ICONS.playc }] : []),
+      ...(q.status === 'done' ? [{ label: L.renderAgain, value: 'again', icon: ICONS.again }] : []),
+      { label: L.duplicate, value: 'dup', icon: ICONS.dup },
       { label: q.status === 'done' ? L.showOutput : L.showInFolder, value: 'reveal', icon: ICONS.reveal },
       { label: L.moveTop, value: 'top', icon: ICONS.top },
       { sep: true },
@@ -517,7 +541,24 @@
     drag.el = null; drag.on = false;
   });
 
-  $('#bClearDone').onclick = () => clearDone(true);
+  $('#bClearDone').dataset.menu = '1';
+  $('#bClearDone').onclick = (e) => {
+    const done = S.queue.some((q) => q.status === 'done');
+    openMenu(e.currentTarget, [
+      ...(done ? [{ label: L.clearDoneItems, value: 'done', icon: ICONS.check }] : []),
+      { label: L.clearAll, value: 'all', icon: ICONS.trash, danger: true },
+    ], (v) => (v === 'done' ? clearDone(true) : clearAll()));
+  };
+  function clearAll() {
+    const list = S.queue.filter((q) => q.status !== 'running'); if (!list.length) return;
+    list.forEach((q) => { const el = $(`.item[data-id="${q.id}"]`); if (el) { el.style.transition = 'opacity .25s, transform .35s var(--ease)'; el.style.opacity = 0; el.style.transform = 'scale(.96)'; } });
+    if (REAL) list.forEach((q) => inv('forget', { id: q.id }).catch(() => {}));
+    setTimeout(() => {
+      const before = rects(); S.queue = S.queue.filter((q) => q.status === 'running');
+      S.picked = new Set([...S.picked].filter((id) => itemOf(id))); if (!selItem()) S.sel = S.picked.size ? [...S.picked][0] : null;
+      renderAll(); flip(before); toast(L.clearedAll);
+    }, 230);
+  }
   function clearDone(withToast) {
     const done = S.queue.filter((q) => q.status === 'done'); if (!done.length) return;
     done.forEach((q) => { const el = $(`.item[data-id="${q.id}"]`); if (el) { el.style.transition = 'opacity .25s, transform .35s var(--ease)'; el.style.opacity = 0; el.style.transform = 'scale(.96)'; } });
@@ -1316,7 +1357,9 @@
         if (!q) break;
         q.status = 'running'; q.queued = false; q.p = 0; q.speed = 0; q.eta = null; q.error = null; q.t0 = Date.now(); q.jobId = J.id; q.took = 0; renderQueue(); updateFill();
         try {
-          const r = await inv('render', { id: q.id, cfg: q.cfg });
+          const twin = q.path && S.queue.some((x) => x !== q && x.path === q.path && x.status !== 'done');
+          if (twin && q.cfg.output.deleteSource) toast(L.keptForCopy);
+          const r = await inv('render', { id: q.id, cfg: twin ? Object.assign(clone(q.cfg), { output: Object.assign(clone(q.cfg.output), { deleteSource: false }) }) : q.cfg });
           q.status = 'done'; q.p = 1; q.out = r.output; q.outMb = r.size / 1e6; q.took = elapsedOf(q); J.done++;
           if (r.deleted) toast(L.deletedOrig);
           if (J.mode === 'single') notify(L.rendered(q.file) + ' · ' + fmtDur(q.took));

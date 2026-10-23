@@ -32,7 +32,7 @@ window.MEC_I18N = {
     revealToast: 'Opens File Explorer with the file selected', defaultSet: (p) => `New videos will use ${p}`, busy: 'Rendering…',
     reorderHint: 'Drag to reorder', presetsFold: 'Show or hide presets', setForAllBtn: 'Use for all',
 
-    queue: 'Queue', videos: (n) => `${n} video${n === 1 ? '' : 's'}`, clearDone: 'Clear done',
+    queue: 'Queue', videos: (n) => `${n} video${n === 1 ? '' : 's'}`, clearDone: 'Clear', clearDoneItems: 'Remove finished', clearAll: 'Remove all', clearedAll: 'Queue cleared', renderAgain: 'Render again', keptForCopy: 'Original kept: another copy of this video is still in the queue',
     dropTitle: 'Drop videos or folders', dropSub: 'Subfolders included', newUse: 'New videos use',
     toRender: (n, s) => `<b>${n}</b> to render · ≈ <b>${s}</b>`,
     render: 'Render queue', stop: 'Stop', ready: 'Done', error: 'Error',
@@ -116,7 +116,7 @@ window.MEC_I18N = {
     revealToast: 'Abre o Explorador de Arquivos com o arquivo selecionado', defaultSet: (p) => `Vídeos novos vão usar ${p}`, busy: 'Renderizando…',
     reorderHint: 'Arraste para reordenar', presetsFold: 'Mostrar ou esconder os presets', setForAllBtn: 'Usar em todos',
 
-    queue: 'Fila', videos: (n) => `${n} vídeo${n === 1 ? '' : 's'}`, clearDone: 'Limpar',
+    queue: 'Fila', videos: (n) => `${n} vídeo${n === 1 ? '' : 's'}`, clearDone: 'Limpar', clearDoneItems: 'Tirar os prontos', clearAll: 'Tirar todos', clearedAll: 'Fila limpa', renderAgain: 'Renderizar de novo', keptForCopy: 'Original mantido: outra cópia deste vídeo ainda está na fila',
     dropTitle: 'Arraste vídeos ou pastas', dropSub: 'Inclui subpastas', newUse: 'Vídeos novos usam',
     toRender: (n, s) => `<b>${n}</b> para renderizar · ≈ <b>${s}</b>`,
     render: 'Renderizar fila', stop: 'Parar', ready: 'Pronto', error: 'Erro',

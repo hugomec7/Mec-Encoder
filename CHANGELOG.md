@@ -1,5 +1,21 @@
 # Changelog · Novidades
 
+## 0.2.1
+
+**English**
+- **Bitrate**: Auto now comes with its level right in the menu: Source · Auto · High · Auto · Balanced · Auto · Light · Manual, with an ⓘ explaining each one. The estimated size now follows the level.
+- **Dropdowns**: clicking the same box again closes the menu.
+- **Render again**: finished videos have a ↻ button (and right-click › Render again). The previous file is kept; the new one gets " (2)".
+- **Duplicate** a video in the queue (right-click › Duplicate), e.g. to render the same file with different presets and compare times. While another copy is still in the queue, the original is never sent to the Recycle Bin.
+- **Clear** is always visible: Remove finished · Remove all.
+
+**Português**
+- **Bitrate**: o Auto agora vem com o nível no próprio menu: Original · Auto · Alta · Auto · Equilibrada · Auto · Leve · Manual, com um ⓘ explicando cada um. O tamanho estimado agora acompanha o nível.
+- **Menus suspensos**: clicar de novo na mesma caixa fecha o menu.
+- **Renderizar de novo**: vídeos prontos têm um botão ↻ (e botão direito › Renderizar de novo). O arquivo anterior fica; o novo ganha " (2)".
+- **Duplicar** um vídeo na fila (botão direito › Duplicar), por exemplo para renderizar o mesmo arquivo com presets diferentes e comparar os tempos. Enquanto houver outra cópia na fila, o original nunca vai para a Lixeira.
+- **Limpar** sempre aparece: Tirar os prontos · Tirar todos.
+
 ## 0.2.0
 
 **English**
