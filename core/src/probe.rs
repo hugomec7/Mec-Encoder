@@ -45,6 +45,8 @@ pub struct AudioInfo {
     pub codec: String,
     pub channels: u32,
     pub sample_rate: u32,
+    /// 0 quando o arquivo não informa.
+    pub bitrate_kbps: u32,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -168,6 +170,7 @@ pub fn parse_flat(text: &str) -> MediaInfo {
                 codec: g("codec_name").to_string(),
                 channels: g("channels").parse().unwrap_or(2),
                 sample_rate: g("sample_rate").parse().unwrap_or(48000),
+                bitrate_kbps: g("bit_rate").parse::<u64>().map_or(0, |b| (b / 1000) as u32),
             }),
             _ => {}
         }

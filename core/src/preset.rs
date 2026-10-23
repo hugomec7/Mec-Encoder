@@ -30,8 +30,9 @@ pub struct Audio {
     pub channels: String,
     /// Faixas de origem, começando em 1. Estéreo: [esquerdo, direito]. Mono: [faixa].
     pub tracks: Vec<u32>,
+    /// Qualidade do AAC em kb/s; 0 = a mesma do áudio original.
     pub kbps: u32,
-    /// Taxa de amostragem do AAC: 44100 ou 48000.
+    /// Taxa de amostragem do AAC: 44100 ou 48000; 0 = a mesma do áudio original.
     pub rate: u32,
 }
 

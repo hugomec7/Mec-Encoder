@@ -278,8 +278,32 @@ fn audio_args(info: &MediaInfo, p: &Preset) -> (Option<String>, Vec<String>) {
             format!("[0:{}]{}[l];[0:{}]{}[r];[l][r]amerge=inputs=2,pan=stereo|c0=c0|c1=c1{sync}[aout]", sid(l), mono(l), sid(r), mono(r))
         }
     };
-    let kbps = if p.audio.kbps > 0 { p.audio.kbps } else { 256 };
-    (Some(graph), vec!["-map".into(), "[aout]".into(), "-c:a".into(), "aac".into(), "-b:a".into(), format!("{kbps}k"), "-ar".into(), (if p.audio.rate == 44100 { 44100 } else { 48000 }).to_string()])
+    let (kbps, rate) = aac_quality(info, p);
+    (Some(graph), vec!["-map".into(), "[aout]".into(), "-c:a".into(), "aac".into(), "-b:a".into(), format!("{kbps}k"), "-ar".into(), rate.to_string()])
+}
+
+/// Qualidade e taxa do AAC. "Original" (0) usa o áudio de origem: kb/s das faixas escolhidas
+/// (duas faixas mono → soma), limitado a 64–320 (PCM 1536 kb/s vira 320, o máximo útil do AAC);
+/// a taxa do arquivo se o AAC aceitar, senão 48 kHz.
+pub fn aac_quality(info: &MediaInfo, p: &Preset) -> (u32, u32) {
+    let n = info.audio.len() as u32;
+    let pick = |i: usize| -> Option<&crate::probe::AudioInfo> {
+        let t = p.audio.tracks.get(i).copied().unwrap_or(1).clamp(1, n.max(1)) - 1;
+        info.audio.get(t as usize)
+    };
+    let first = pick(0);
+    let kbps = if p.audio.kbps > 0 { p.audio.kbps } else {
+        let a = first.map_or(0, |a| a.bitrate_kbps);
+        let b = if p.audio.channels == "stereo" && p.audio.tracks.get(0) != p.audio.tracks.get(1) { pick(1).map_or(0, |a| a.bitrate_kbps) } else { 0 };
+        let sum = a + b;
+        if sum == 0 { 256 } else { sum.clamp(64, 320) }
+    };
+    let rate = match p.audio.rate {
+        0 => first.map(|a| a.sample_rate).filter(|r| [32000, 44100, 48000, 88200, 96000].contains(r)).unwrap_or(48000),
+        44100 => 44100,
+        _ => 48000,
+    };
+    (kbps, rate)
 }
 
 fn codec_tag(p: &Preset) -> &'static str { if p.codec == "h264" { "H264" } else { "H265" } }
@@ -440,12 +464,29 @@ mod tests {
     use super::*;
 
     #[test]
+    fn aac_source_quality() {
+        let mut i = iphone(0, "");
+        i.audio = vec![AudioInfo { index: 1, codec: "aac".into(), channels: 2, sample_rate: 48000, bitrate_kbps: 107 }];
+        let mut p = preset("iphone-4k60"); p.audio.codec = "aac".into(); p.audio.kbps = 0; p.audio.rate = 0; p.audio.tracks = vec![1, 1];
+        assert_eq!(aac_quality(&i, &p), (107, 48000));
+        i.audio[0] = AudioInfo { index: 1, codec: "pcm_s16be".into(), channels: 2, sample_rate: 44100, bitrate_kbps: 1536 };
+        assert_eq!(aac_quality(&i, &p), (320, 44100));
+        // dois microfones mono de 128 → estéreo 256
+        i.audio = vec![AudioInfo { index: 1, codec: "aac".into(), channels: 1, sample_rate: 48000, bitrate_kbps: 128 },
+                       AudioInfo { index: 2, codec: "aac".into(), channels: 1, sample_rate: 48000, bitrate_kbps: 128 }];
+        p.audio.tracks = vec![1, 2];
+        assert_eq!(aac_quality(&i, &p), (256, 48000));
+        let s = build_opts(&i, &p, &Encoder::Nvenc, Path::new("o.mp4"), true).args.join(" ");
+        assert!(s.contains("-c:a aac -b:a 256k -ar 48000"), "{s}");
+    }
+
+    #[test]
     fn like_xavc() {
         // FX30: H.264 4:2:2 10-bit em pé (270), PCM, timecode. Tudo em Original.
         let mut i = iphone(270, "");
         { let v = i.video.as_mut().unwrap(); v.codec = "h264".into(); v.pix_fmt = "yuv422p10le".into(); v.bit_depth = 10; v.fps = 59.94006; v.fps_nominal = 59.94006; v.vfr = false; }
         i.path = PathBuf::from("/v/C0579.MP4");
-        i.audio = vec![AudioInfo { index: 1, codec: "pcm_s16be".into(), channels: 2, sample_rate: 48000 }];
+        i.audio = vec![AudioInfo { index: 1, codec: "pcm_s16be".into(), channels: 2, sample_rate: 48000, bitrate_kbps: 1536 }];
         i.timecode = "07:51:07:46".into();
         let mut p = preset("iphone-4k60");
         p.codec = "source".into(); p.bits = 0; p.chroma = "source".into(); p.container = "source".into(); p.fps.value = "source".into();
@@ -541,8 +582,8 @@ mod tests {
             path: PathBuf::from("/v/IMG_0001.MOV"), duration: 10.0, bitrate_kbps: 50_000,
             video: Some(VideoInfo { coded_width: cw, coded_height: ch, width: w, height: h, rotation, hdr: hdr.into(),
                 bit_depth: 10, fps: 59.93, fps_nominal: 60.0, vfr: true, bitrate_kbps: 49_000, ..Default::default() }),
-            audio: vec![AudioInfo { index: 1, codec: "aac".into(), channels: 1, sample_rate: 48000 },
-                        AudioInfo { index: 2, codec: "aac".into(), channels: 1, sample_rate: 48000 }],
+            audio: vec![AudioInfo { index: 1, codec: "aac".into(), channels: 1, sample_rate: 48000, bitrate_kbps: 0 },
+                        AudioInfo { index: 2, codec: "aac".into(), channels: 1, sample_rate: 48000, bitrate_kbps: 0 }],
             ..Default::default()
         }
     }

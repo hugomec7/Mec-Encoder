@@ -155,6 +155,20 @@
   const codecOut = (c, src) => (c.codec === 'source' ? (src ? (srcIs264(src) ? 'h264' : 'h265') : null) : c.codec);
   const chromaOut = (c, src) => { const v = c.chroma || '420'; return v === 'source' ? (src ? (/422|p210|nv16/.test(src.pix || '') || src.chroma === '422' ? '422' : '420') : null) : v; };
   const extOut = (c, file) => { const v = c.container || 'mp4'; return v === 'source' ? (/\.mov$/i.test(file || '') ? 'mov' : 'mp4') : v; };
+  // AAC "Original" (igual ao motor): kb/s das faixas escolhidas (64–320) e a taxa do arquivo
+  function aacOut(a, src) {
+    const aud = (src && src.aud) || []; const n = Math.max(1, aud.length);
+    const t = (i) => aud[Math.min(Math.max((a.tracks[i] || 1), 1), n) - 1];
+    let kbps = a.kbps;
+    if (!kbps) {
+      if (!aud.length) kbps = null;
+      else { const sum = ((t(0) || {}).kbps || 0) + (a.channels === 'stereo' && a.tracks[0] !== a.tracks[1] ? ((t(1) || {}).kbps || 0) : 0); kbps = sum ? Math.min(320, Math.max(64, sum)) : 256; }
+    }
+    const r0 = (t(0) || {}).rate;
+    const rate = a.rate === 0 ? (aud.length ? ([32000, 44100, 48000, 88200, 96000].includes(r0) ? r0 : 48000) : null) : a.rate === 44100 ? 44100 : 48000;
+    return { kbps, rate };
+  }
+  const khz = (r) => fpsTxt(String(r / 1000)) + ' kHz';
   const isBlackwell = () => /RTX\s*(PRO\s*)?5\d{3}|BLACKWELL/i.test(S.engine.gpu || '');
   // vai pelo x264/x265 (CPU) porque a NVENC desta placa não grava 4:2:2 nem H.264 10-bit?
   const cpuEncode = (c, src) => S.engine.status === 'nvenc' && !isBlackwell() && (chromaOut(c, src) === '422' || (codecOut(c, src) === 'h264' && bitsOut(c, src) === 10));
@@ -176,6 +190,7 @@
       audio: (info.audio || []).length, hdr: v.hdr || false, rot: v.rotation || 0, mb: (info.sizeBytes || 0) / 1e6,
       codecId: v.codec || '', pix: v.pixFmt || '', ext: String(info.path || '').split('.').pop().toLowerCase(), tc: info.timecode || '',
       pcm: (info.audio || []).some((a) => String(a.codec).startsWith('pcm_')),
+      aud: (info.audio || []).map((a) => ({ kbps: a.bitrateKbps || 0, rate: a.sampleRate || 48000 })),
     };
   }
   const durOf = (q) => q.src.durS || secs(q.src.dur);
@@ -962,7 +977,7 @@
     $('#modified').classList.toggle('show', !!mod); $('#bSavePreset').classList.toggle('show', !!mod);
     $('#bSavePreset').textContent = T.isPreset ? L.saveChanges : L.saveToPreset;
     $('#bDiscard').classList.toggle('show', !!(mod && T.isPreset));
-    const a = c.audio; const o = c.output; const h264 = c.codec === 'h264';
+    const a = c.audio; const o = c.output; const aq = aacOut(a, src); const h264 = c.codec === 'h264';
     const dims = src ? outDims(src, c) : null;
     const resHint = !src && c.scale === '1080' ? `<div class="hint">${L.scale1080Hint}</div>` : '';
     const rotTxt = c.rotate ? ` · ↻ ${c.rotate}°` : '';
@@ -991,8 +1006,8 @@
           ${row(L.codec, dd('audio.codec', a.codec, [['aac', 'AAC'], ['copy', L.copy]]))}
           ${a.codec === 'aac' ? row(L.channels, dd('audio.channels', a.channels, [['stereo', L.stereo], ['mono', L.mono]])) : ''}
           ${a.codec === 'aac' ? row(L.tracks, `<div class="val">${a.channels === 'stereo' ? trackBtn(0, a.tracks[0]) + trackBtn(1, a.tracks[1]) : trackBtn(0, a.tracks[0])}</div>`, a.channels === 'stereo' ? L.tracksStereo : L.tracksMono) : ''}
-          ${a.codec === 'aac' ? row(L.quality, dd('audio.kbps', a.kbps || 256, [[128, '128 kb/s'], [192, '192 kb/s'], [256, '256 kb/s'], [320, '320 kb/s']])) : ''}
-          ${a.codec === 'aac' ? row(L.sampleRate, dd('audio.rate', a.rate === 44100 ? 44100 : 48000, [[44100, '44,1 kHz'], [48000, '48 kHz']])) : ''}
+          ${a.codec === 'aac' ? row(L.quality + (!a.kbps && aq.kbps ? `<small class="res-out">${aq.kbps} kb/s</small>` : ''), dd('audio.kbps', a.kbps ?? 256, [[0, L.source], [128, '128 kb/s'], [192, '192 kb/s'], [256, '256 kb/s'], [320, '320 kb/s']])) : ''}
+          ${a.codec === 'aac' ? row(L.sampleRate + (a.rate === 0 && aq.rate ? `<small class="res-out">${khz(aq.rate)}</small>` : ''), dd('audio.rate', a.rate === 0 ? 0 : a.rate === 44100 ? 44100 : 48000, [[0, L.source], [44100, '44,1 kHz'], [48000, '48 kHz']])) : ''}
         </div>`)
       + sec('adv', L.advanced, [c.avSync ? L.avSync : null, c.metadata ? L.metadata : null].filter(Boolean).join(' · ') || '—',
         `<div class="group">
