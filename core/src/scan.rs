@@ -11,9 +11,16 @@ pub struct Found {
     pub dir: String,
 }
 
+pub const AUDIO_EXT: &[&str] = &["mp3", "wav", "m4a", "aac", "flac", "ogg", "opus", "aif", "aiff", "wma", "caf"];
+
 pub fn is_video(p: &Path) -> bool {
     p.extension().and_then(|e| e.to_str()).map_or(false, |e| VIDEO_EXT.contains(&e.to_ascii_lowercase().as_str()))
 }
+pub fn is_audio(p: &Path) -> bool {
+    p.extension().and_then(|e| e.to_str()).map_or(false, |e| AUDIO_EXT.contains(&e.to_ascii_lowercase().as_str()))
+}
+/// Vídeo ou áudio que o app aceita na fila.
+pub fn is_media(p: &Path) -> bool { is_video(p) || is_audio(p) }
 
 fn hidden(p: &Path) -> bool {
     let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
@@ -35,7 +42,7 @@ pub fn expand(paths: &[PathBuf]) -> Vec<Found> {
         if p.is_dir() {
             let root = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
             walk(p, &root, &mut out, 0);
-        } else if p.is_file() && is_video(p) {
+        } else if p.is_file() && is_media(p) {
             out.push(Found { path: p.clone(), dir: String::new() });
         }
     }
@@ -50,7 +57,7 @@ fn walk(dir: &Path, rel: &str, out: &mut Vec<Found>, depth: usize) {
     let mut entries: Vec<PathBuf> = rd.filter_map(|e| e.ok().map(|e| e.path())).filter(|p| !hidden(p)).collect();
     entries.sort_by(|a, b| natural(&a.to_string_lossy(), &b.to_string_lossy()));
     let (dirs, files): (Vec<_>, Vec<_>) = entries.into_iter().partition(|p| p.is_dir());
-    for f in files { if is_video(&f) { out.push(Found { path: f, dir: rel.to_string() }); } }
+    for f in files { if is_media(&f) { out.push(Found { path: f, dir: rel.to_string() }); } }
     for d in dirs {
         let name = d.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
         walk(&d, &format!("{rel}/{name}"), out, depth + 1);

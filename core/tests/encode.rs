@@ -61,7 +61,8 @@ fn iphone_to_cfr_and_proxy() {
     let o = probe(&fp, &out).unwrap();
     let ov = o.video.as_ref().unwrap();
     assert_eq!((ov.width, ov.height, ov.rotation), (360, 640, 0), "deve sair em pé e sem metadado de rotação");
-    assert!(!ov.vfr && (ov.fps_nominal - 59.94).abs() < 0.01, "fps {} / {}", ov.fps, ov.fps_nominal);
+    // RAW: FPS Original em CFR → o fps nominal do arquivo (60), constante
+    assert!(!ov.vfr && (ov.fps_nominal - 60.0).abs() < 0.01, "fps {} / {}", ov.fps, ov.fps_nominal);
     assert_eq!(o.audio.len(), 1);
     assert_eq!(o.audio[0].channels, 2);
     mec_core::command::verify(&info, &o).unwrap();
@@ -89,7 +90,9 @@ fn hlg_to_rec709() {
     let src = make_iphone_like(&ff, &d, true);
     let info = probe(&fp, &src).unwrap();
     assert_eq!(info.video.as_ref().unwrap().hdr, "HLG");
-    let p = Preset::defaults().into_iter().find(|p| p.id == "iphone-4k60-hdr").unwrap();
+    // RAW tem HDR automático: converte porque o vídeo é HLG
+    let p = Preset::defaults().into_iter().find(|p| p.id == "iphone-4k60").unwrap();
+    assert!(p.hdr_to_sdr);
     let out = d.join("hdr_out.mp4");
     run(&ff, &build(&info, &p, &Encoder::Cpu { preset: "ultrafast".into() }, &out).args);
     let o = probe(&fp, &out).unwrap();
@@ -158,5 +161,49 @@ fn fx30_like_xavc() {
     assert_eq!(o.timecode, "07:51:07:46");
     let tag = Command::new(&fp).args(["-v", "error", "-select_streams", "a:0", "-show_entries", "stream=codec_tag_string", "-of", "csv=p=0"]).arg(&out).output().unwrap();
     assert_eq!(String::from_utf8_lossy(&tag.stdout).trim(), "twos");
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+
+/// Converter só áudio: MP3 → WAV 24-bit, vídeo → MP3 (extrai o áudio), WAV → FLAC.
+#[test]
+fn audio_only() {
+    let (Some(ff), Some(fp)) = (tool("ffmpeg"), tool("ffprobe")) else { eprintln!("sem ffmpeg, pulando"); return };
+    let d = dir("audio");
+    let mp3 = d.join("musica.mp3");
+    if !Command::new(&ff).args(["-v", "error", "-y", "-f", "lavfi", "-i", "sine=f=440:sample_rate=44100:d=3", "-ac", "2", "-c:a", "libmp3lame", "-b:a", "192k"]).arg(&mp3).status().unwrap().success() {
+        eprintln!("sem libmp3lame, pulando"); return;
+    }
+    let info = probe(&fp, &mp3).unwrap();
+    assert!(info.video.is_none() && info.audio.len() == 1);
+    let presets = Preset::audio_defaults();
+    let get = |id: &str| presets.iter().find(|p| p.id == id).unwrap().clone();
+    // MP3 → WAV 24-bit, mesma taxa (44,1 kHz)
+    let wav = get("audio-wav");
+    let out = output_path(&mp3, &wav);
+    assert!(out.to_string_lossy().ends_with("musica.wav"));
+    run(&ff, &mec_core::command::build_audio(&info, &wav, &out).args);
+    let o = probe(&fp, &out).unwrap();
+    assert_eq!((o.audio[0].codec.as_str(), o.audio[0].sample_rate, o.audio[0].channels), ("pcm_s24le", 44100, 2));
+    mec_core::command::verify(&info, &o).unwrap();
+    // WAV → FLAC (mantém 24-bit)
+    let wi = probe(&fp, &out).unwrap();
+    let flac = get("audio-flac");
+    let fo = output_path(&out, &flac);
+    run(&ff, &mec_core::command::build_audio(&wi, &flac, &fo).args);
+    let o = probe(&fp, &fo).unwrap();
+    assert_eq!(o.audio[0].codec, "flac");
+    assert_eq!(o.audio[0].bits, 24);
+    // Vídeo do iPhone → MP3 320
+    let src = make_iphone_like(&ff, &d, false);
+    let vinfo = probe(&fp, &src).unwrap();
+    let m = get("audio-mp3");
+    let mo = output_path(&src, &m);
+    assert!(mo.to_string_lossy().ends_with("IMG_0001.mp3"));
+    run(&ff, &mec_core::command::build_audio(&vinfo, &m, &mo).args);
+    let o = probe(&fp, &mo).unwrap();
+    assert!(o.video.is_none());
+    assert_eq!(o.audio[0].codec, "mp3");
+    mec_core::command::verify(&vinfo, &o).unwrap();
     let _ = std::fs::remove_dir_all(&d);
 }

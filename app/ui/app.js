@@ -18,6 +18,7 @@
     teal: 'var(--teal)', yellow: 'var(--yellow)', pink: 'var(--pink)', indigo: 'var(--indigo)', red: 'var(--red)' };
   const PALETTE = Object.keys(COLORS);
   const ICONS = {
+    note: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 12.2V3.4l7-1.4v8.6"/><circle cx="4.3" cy="12.2" r="1.8" fill="currentColor"/><circle cx="11.3" cy="10.6" r="1.8" fill="currentColor"/></svg>',
     info: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="8" cy="8" r="6.3"/><path d="M8 7.3v3.9"/><circle cx="8" cy="5" r=".4" fill="currentColor"/></svg>',
     clock: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="6"/><path d="M8 4.8V8l2.2 1.4"/></svg>',
     phone: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="6.5" y="2.5" width="11" height="19" rx="3"/><path d="M10.5 18.5h3"/></svg>',
@@ -57,7 +58,7 @@
     queue: demo.queue.map((q) => Object.assign(q, { cfg: clone(demo.presets.find((p) => p.id === q.preset)) })),
     set: Object.assign({ lang: 'en', theme: 'oled', lastDark: 'oled', defaultPreset: demo.presets[0] && demo.presets[0].id,
       clearWhenDone: true, notify: true, sound: true, foldPresets: false, parallel: 2 }, demo.settings),
-    sel: REAL ? null : 2, picked: new Set(REAL ? [] : [2]), anchor: null, editPreset: null, cmp: false, job: null, playing: false, t: REAL ? 0 : .31,
+    audioDefaults: REAL ? [] : (demo.audioDefaults || []), sel: REAL ? null : 2, picked: new Set(REAL ? [] : [2]), anchor: null, editPreset: null, cmp: false, job: null, playing: false, t: REAL ? 0 : .31,
     open: { video: true }, engine: { status: REAL ? 'checking' : 'nvenc', gpu: REAL ? null : 'NVIDIA GeForce RTX' },
     version: '0.1.0', update: null,
   };
@@ -190,7 +191,8 @@
       audio: (info.audio || []).length, hdr: v.hdr || false, rot: v.rotation || 0, mb: (info.sizeBytes || 0) / 1e6,
       codecId: v.codec || '', pix: v.pixFmt || '', ext: String(info.path || '').split('.').pop().toLowerCase(), tc: info.timecode || '',
       pcm: (info.audio || []).some((a) => String(a.codec).startsWith('pcm_')),
-      aud: (info.audio || []).map((a) => ({ kbps: a.bitrateKbps || 0, rate: a.sampleRate || 48000 })),
+      aud: (info.audio || []).map((a) => ({ kbps: a.bitrateKbps || 0, rate: a.sampleRate || 48000, ch: a.channels || 2, codec: a.codec || '', bits: a.bits || 0 })),
+      audioOnly: !info.video,
     };
   }
   const durOf = (q) => q.src.durS || secs(q.src.dur);
@@ -210,7 +212,29 @@
     if (cfg.bitrate.mode === 'source') return src.kbps || 20000;
     const o = outDims(src, cfg); return Math.round(o.w * o.h * 60 * 0.07 / 1000 / 100) * 100;
   }
-  const estMB = (q) => (videoKbps(q.src, q.cfg) + (q.cfg.audio.codec === 'copy' ? 256 : q.cfg.audio.kbps)) * durOf(q) / 8 / 1000;
+  const isAudioP = (c) => c && c.kind === 'audio';
+  const ACODEC = { wav: 'WAV', mp3: 'MP3', aac: 'AAC', flac: 'FLAC', copy: null };
+  const AEXT = { wav: 'wav', mp3: 'mp3', aac: 'm4a', flac: 'flac' };
+  const srcAud = (src) => (src && src.aud && src.aud[0]) || null;
+  // o que um preset de áudio vai gerar: "MP3 · 320 kb/s · 44,1 kHz"
+  function audioOutTxt(c, src) {
+    const a = c.audio; const s0 = srcAud(src);
+    if (a.codec === 'copy') return L.copy;
+    const rate = a.rate || (s0 ? (a.codec === 'mp3' && s0.rate > 48000 ? 48000 : s0.rate) : null);
+    const q = a.codec === 'mp3' || a.codec === 'aac' ? (a.kbps ? a.kbps + ' kb/s' : s0 && s0.kbps ? Math.min(320, Math.max(64, s0.kbps)) + ' kb/s' : L.source)
+      : (a.bits ? a.bits + '-bit' : s0 ? ((s0.bits >= 24 ? 24 : 16) + '-bit') : L.source);
+    return [ACODEC[a.codec], q, rate ? khz(rate) : null].filter(Boolean).join(' · ');
+  }
+  function audioKbps(q) {
+    const a = q.cfg.audio; const s0 = srcAud(q.src) || { rate: 48000, ch: 2, bits: 16, kbps: 256 };
+    const rate = a.rate || s0.rate || 48000; const ch = a.channels === 'mono' ? 1 : a.channels === 'stereo' ? 2 : (s0.ch || 2);
+    const bits = a.bits || (s0.bits >= 24 ? 24 : 16);
+    if (a.codec === 'wav') return rate * bits * ch / 1000;
+    if (a.codec === 'flac') return rate * bits * ch / 1000 * 0.6;
+    if (a.codec === 'copy') return s0.kbps || 256;
+    return a.kbps || Math.min(320, Math.max(64, s0.kbps || 256));
+  }
+  const estMB = (q) => (isAudioP(q.cfg) ? audioKbps(q) : videoKbps(q.src, q.cfg) + (q.cfg.audio.codec === 'copy' ? 256 : q.cfg.audio.kbps || 256)) * durOf(q) / 8 / 1000;
   const warnings = (q) => (q.src.hdr && !q.cfg.hdrToSdr ? [L.hdrMismatch(q.src.hdr)] : []);
   const codecName = (c) => (c === 'h265' ? 'H.265' : c === 'h264' ? 'H.264' : L.source);
   const scaleTxt = (s) => (s === 'source' ? L.source : s === '1080' ? '1080p' : s === 'custom' ? L.custom : s + '%');
@@ -233,7 +257,7 @@
       <rect y="${H * .74}" width="${W}" height=".6" fill="hsl(${hue + 20},90%,75%)" opacity=".5"/>
     </svg>`;
   }
-  const thumbHtml = (q) => q.thumb ? `<img src="${q.thumb}" alt="">` : REAL ? '<i class="thumb-ph"></i>' : scene(q.hue, q.src.h > q.src.w);
+  const thumbHtml = (q) => q.src.audioOnly ? `<i class="thumb-audio">${ICONS.note}</i>` : q.thumb ? `<img src="${q.thumb}" alt="">` : REAL ? '<i class="thumb-ph"></i>' : scene(q.hue, q.src.h > q.src.w);
 
   /* ---------- scroll suave com efeito elástico nas pontas ---------- */
   function smooth(el) {
@@ -293,10 +317,12 @@
   menu.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { closeMenu(); menuPick && menuPick(+b.dataset.i); } });
   document.addEventListener('pointerdown', (e) => { if (!e.target.closest('#menu') && !e.target.closest('[data-menu]')) closeMenu(); });
   document.addEventListener('contextmenu', (e) => { if (!e.target.closest('input')) e.preventDefault(); });
+  const defaultAudioId = () => (presetOf(S.set.defaultAudioPreset) && isAudioP(presetOf(S.set.defaultAudioPreset)) ? S.set.defaultAudioPreset : (S.presets.find(isAudioP) || S.presets[0]).id);
   const presetItems = (cur) => S.presets.map((p) => ({ label: p.name, value: p.id, color: COLORS[p.color] || COLORS.blue, sel: p.id === cur }));
 
   /* ---------- fila ---------- */
   const qList = $('#qList');
+  const audioSrcTxt = (src) => { const a = srcAud(src) || {}; return [String(a.codec || '').replace(/^pcm_.*/, 'PCM').toUpperCase(), a.rate ? khz(a.rate) : null, a.ch ? L.nch(a.ch) : null].filter(Boolean).join(' · '); };
   const runTxt = (q) => Math.round((q.p || 0) * 100) + '%' + (q.speed > 0 ? ` · ${num(q.speed, 1)}×` : '');
   // tempo: 75 → "1:15", 3725 → "1:02:05"
   const fmtDur = (t) => { t = Math.max(0, Math.round(t)); const h = Math.floor(t / 3600); const m = Math.floor(t / 60) % 60; const x = String(t % 60).padStart(2, '0');
@@ -346,7 +372,7 @@
         <div class="thumb">${thumbHtml(q)}${q.src.hdr ? '<span class="hdr">HDR</span>' : ''}</div>
         <div class="meta">
           <div class="name" title="${esc(q.path || q.file)}">${esc(q.file)}</div>
-          <div class="spec">${q.status === 'running' ? timeLine(q) : `${dir}${q.src.w}×${q.src.h} · ${q.src.codec} · ${fpsTxt(q.src.fps)} fps${q.src.vfr ? ' VFR' : ''}`}</div>
+          <div class="spec">${q.status === 'running' ? timeLine(q) : q.src.audioOnly ? `${dir}${audioSrcTxt(q.src)}` : `${dir}${q.src.w}×${q.src.h} · ${q.src.codec} · ${fpsTxt(q.src.fps)} fps${q.src.vfr ? ' VFR' : ''}`}</div>
           <div class="row2"><span class="badge" style="--c:${c}"><i></i>${esc(p.name)}${same(q.cfg, p) ? '' : '*'}</span>
             ${w.length ? `<span class="warn" title="${esc(w.join('\n'))}">${ICONS.warn}</span>` : ''}${st}</div>
         </div>
@@ -516,20 +542,24 @@
   $('#bAdd').onclick = (e) => addMenu(e.currentTarget);
   $('#bSetAll').onclick = (e) => openMenu(e.currentTarget, presetItems(null), (v) => assignAll(v));
 
-  function assign(q, pid) { q.preset = pid; q.cfg = clone(presetOf(pid)); }
+  function assign(q, pid) {
+    if (q.src.audioOnly && !isAudioP(presetOf(pid))) { toast(L.needAudioPreset); return false; }
+    q.preset = pid; q.cfg = clone(presetOf(pid)); return true;
+  }
   function assignPicked(pid) {
-    const list = pickedItems().filter((q) => q.status !== 'running'); list.forEach((q) => assign(q, pid)); renderAll();
+    const list = pickedItems().filter((q) => q.status !== 'running' && (isAudioP(presetOf(pid)) || !q.src.audioOnly)); list.forEach((q) => assign(q, pid)); renderAll();
     list.forEach((q) => { const b = $(`.item[data-id="${q.id}"] .badge`); if (b) b.classList.add('bump'); });
     toast(L.assigned(presetOf(pid).name, list.length));
   }
   function assignAll(pid) {
-    const list = pending(); list.forEach((q) => assign(q, pid)); renderAll();
+    const list = pending().filter((q) => isAudioP(presetOf(pid)) || !q.src.audioOnly); list.forEach((q) => assign(q, pid)); renderAll();
     $$('.item:not(.is-done) .badge').forEach((b) => b.classList.add('bump'));
     toast(L.assigned(presetOf(pid).name, list.length));
   }
 
   /* ---------- presets ---------- */
   function describe(p) {
+    if (isAudioP(p)) return `<b>${esc(p.name)}:</b> ${audioOutTxt(p, null)} · ${L.audioOnlyDesc}`;
     const parts = [codecName(p.codec) + ' ' + bitsTxt(p, null) + ((p.chroma || '420') === '420' ? '' : ' ' + (p.chroma === '422' ? '4:2:2' : L.sourceChroma)), p.scale === 'source' ? L.sourceRes : scaleTxt(p.scale),
       p.bitrate.mode === 'manual' ? fmtK(p.bitrate.kbps) + ' ' + p.bitrate.rc.toUpperCase() : p.bitrate.mode === 'source' ? L.bitrateSrc : L.bitrateAuto,
       p.fps.conform ? fpsCfrTxt(p, null) : null, p.hdrToSdr ? 'HDR → 709' : null,
@@ -542,7 +572,7 @@
     S.presets.forEach((p) => { if (p.folder && !f.includes(p.folder)) f.push(p.folder); });
     return f;
   }
-  const pill = (p, selId) => `<button class="preset ${selId === p.id ? 'sel' : ''}" data-id="${p.id}" style="--c:${COLORS[p.color] || COLORS.blue}"><i class="pdot"></i>${esc(p.name)}</button>`;
+  const pill = (p, selId) => `<button class="preset ${selId === p.id ? 'sel' : ''} ${isAudioP(p) ? 'is-audio' : ''}" data-id="${p.id}" style="--c:${COLORS[p.color] || COLORS.blue}"><i class="pdot"></i>${isAudioP(p) ? ICONS.note : ''}${esc(p.name)}</button>`;
   function renderPresets() {
     const t = target(); const selId = t.preset && t.preset.id; const closed = S.set.folderClosed || {};
     const loose = S.presets.filter((p) => !p.folder);
@@ -591,6 +621,12 @@
   function newPreset(folder) {
     const base = clone(target().preset || S.presets[0]);
     Object.assign(base, { id: uid(), name: L.newPresetName, color: PALETTE[S.presets.length % PALETTE.length], folder: folder || '' });
+    addPresets([base], false); editPreset(base.id, true);
+  }
+  function newAudioPreset() {
+    const base = clone(S.presets.find(isAudioP) || S.audioDefaults[0] || {});
+    if (!base.audio) return;
+    Object.assign(base, { kind: 'audio', id: uid(), name: L.newPresetName, color: PALETTE[S.presets.length % PALETTE.length], folder: '' });
     addPresets([base], false); editPreset(base.id, true);
   }
   function deletePreset(pid) {
@@ -688,8 +724,8 @@
     if (fh) { const f = fh.dataset.folder; S.set.folderClosed = Object.assign({}, S.set.folderClosed, { [f]: !(S.set.folderClosed || {})[f] }); saveSettings(); renderPresets(); return; }
     const b = e.target.closest('.preset'); if (!b) return;
     if (b.classList.contains('add')) {
-      openMenu(b, [{ label: L.newPresetMenu, value: 'new', icon: ICONS.plus }, { label: L.newFolderMenu, value: 'folder', icon: ICONS.folder }, { label: L.importEnc, value: 'enc', icon: ICONS.down }],
-        (v) => (v === 'new' ? newPreset() : v === 'folder' ? newFolder() : importEnc()));
+      openMenu(b, [{ label: L.newPresetMenu, value: 'new', icon: ICONS.plus }, { label: L.newAudioPreset, value: 'audio', icon: ICONS.note }, { label: L.newFolderMenu, value: 'folder', icon: ICONS.folder }, { label: L.importEnc, value: 'enc', icon: ICONS.down }],
+        (v) => (v === 'new' ? newPreset() : v === 'audio' ? newAudioPreset() : v === 'folder' ? newFolder() : importEnc()));
       return;
     }
     const q = selItem();
@@ -812,7 +848,7 @@
       }).catch(() => { if (seq === st.seq) fr.classList.remove('loading'); });
     }, 70);
   }
-  const requestFrames = (q) => { requestPreview(q, true); if (S.cmp) requestPreview(q, false); };
+  const requestFrames = (q) => { if (q.src.audioOnly) return; requestPreview(q, true); if (S.cmp) requestPreview(q, false); };
   // encaixa cada quadro no espaço disponível (um ou dois lado a lado)
   function fitFrames() {
     const st = $('.stage'); const r = st.getBoundingClientRect(); const pad = 14; const gap = 12;
@@ -845,6 +881,20 @@
     $('.stage').classList.toggle('compare', !!S.cmp);
     $('#bCompare').classList.toggle('on', !!S.cmp);
     if (!q) { fr.innerHTML = ''; fi.innerHTML = ''; $('#pvMeta').innerHTML = ''; $('#tcEnd').textContent = '00:00:00:00'; pvSt.in.key = pvSt.out.key = ''; drawWave(); return; }
+    $('#previewCard').classList.toggle('audio-item', !!q.src.audioOnly);
+    if (q.src.audioOnly || isAudioP(q.cfg)) {
+      // Áudio: a linha mostra o que vai sair; arquivo só de áudio mostra um cartão no lugar da imagem
+      $('#pvMeta').innerHTML = [chip(audioOutTxt(q.cfg, q.src), COLORS.teal, ICONS.note), chip(`≈ ${fmtMB(estMB(q))}`)].join('<span class="dot">·</span>');
+      if (q.src.audioOnly) {
+        S.cmp = false; $('.stage').classList.remove('compare');
+        fr.className = 'frame audio-card'; fr.dataset.id = q.id; fr.dataset.ar = 16 / 10; fr.dataset.label = '';
+        fr.innerHTML = `<div class="ac-in">${ICONS.note}<b>${esc(q.file)}</b><span>${esc(audioSrcTxt(q.src))} · ${esc(q.src.dur)}</span></div>`;
+        fi.innerHTML = ''; fitFrames();
+        $('#tcEnd').textContent = q.src.dur; setT(S.t, true);
+        if (REAL && q.wave === undefined) { q.wave = null; inv('waveform', { id: q.id, bars: 600 }).then((w) => { q.wave = w; if (selItem() === q) drawWave(); }).catch(() => { q.wave = []; }); }
+        drawWave(); return;
+      }
+    }
     const o = outDims(q.src, q.cfg); const c = [];
     // informação de como o vídeo VAI FICAR
     const cfr = q.cfg.fps.conform;
@@ -853,7 +903,7 @@
     if (q.src.hdr) c.push(q.cfg.hdrToSdr ? chip('Rec. 709', COLORS.green) : chip(L.hdrKept, COLORS.orange));
     if (q.cfg.rotate) c.push(chip(`${q.cfg.rotate}°`, COLORS.teal, ICONS.rot));
     c.push(chip(`≈ ${fmtMB(estMB(q))}`));
-    $('#pvMeta').innerHTML = c.join('<span class="dot">·</span>');
+    if (!isAudioP(q.cfg)) $('#pvMeta').innerHTML = c.join('<span class="dot">·</span>');
     if (anim) { const m = $('#pvMeta'); m.classList.remove('swap'); void m.offsetWidth; m.classList.add('swap'); }
     paintFrame(fr, q, true);
     if (S.cmp) paintFrame(fi, q, false);
@@ -964,6 +1014,17 @@
       <div class="sec-body"><div class="sec-inner">${body}</div></div></div>`;
   const trackBtn = (i, n) => `<button class="field pick" data-menu="1" data-track="${i}">${L.track(n)}${ICONS.chev}</button>`;
 
+  // Preset de áudio: só formato, qualidade, taxa e canais
+  function audioInspector(c, src) {
+    const a = c.audio; const s0 = srcAud(src); const lossy = a.codec === 'mp3' || a.codec === 'aac'; const pcm = a.codec === 'wav' || a.codec === 'flac';
+    return sec('audio', L.audio, audioOutTxt(c, src), `<div class="group">
+      ${row(L.format + (a.codec !== 'copy' ? `<small class="res-out">.${AEXT[a.codec]}</small>` : ''), dd('audio.codec', a.codec, [['wav', 'WAV'], ['mp3', 'MP3'], ['aac', 'AAC (.m4a)'], ['flac', 'FLAC'], ['copy', L.copy]]))}
+      ${lossy ? row(L.quality + (!a.kbps && s0 && s0.kbps ? `<small class="res-out">${Math.min(320, Math.max(64, s0.kbps))} kb/s</small>` : ''), dd('audio.kbps', a.kbps, [[0, L.source], [128, '128 kb/s'], [192, '192 kb/s'], [256, '256 kb/s'], [320, '320 kb/s']])) : ''}
+      ${pcm ? row(L.audioBits + (!a.bits && s0 ? `<small class="res-out">${s0.bits >= 24 ? 24 : 16}-bit</small>` : ''), dd('audio.bits', a.bits || 0, [[0, L.source], [16, '16-bit'], [24, '24-bit']])) : ''}
+      ${a.codec !== 'copy' ? row(L.sampleRate + (!a.rate && s0 ? `<small class="res-out">${khz(a.codec === 'mp3' && s0.rate > 48000 ? 48000 : s0.rate)}</small>` : ''), dd('audio.rate', a.rate || 0, [[0, L.source], [44100, '44,1 kHz'], [48000, '48 kHz']])) : ''}
+      ${a.codec !== 'copy' ? row(L.channels, dd('audio.channels', a.channels || 'source', [['source', L.source], ['stereo', L.stereo], ['mono', L.mono]])) : ''}
+    </div>${src && !src.audioOnly ? `<div class="hint">${L.extractHint}</div>` : ''}`);
+  }
   function renderInspector(anim) {
     const T = target(); const el = $('#inspIn');
     if (!T.cfg) { el.innerHTML = ''; return; }
@@ -971,7 +1032,7 @@
     const mod = T.isPreset ? T.dirty : T.preset && !same(c, T.preset);
     // Editando um preset: o nome e a cor ficam só nos presets lá em cima (sem repetir aqui).
     $('#inspFor').innerHTML = T.isPreset ? ''
-      : S.picked.size > 1 ? L.settingsForN(S.picked.size) : L.settingsFor;
+      : S.picked.size > 1 ? L.settingsForN(S.picked.size) : T.q && T.q.src.audioOnly ? L.thisFile : L.settingsFor;
     $('#inspFor').classList.toggle('editing', T.isPreset);
     $('.insp-title').classList.toggle('hide', !!T.isPreset && !mod);
     $('#modified').classList.toggle('show', !!mod); $('#bSavePreset').classList.toggle('show', !!mod);
@@ -981,7 +1042,9 @@
     const dims = src ? outDims(src, c) : null;
     const resHint = !src && c.scale === '1080' ? `<div class="hint">${L.scale1080Hint}</div>` : '';
     const rotTxt = c.rotate ? ` · ↻ ${c.rotate}°` : '';
-    el.innerHTML = (T.isPreset ? '' : S.picked.size > 1 ? `<div class="hint top-hint multi-hint">${L.multiHint(S.picked.size)}</div>` : '')
+    const top = (T.isPreset ? '' : S.picked.size > 1 ? `<div class="hint top-hint multi-hint">${L.multiHint(S.picked.size)}</div>` : '');
+    if (isAudioP(c)) el.innerHTML = top + audioInspector(c, src) + sec('adv', L.advanced, c.metadata ? L.metadata : '—', `<div class="group">${row(L.metadata, sw('metadata', c.metadata), L.metadataSub)}</div>`);
+    else el.innerHTML = top
       + sec('video', L.video, `${codecName(codecOut(c, src) || c.codec)} · ${bitsTxt(c, src)}${chromaOut(c, src) === '422' ? ' 4:2:2' : ''} · ${scaleTxt(c.scale)}${rotTxt} · ${c.fps.conform ? fpsCfrTxt(c, src) : c.bitrate.mode === 'manual' ? fmtK(c.bitrate.kbps) : c.bitrate.mode === 'source' ? L.source : L.auto}${c.hdrToSdr ? ' · 709' : ''}`,
         `<div class="group">
           ${row(`${L.resolution}<small class="res-out">${resLabel(c, src)}</small>`, dd('scale', c.scale, [['source', L.source], ['1080', '1080p'], ['50', '50%'], ['25', '25%'], ['custom', L.custom]]))}
@@ -989,6 +1052,9 @@
             ${row(L.size, `<div class="field"><input class="tnum" data-k="customW" value="${c.customW || ''}" placeholder="auto"><span>W</span></div><span class="times">×</span><div class="field"><input class="tnum" data-k="customH" value="${c.customH || ''}" placeholder="auto"><span>H</span></div>`)}
           </div>
           ${row(L.bitrate, dd('bitrate.mode', c.bitrate.mode, [['auto', L.auto], ['source', L.source], ['manual', L.manual]]))}
+          <div class="collapse ${c.bitrate.mode === 'auto' ? '' : 'closed'}" style="max-height:60px">
+            ${row(L.level, dd('bitrate.level', c.bitrate.level || (c.scale === 'source' ? 'high' : 'light'), [['high', L.lvHigh], ['balanced', L.lvBalanced], ['light', L.lvLight]]))}
+          </div>
           <div class="collapse ${c.bitrate.mode === 'manual' ? '' : 'closed'}" style="max-height:60px">
             ${row(L.value, `<div class="field"><input class="tnum" data-k="bitrate.kbps" value="${num(c.bitrate.kbps, 0)}"><span>kb/s</span></div>${dd('bitrate.rc', c.bitrate.rc, [['cbr', 'CBR'], ['vbr', 'VBR']])}`)}
           </div>
@@ -999,7 +1065,7 @@
           ${row(L.fpsMode, segH('fpsMode', c.fps.conform ? 'cfr' : 'vfr', [['vfr', 'VFR'], ['cfr', 'CFR']]))}
           ${row(L.rotate, dd('rotate', c.rotate || 0, [[0, L.rotNone], [90, L.rotCw], [180, '180°'], [270, L.rotCcw]]))}
           ${row(L.maxQuality, sw('maxQuality', c.maxQuality))}
-          ${row(`<span class="lbl-i">${L.hdr}<span class="info" tabindex="0" aria-label="${esc(L.hdrSub)}" data-tip="${esc(L.hdrSub)}">${ICONS.info}</span></span>` + (src && src.hdr ? `<span class="pill-tag" style="--c:${COLORS.yellow}">${L.detected(src.hdr)}</span>` : ''), sw('hdrToSdr', c.hdrToSdr))}
+          ${row(`<span class="lbl-i">${L.hdr}<span class="info" tabindex="0" aria-label="${esc(L.hdrSub)}" data-tip="${esc(L.hdrSub)}">${ICONS.info}</span></span>` + (src && src.hdr ? `<span class="pill-tag" style="--c:${COLORS.yellow}">${L.detected(src.hdr)}</span>` : ''), dd('hdrToSdr', !!c.hdrToSdr, [[true, L.hdrAuto], [false, L.off]]))}
         </div>${resHint}${cpuEncode(c, src) ? `<div class="hint warn-t">${chromaOut(c, src) === '422' ? L.cpuWarn422 : L.cpuWarnH264}</div>` : ''}${src && src.hdr && !c.hdrToSdr ? `<div class="hint warn-t">${L.hdrWarn}</div>` : ''}`)
       + sec('audio', L.audio, a.codec === 'copy' ? L.copy : `AAC · ${a.channels === 'stereo' ? L.stereo : L.mono}`,
         `<div class="group">
@@ -1040,7 +1106,7 @@
       <div class="group">
         ${row(L.suffix, `<div class="field ${o.suffix.on ? '' : 'off'}"><input data-k="output.suffix.text" value="${esc(o.suffix.text)}" class="txt" spellcheck="false"></div>${sw('output.suffix.on', o.suffix.on)}`)}
         ${row(L.subfolder, `<div class="field ${o.subfolder.on ? '' : 'off'}"><input data-k="output.subfolder.text" value="${esc(o.subfolder.text)}" class="txt" spellcheck="false"></div>${sw('output.subfolder.on', o.subfolder.on)}`)}
-        ${row(L.format + (c.container === 'source' && T.q ? `<small class="res-out">.${extOut(c, T.q.file)}</small>` : ''), dd('container', c.container || 'mp4', [['source', L.source], ['mp4', 'MP4'], ['mov', 'MOV']]))}
+        ${isAudioP(c) ? '' : row(L.format + (c.container === 'source' && T.q ? `<small class="res-out">.${extOut(c, T.q.file)}</small>` : ''), dd('container', c.container || 'mp4', [['source', L.source], ['mp4', 'MP4'], ['mov', 'MOV']]))}
         ${row(L.deleteSrc, sw('output.deleteSource', o.deleteSource, true), '', o.deleteSource ? 'danger' : '')}
       </div>`;
     wireDD(box);
@@ -1053,8 +1119,8 @@
   }
   function outName(file, cfg) {
     const c = cfg.output; const base = file.replace(/\.[^.]+$/, '');
-    const suf = c.suffix.on ? c.suffix.text.replace('{codec}', codecName(codecOut(cfg, (target().src)) || 'h265').replace('.', '')).replace('{preset}', cfg.name || '') : '';
-    return (c.subfolder.on ? c.subfolder.text + '\\' : '') + base + suf + '.' + extOut(cfg, file);
+    const suf = c.suffix.on ? c.suffix.text.replace('{codec}', isAudioP(cfg) ? (ACODEC[cfg.audio.codec] || 'AUDIO') : codecName(codecOut(cfg, (target().src)) || 'h265').replace('.', '')).replace('{preset}', cfg.name || '') : '';
+    return (c.subfolder.on ? c.subfolder.text + '\\' : '') + base + suf + '.' + (isAudioP(cfg) ? (AEXT[cfg.audio.codec] || String(file).split('.').pop()) : extOut(cfg, file));
   }
   // copia os campos alterados do vídeo principal para os outros selecionados
   function spread(from, keys) {
@@ -1124,6 +1190,7 @@
       <div class="sec-label">${L.general}</div>
       <div class="group">
         ${row(L.newVideosUse, `<button class="field pick" data-menu="1" id="bSheetDef"><i class="dotc" style="--c:${dp ? COLORS[dp.color] : 'var(--text-3)'}"></i>${dp ? esc(dp.name) : ''}${ICONS.chev}</button>`)}
+        ${S.presets.some(isAudioP) ? row(L.newAudioUse, `<button class="field pick" data-menu="1" id="bSheetDefA"><i class="dotc" style="--c:${COLORS[(presetOf(defaultAudioId()) || {}).color] || 'var(--text-3)'}"></i>${esc((presetOf(defaultAudioId()) || {}).name || '')}${ICONS.chev}</button>`) : ''}
         ${row(L.clearWhenDone, sw('clearWhenDone', S.set.clearWhenDone))}
         ${row(L.sound, sw('sound', S.set.sound))}
         ${row(L.notify, sw('notify', S.set.notify))}
@@ -1146,7 +1213,8 @@
       if (s.dataset.k === 'parallel') { S.set.parallel = +v; saveSettings(); return; }
       S.set.lang = v; saveSettings(); applyLang(); renderAll(); renderSheet();
     }));
-    $('#bSheetDef').onclick = (e) => openMenu(e.currentTarget, presetItems(S.set.defaultPreset), (v) => { S.set.defaultPreset = v; saveSettings(); renderSheet(); renderQueue(); });
+    $('#bSheetDef').onclick = (e) => openMenu(e.currentTarget, presetItems(S.set.defaultPreset).filter((i) => !isAudioP(presetOf(i.value))), (v) => { S.set.defaultPreset = v; saveSettings(); renderSheet(); renderQueue(); });
+    const da = $('#bSheetDefA'); if (da) da.onclick = (e) => openMenu(e.currentTarget, presetItems(defaultAudioId()).filter((i) => isAudioP(presetOf(i.value))), (v) => { S.set.defaultAudioPreset = v; saveSettings(); renderSheet(); });
     $('#bOpenLog').onclick = () => (REAL ? inv('open_log').catch((e) => toast(String(e))) : toast('render.log'));
     const cu = $('#bCheckUpdate'); if (cu) cu.onclick = () => checkUpdate(true);
     const su = $('#bSheetUpdate'); if (su) su.onclick = installUpdate;
@@ -1323,6 +1391,12 @@
       else if ((navigator.language || '').toLowerCase().startsWith('pt')) S.set.lang = 'pt'; // primeira vez: idioma do Windows
       if (!presetOf(S.set.defaultPreset) && S.presets[0]) S.set.defaultPreset = S.presets[0].id;
       S.engine = Object.assign(S.engine, st.engine); S.version = st.version;
+      S.audioDefaults = st.audioDefaults || []; S.cameraPreset = st.cameraPreset; S.firstRun = !!st.firstRun;
+      if (st.presetsRecovered) setTimeout(() => toast(L.presetsRecovered(st.presetsRecovered)), 1200);
+      // Presets de áudio entram uma vez para quem já usava o app (os seus presets não mudam)
+      if (!S.set.audioPresetsAdded && !S.presets.some(isAudioP) && S.audioDefaults.length) {
+        S.presets.push(...clone(S.audioDefaults)); S.set.audioPresetsAdded = true; savePresets(); saveSettings();
+      } else if (!S.set.audioPresetsAdded) { S.set.audioPresetsAdded = true; saveSettings(); }
       if (!st.engine.ffmpeg) S.engine.status = 'missing';
     } catch (e) { console.error(e); }
     applyTheme(); applyLang(); renderAll();
@@ -1332,7 +1406,8 @@
     let batch = []; let batchTimer = 0; let firstNew = null;
     on('scan-start', (p) => { if (p.count > 2) toast(L.scanning(p.count)); });
     on('item-added', (p) => {
-      const pid = presetOf(S.set.defaultPreset) ? S.set.defaultPreset : S.presets[0].id;
+      const audioOnly = !p.info.video;
+      const pid = audioOnly ? defaultAudioId() : presetOf(S.set.defaultPreset) ? S.set.defaultPreset : S.presets[0].id;
       const q = { id: p.id, path: p.path, file: p.file, dir: p.dir, src: mapSrc(p.info), preset: pid, cfg: clone(presetOf(pid)), status: 'ready', thumb: null };
       S.queue.push(q); batch.push(q.id); if (firstNew == null) firstNew = q.id;
       clearTimeout(batchTimer);
@@ -1360,7 +1435,11 @@
     });
     on('drag', (p) => $('#queueCard').classList.toggle('drag-over', !!p.over));
     on('engine', (p) => {
-      Object.assign(S.engine, p); renderQueue(); renderSheetIfOpen();
+      Object.assign(S.engine, p);
+      // RTX 50 na primeira vez: preset extra que mantém 4:2:2 pela placa
+      if (S.firstRun && isBlackwell() && S.cameraPreset && !S.set.cameraAdded && !presetOf(S.cameraPreset.id)) {
+        S.presets.splice(1, 0, clone(S.cameraPreset)); S.set.cameraAdded = true; savePresets(); saveSettings(); renderPresets();
+      } renderQueue(); renderSheetIfOpen();
       if (p.status === 'cpu') toast(L.cpuWarn);
     });
     on('update-progress', (p) => { if (p.total) { S.updating = Math.round(p.done / p.total * 100); renderUpdateBtn(); } });

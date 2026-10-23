@@ -133,7 +133,8 @@ async fn pick(app: AppHandle, folder: bool) -> Result<usize, String> {
         if folder {
             d.blocking_pick_folder().and_then(|p| p.into_path().ok()).map(|p| vec![p]).unwrap_or_default()
         } else {
-            d.add_filter("Video", scan::VIDEO_EXT)
+            let all: Vec<&str> = scan::VIDEO_EXT.iter().chain(scan::AUDIO_EXT.iter()).copied().collect();
+            d.add_filter("Video / Audio", &all)
                 .blocking_pick_files()
                 .map(|v| v.into_iter().filter_map(|p| p.into_path().ok()).collect())
                 .unwrap_or_default()
@@ -270,8 +271,26 @@ fn do_render(app: &AppHandle, engine: &Engine, info: &MediaInfo, cfg: &Preset, i
     if !info.path.exists() { return Err("source-missing".into()); }
     // Troca as opções "Original" (codec, croma, profundidade, fps, formato) pelos valores deste arquivo.
     let cfg = &command::resolve(info, cfg);
-    let out = command::output_path(&info.path, cfg);
+    let out = if cfg.is_audio() && cfg.audio.codec == "copy" {
+        // cópia de áudio: a extensão segue o codec de verdade
+        let ext = command::audio_ext(&info.path, cfg, info.audio.first().map_or("", |a| a.codec.as_str()));
+        command::output_path(&info.path, cfg).with_extension(ext)
+    } else { command::output_path(&info.path, cfg) };
     if let Some(dir) = out.parent() { std::fs::create_dir_all(dir).map_err(|e| e.to_string())?; }
+    if cfg.is_audio() {
+        // Converter só áudio (ou extrair o áudio de um vídeo): um comando, sem placa de vídeo.
+        if info.audio.is_empty() { return Err("no-audio".into()); }
+        let plan = command::build_audio(info, cfg, &out);
+        log(app, &format!("{} | audio | ffmpeg {}", info.path.display(), plan.args.join(" ")));
+        let started = Instant::now();
+        if let Err(e) = run_ffmpeg(app, &ffmpeg, &plan, id, info.duration, children, cancel, "audio") {
+            let _ = std::fs::remove_file(&out);
+            log(app, &format!("{} | failed (audio): {}", info.path.display(), e.replace('\n', " / ")));
+            return Err(e);
+        }
+        log(app, &format!("{} | ok (audio) | {:.1}s", info.path.display(), started.elapsed().as_secs_f64()));
+        return finish(&ffprobe, info, cfg, out, vec![]);
+    }
     let enc = engine.encoder.lock().unwrap().clone();
     // RTX 50 (Blackwell) lê e grava 4:2:2 e H.264 10-bit; as RTX 20/30/40 não.
     let blackwell = engine.gpu.lock().unwrap().as_deref().map_or(false, command::gpu_reads_422);
@@ -313,8 +332,12 @@ fn do_render(app: &AppHandle, engine: &Engine, info: &MediaInfo, cfg: &Preset, i
     }
     if let Err(e) = res { let _ = std::fs::remove_file(&out); return Err(e); }
 
-    let mut warnings = plan.warnings.clone();
-    let out_info = probe::probe(&ffprobe, &out).map_err(|e| format!("output check failed: {e}"))?;
+    finish(&ffprobe, info, cfg, out, plan.warnings.clone())
+}
+
+/// Confere o arquivo novo e, se o preset pedir, manda o original para a Lixeira.
+fn finish(ffprobe: &PathBuf, info: &MediaInfo, cfg: &Preset, out: PathBuf, mut warnings: Vec<String>) -> Result<RenderResult, String> {
+    let out_info = probe::probe(ffprobe, &out).map_err(|e| format!("output check failed: {e}"))?;
     command::verify(info, &out_info)?;
     let mut deleted = false;
     if cfg.output.delete_source {
@@ -352,8 +375,13 @@ fn stop(state: State<'_, AppState>) {
 #[tauri::command]
 fn get_state(app: AppHandle, state: State<'_, AppState>) -> Value {
     let e = &state.engine;
+    let loaded = store::load_presets(&app);
     json!({
-        "presets": store::load_presets(&app),
+        "presets": loaded.presets,
+        "firstRun": loaded.first_run,
+        "presetsRecovered": loaded.recovered,
+        "audioDefaults": Preset::audio_defaults(),
+        "cameraPreset": Preset::camera_422(),
         "settings": store::load_settings(&app),
         "engine": {
             "ffmpeg": e.ffmpeg.is_some(),

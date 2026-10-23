@@ -209,6 +209,11 @@ fn video_codec_args(info: &MediaInfo, p: &Preset, enc: &Encoder, _warnings: &mut
     let h265 = p.codec != "h264";
     let ten = effective_bits(p) == 10;
     let proxy = p.scale != "source";
+    // Nível do Auto (qualidade constante): Alta · Equilibrada · Leve. Sem nível: alta, ou leve no proxy.
+    let (cq, crf) = match p.bitrate.level.as_str() {
+        "high" => ("19", "20"), "balanced" => ("23", "23"), "light" => ("27", "26"),
+        _ => if proxy { ("26", "26") } else { ("19", "20") },
+    };
     let kbps = match p.bitrate.mode.as_str() {
         "manual" if p.bitrate.kbps > 0 => Some(p.bitrate.kbps),
         "source" => Some(v.map_or(0, |v| v.bitrate_kbps)).filter(|k| *k > 0).or(Some(20_000)),
@@ -232,7 +237,7 @@ fn video_codec_args(info: &MediaInfo, p: &Preset, enc: &Encoder, _warnings: &mut
                     a.extend(["-rc".into(), if cbr { "cbr" } else { "vbr" }.into()]);
                     rate(&mut a, cbr, k);
                 }
-                None => a.extend(["-rc".into(), "vbr".into(), "-cq".into(), if proxy { "26" } else { "19" }.into(), "-b:v".into(), "0".into()]),
+                None => a.extend(["-rc".into(), "vbr".into(), "-cq".into(), cq.into(), "-b:v".into(), "0".into()]),
             }
         }
         Encoder::Cpu { preset } => {
@@ -242,7 +247,7 @@ fn video_codec_args(info: &MediaInfo, p: &Preset, enc: &Encoder, _warnings: &mut
             if h265 { a.extend(["-x265-params".into(), "log-level=error".into()]); }
             match kbps {
                 Some(k) => rate(&mut a, p.bitrate.rc == "cbr", k),
-                None => a.extend(["-crf".into(), if proxy { "26" } else { "20" }.into()]),
+                None => a.extend(["-crf".into(), crf.into()]),
             }
         }
     }
@@ -306,7 +311,22 @@ pub fn aac_quality(info: &MediaInfo, p: &Preset) -> (u32, u32) {
     (kbps, rate)
 }
 
-fn codec_tag(p: &Preset) -> &'static str { if p.codec == "h264" { "H264" } else { "H265" } }
+fn codec_tag(p: &Preset) -> &'static str {
+    if p.is_audio() { return match p.audio.codec.as_str() { "wav" => "WAV", "mp3" => "MP3", "flac" => "FLAC", "aac" => "AAC", _ => "AUDIO" }; }
+    if p.codec == "h264" { "H264" } else { "H265" }
+}
+
+/// Extensão de um preset de áudio. "copy" mantém o tipo do arquivo de áudio (ou .m4a/.mp3/.wav de um vídeo).
+pub fn audio_ext(src: &Path, p: &Preset, src_codec: &str) -> String {
+    match p.audio.codec.as_str() {
+        "wav" => "wav".into(), "mp3" => "mp3".into(), "flac" => "flac".into(), "aac" => "m4a".into(),
+        _ => {
+            let e = src.extension().and_then(|e| e.to_str()).map(|e| e.to_ascii_lowercase()).unwrap_or_default();
+            if crate::scan::AUDIO_EXT.contains(&e.as_str()) { return e; }
+            match src_codec { "mp3" => "mp3", "flac" => "flac", c if c.starts_with("pcm_") => "wav", "opus" | "vorbis" => "ogg", _ => "m4a" }.into()
+        }
+    }
+}
 
 fn clean(s: &str) -> String {
     s.chars().map(|c| if r#"<>:"/\|?*"#.contains(c) || c.is_control() { '_' } else { c }).collect::<String>().trim().to_string()
@@ -320,7 +340,9 @@ pub fn output_path(src: &Path, p: &Preset) -> PathBuf {
     let suffix = if p.output.suffix.on {
         clean(&p.output.suffix.text.replace("{codec}", codec_tag(p)).replace("{preset}", &p.name))
     } else { String::new() };
-    let ext = match p.container.as_str() { "mov" => "mov", "source" => source_container(src), _ => "mp4" };
+    let ext = if p.is_audio() { audio_ext(src, p, "") } else {
+        match p.container.as_str() { "mov" => "mov", "source" => source_container(src), _ => "mp4" }.to_string()
+    };
     let mut out = dir.join(format!("{stem}{suffix}.{ext}"));
     let mut i = 2;
     while out.exists() || out == src {
@@ -437,6 +459,49 @@ pub fn build_mode(info: &MediaInfo, p: &Preset, enc: &Encoder, output: &Path, de
     Plan { args, output: output.to_path_buf(), width, height, warnings }
 }
 
+/// Converte só o áudio (preset de áudio): WAV, MP3, AAC (.m4a), FLAC ou cópia. De um vídeo, extrai o áudio.
+pub fn build_audio(info: &MediaInfo, p: &Preset, output: &Path) -> Plan {
+    let mut args: Vec<String> = vec!["-nostdin".into(), "-hide_banner".into(), "-v".into(), "error".into(), "-i".into(), info.path.to_string_lossy().into_owned()];
+    let a = &p.audio;
+    let first = info.audio.first();
+    let n = info.audio.len() as u32;
+    // Canais: "source" mantém a faixa como está; estéreo/mono usam o mesmo mapeamento de faixas do vídeo.
+    if a.channels == "source" || n == 0 || a.codec == "copy" {
+        args.extend(["-map".into(), format!("0:{}", first.map_or(1, |t| t.index))]);
+    } else {
+        let mut q = p.clone(); q.audio.codec = "aac".into();
+        let (graph, _) = audio_args(info, &q);
+        if let Some(g) = graph { args.extend(["-filter_complex".into(), g, "-map".into(), "[aout]".into()]); }
+    }
+    args.push("-vn".into());
+    let src_bits = first.map_or(0, |t| t.bits);
+    let bits = if a.bits == 0 { if src_bits >= 24 { 24 } else { 16 } } else if a.bits >= 24 { 24 } else { 16 };
+    let rate = match a.rate { 0 => None, r => Some(r) };
+    match a.codec.as_str() {
+        "wav" => args.extend(["-c:a".into(), if bits == 24 { "pcm_s24le" } else { "pcm_s16le" }.into()]),
+        "flac" => {
+            args.extend(["-c:a".into(), "flac".into()]);
+            if bits == 24 { args.extend(["-sample_fmt".into(), "s32".into()]); } else { args.extend(["-sample_fmt".into(), "s16".into()]); }
+        }
+        "mp3" | "aac" => {
+            let (kbps, _) = aac_quality(info, p);
+            let kbps = if a.codec == "mp3" { [128, 160, 192, 224, 256, 320].into_iter().min_by_key(|k| (*k as i64 - kbps as i64).abs()).unwrap_or(320) } else { kbps };
+            args.extend(["-c:a".into(), if a.codec == "mp3" { "libmp3lame" } else { "aac" }.into(), "-b:a".into(), format!("{kbps}k")]);
+            if a.codec == "mp3" { args.extend(["-id3v2_version".into(), "3".into()]); }
+        }
+        _ => args.extend(["-c:a".into(), "copy".into()]),
+    }
+    if a.codec != "copy" {
+        // MP3 aceita no máximo 48 kHz; os outros mantêm a taxa original quando "Original".
+        let r = rate.or_else(|| first.map(|t| t.sample_rate).filter(|r| *r > 48000 && a.codec == "mp3").map(|_| 48000));
+        if let Some(r) = r { args.extend(["-ar".into(), r.to_string()]); }
+    }
+    args.extend(["-map_metadata".into(), if p.metadata { "0" } else { "-1" }.into()]);
+    args.extend(["-progress", "pipe:1", "-nostats", "-y"].map(String::from));
+    args.push(output.to_string_lossy().into_owned());
+    Plan { args, output: output.to_path_buf(), width: 0, height: 0, warnings: vec![] }
+}
+
 /// Um quadro JPEG da prévia, no tempo `t` (segundos). `output = true` mostra o resultado do preset.
 pub fn preview_args(info: &MediaInfo, p: &Preset, t: f64, output: bool, max: u32) -> Vec<String> {
     let p = &resolve(info, p);
@@ -451,7 +516,8 @@ pub fn preview_args(info: &MediaInfo, p: &Preset, t: f64, output: bool, max: u32
 
 /// Confere o arquivo convertido antes de apagar o original.
 pub fn verify(src: &MediaInfo, out: &MediaInfo) -> Result<(), String> {
-    if out.video.is_none() { return Err("output has no video".into()); }
+    if src.video.is_some() && out.video.is_none() && out.audio.is_empty() { return Err("output has no video".into()); }
+    if src.video.is_none() && out.audio.is_empty() { return Err("output has no audio".into()); }
     let tol = (src.duration * 0.02).max(1.0);
     if (src.duration - out.duration).abs() > tol {
         return Err(format!("duration mismatch: {:.2}s vs {:.2}s", src.duration, out.duration));
@@ -466,14 +532,14 @@ mod tests {
     #[test]
     fn aac_source_quality() {
         let mut i = iphone(0, "");
-        i.audio = vec![AudioInfo { index: 1, codec: "aac".into(), channels: 2, sample_rate: 48000, bitrate_kbps: 107 }];
+        i.audio = vec![AudioInfo { index: 1, codec: "aac".into(), channels: 2, sample_rate: 48000, bitrate_kbps: 107, bits: 0 }];
         let mut p = preset("iphone-4k60"); p.audio.codec = "aac".into(); p.audio.kbps = 0; p.audio.rate = 0; p.audio.tracks = vec![1, 1];
         assert_eq!(aac_quality(&i, &p), (107, 48000));
-        i.audio[0] = AudioInfo { index: 1, codec: "pcm_s16be".into(), channels: 2, sample_rate: 44100, bitrate_kbps: 1536 };
+        i.audio[0] = AudioInfo { index: 1, codec: "pcm_s16be".into(), channels: 2, sample_rate: 44100, bitrate_kbps: 1536, bits: 0 };
         assert_eq!(aac_quality(&i, &p), (320, 44100));
         // dois microfones mono de 128 → estéreo 256
-        i.audio = vec![AudioInfo { index: 1, codec: "aac".into(), channels: 1, sample_rate: 48000, bitrate_kbps: 128 },
-                       AudioInfo { index: 2, codec: "aac".into(), channels: 1, sample_rate: 48000, bitrate_kbps: 128 }];
+        i.audio = vec![AudioInfo { index: 1, codec: "aac".into(), channels: 1, sample_rate: 48000, bitrate_kbps: 128, bits: 0 },
+                       AudioInfo { index: 2, codec: "aac".into(), channels: 1, sample_rate: 48000, bitrate_kbps: 128, bits: 0 }];
         p.audio.tracks = vec![1, 2];
         assert_eq!(aac_quality(&i, &p), (256, 48000));
         let s = build_opts(&i, &p, &Encoder::Nvenc, Path::new("o.mp4"), true).args.join(" ");
@@ -486,7 +552,7 @@ mod tests {
         let mut i = iphone(270, "");
         { let v = i.video.as_mut().unwrap(); v.codec = "h264".into(); v.pix_fmt = "yuv422p10le".into(); v.bit_depth = 10; v.fps = 59.94006; v.fps_nominal = 59.94006; v.vfr = false; }
         i.path = PathBuf::from("/v/C0579.MP4");
-        i.audio = vec![AudioInfo { index: 1, codec: "pcm_s16be".into(), channels: 2, sample_rate: 48000, bitrate_kbps: 1536 }];
+        i.audio = vec![AudioInfo { index: 1, codec: "pcm_s16be".into(), channels: 2, sample_rate: 48000, bitrate_kbps: 1536, bits: 0 }];
         i.timecode = "07:51:07:46".into();
         let mut p = preset("iphone-4k60");
         p.codec = "source".into(); p.bits = 0; p.chroma = "source".into(); p.container = "source".into(); p.fps.value = "source".into();
@@ -582,15 +648,15 @@ mod tests {
             path: PathBuf::from("/v/IMG_0001.MOV"), duration: 10.0, bitrate_kbps: 50_000,
             video: Some(VideoInfo { coded_width: cw, coded_height: ch, width: w, height: h, rotation, hdr: hdr.into(),
                 bit_depth: 10, fps: 59.93, fps_nominal: 60.0, vfr: true, bitrate_kbps: 49_000, ..Default::default() }),
-            audio: vec![AudioInfo { index: 1, codec: "aac".into(), channels: 1, sample_rate: 48000, bitrate_kbps: 0 },
-                        AudioInfo { index: 2, codec: "aac".into(), channels: 1, sample_rate: 48000, bitrate_kbps: 0 }],
+            audio: vec![AudioInfo { index: 1, codec: "aac".into(), channels: 1, sample_rate: 48000, bitrate_kbps: 0, bits: 0 },
+                        AudioInfo { index: 2, codec: "aac".into(), channels: 1, sample_rate: 48000, bitrate_kbps: 0, bits: 0 }],
             ..Default::default()
         }
     }
     /// Presets de teste (independentes dos padrões do app).
     fn preset(id: &str) -> Preset {
         let base = Preset {
-            bitrate: crate::preset::Bitrate { mode: "manual".into(), kbps: 50_000, rc: "cbr".into() }, max_quality: true,
+            bitrate: crate::preset::Bitrate { mode: "manual".into(), kbps: 50_000, rc: "cbr".into(), level: String::new() }, max_quality: true,
             fps: crate::preset::Fps { conform: true, value: "59.94".into() }, ..Preset::default()
         };
         match id {
@@ -702,9 +768,22 @@ mod tests {
     }
 
     #[test]
-    fn defaults_are_the_four() {
-        let names: Vec<_> = Preset::defaults().into_iter().map(|p| p.name).collect();
-        assert_eq!(names, vec!["RAW", "RAW HDR", "Proxy", "Meta HDR"]);
+    fn defaults_for_new_users() {
+        let d = Preset::defaults();
+        let names: Vec<_> = d.iter().map(|p| p.name.as_str()).collect();
+        assert_eq!(names, vec!["RAW", "Backup", "Proxy", "Meta Glass", "WAV", "MP3 320", "AAC 256", "FLAC"]);
+        // Tudo que é vídeo roda pela placa em qualquer RTX 20+ e nada apaga o original sem o usuário pedir.
+        for p in d.iter().filter(|p| !p.is_audio()) {
+            assert!(p.codec == "h265" && p.chroma == "420" && !p.output.delete_source && p.hdr_to_sdr, "{}", p.name);
+            assert!(!needs_ext_encoder(&resolve(&iphone(90, "HLG"), p)), "{}", p.name);
+        }
+        assert_eq!(Preset::camera_422().chroma, "source");
+        // Nível do Auto
+        let i = iphone(0, "");
+        let backup = d.iter().find(|p| p.id == "backup").unwrap();
+        assert!(build(&i, backup, &Encoder::Nvenc, Path::new("o.mp4")).args.join(" ").contains("-cq 23"));
+        let proxy = d.iter().find(|p| p.id == "proxy").unwrap();
+        assert!(build(&i, proxy, &Encoder::Nvenc, Path::new("o.mp4")).args.join(" ").contains("-cq 27"));
     }
 
     #[test]

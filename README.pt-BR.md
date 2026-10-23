@@ -17,7 +17,9 @@ Feito em **Rust** (Tauri 2) com **FFmpeg** e encode por **NVIDIA NVENC**.
 
 - Converte vídeos do iPhone para **frame rate constante** (ex.: 59,94 fps), mantendo bitrate e qualidade.
 - Gera **proxy** em 25% com sufixo e subpasta automáticos.
-- Converte **HDR do iPhone (HLG) para Rec. 709** com tone mapping de verdade (a mesma sequência de filtros Hable do HandBrake).
+- Converte **HDR do iPhone (HLG) para Rec. 709** com tone mapping de verdade (a mesma sequência de filtros Hable do HandBrake), automaticamente quando o vídeo é HDR.
+- **Mantém o arquivo da câmera como está** quando você quer: codec, croma (4:2:2), profundidade, frame rate, .mp4/.mov, áudio PCM e timecode em Original.
+- **Converte áudio** (WAV, MP3, AAC, FLAC) e extrai o áudio de vídeos.
 - **Arraste arquivos ou pastas inteiras**: todos os vídeos de dentro, inclusive das subpastas, entram na fila.
 - **Fila em que cada vídeo tem o próprio preset**, visível ao lado do nome.
 - **Prévia do resultado** antes de renderizar: rotação, escala e cor, com **Comparar** para ver o original lado a lado.

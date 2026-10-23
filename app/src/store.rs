@@ -30,11 +30,35 @@ fn read_json(path: &PathBuf) -> Option<Value> {
     serde_json::from_str(&text).ok()
 }
 
-pub fn load_presets(app: &AppHandle) -> Vec<Preset> {
-    read_json(&dir(app).join("presets.json"))
-        .and_then(|v| serde_json::from_value::<Vec<Preset>>(v).ok())
-        .filter(|v| !v.is_empty())
-        .unwrap_or_else(Preset::defaults)
+/// Como os presets foram carregados.
+pub struct Loaded {
+    pub presets: Vec<Preset>,
+    /// Primeira vez (não havia presets): recebeu os padrões.
+    pub first_run: bool,
+    /// O arquivo existia mas não pôde ser lido por inteiro: uma cópia foi guardada (nome do arquivo).
+    pub recovered: Option<String>,
+}
+
+/// Lê os presets do usuário sem nunca trocar por padrões em silêncio:
+/// cada preset é lido sozinho (um com problema não derruba os outros), e se algo não puder ser lido,
+/// o arquivo inteiro é copiado para presets.broken-<data>.json antes de qualquer gravação.
+pub fn load_presets(app: &AppHandle) -> Loaded {
+    let d = dir(app);
+    let path = d.join("presets.json");
+    let exists = path.exists() || path.with_extension("bak").exists();
+    if !exists { return Loaded { presets: Preset::defaults(), first_run: true, recovered: None }; }
+    let raw = read_json(&path);
+    let items: Vec<Value> = match &raw { Some(Value::Array(a)) => a.clone(), _ => vec![] };
+    let presets: Vec<Preset> = items.iter().filter_map(|v| serde_json::from_value::<Preset>(v.clone()).ok()).collect();
+    let mut recovered = None;
+    if raw.is_none() || presets.len() != items.len() {
+        let ts = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |t| t.as_secs());
+        let name = format!("presets.broken-{ts}.json");
+        let _ = std::fs::copy(if path.exists() { path.clone() } else { path.with_extension("bak") }, d.join(&name));
+        recovered = Some(name);
+    }
+    let presets = if presets.is_empty() { Preset::defaults() } else { presets };
+    Loaded { presets, first_run: false, recovered }
 }
 
 pub fn save_presets(app: &AppHandle, presets: &[Preset]) -> Result<(), String> {

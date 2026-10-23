@@ -323,3 +323,14 @@
   -webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);box-shadow:0 8px 28px rgba(0,0,0,.35),0 0 0 .5px var(--sep);opacity:0;transform:translateY(4px);pointer-events:none;transition:opacity .18s,transform .18s}
 #tip.show{opacity:1;transform:none}
 .row .lbl .pill-tag{margin-top:3px}
+/* áudio */
+.thumb-audio{position:absolute;inset:0;display:grid;place-items:center;background:color-mix(in srgb,var(--teal) 16%,var(--panel-2));color:var(--teal)}
+.thumb-audio svg{width:22px;height:22px}
+.thumb{position:relative}
+.preset.is-audio svg{width:12px;height:12px;margin-right:-1px;opacity:.75}
+.frame.audio-card{background:radial-gradient(120% 120% at 30% 20%,color-mix(in srgb,var(--teal) 22%,var(--panel-2)),var(--panel));display:grid;place-items:center;box-shadow:0 0 0 .5px var(--sep)}
+.ac-in{display:grid;justify-items:center;gap:8px;padding:16px;text-align:center;color:var(--text-2)}
+.ac-in svg{width:56px;height:56px;color:var(--teal)}
+.ac-in b{color:var(--text);font-size:15px;font-weight:600;word-break:break-all}
+.ac-in span{font-size:12px}
+.audio-item #bCompare{visibility:hidden}

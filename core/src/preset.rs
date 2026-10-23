@@ -11,6 +11,8 @@ pub struct Bitrate {
     pub kbps: u32,
     /// "cbr" ou "vbr".
     pub rc: String,
+    /// Nível do Auto: "high", "balanced" ou "light" ("" = como antes: alta, ou leve no proxy).
+    pub level: String,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -24,7 +26,7 @@ pub struct Fps {
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(rename_all = "camelCase", default))]
 pub struct Audio {
-    /// "aac" ou "copy".
+    /// Vídeo: "aac" ou "copy". Preset de áudio: "wav", "mp3", "aac", "flac" ou "copy".
     pub codec: String,
     /// "stereo" ou "mono".
     pub channels: String,
@@ -34,6 +36,8 @@ pub struct Audio {
     pub kbps: u32,
     /// Taxa de amostragem do AAC: 44100 ou 48000; 0 = a mesma do áudio original.
     pub rate: u32,
+    /// WAV/FLAC: 16 ou 24 bits; 0 = o mesmo do original.
+    pub bits: u32,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -54,6 +58,8 @@ pub struct Output {
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(rename_all = "camelCase", default))]
 pub struct Preset {
+    /// "video" ou "audio" (converte só o áudio: WAV, MP3, AAC, FLAC).
+    pub kind: String,
     pub id: String,
     pub name: String,
     pub icon: String,
@@ -86,13 +92,13 @@ pub struct Preset {
 }
 
 impl Default for Bitrate {
-    fn default() -> Self { Self { mode: "auto".into(), kbps: 0, rc: "vbr".into() } }
+    fn default() -> Self { Self { mode: "auto".into(), kbps: 0, rc: "vbr".into(), level: String::new() } }
 }
 impl Default for Fps {
     fn default() -> Self { Self { conform: false, value: "59.94".into() } }
 }
 impl Default for Audio {
-    fn default() -> Self { Self { codec: "aac".into(), channels: "stereo".into(), tracks: vec![1, 2], kbps: 256, rate: 48000 } }
+    fn default() -> Self { Self { codec: "aac".into(), channels: "stereo".into(), tracks: vec![1, 2], kbps: 256, rate: 48000, bits: 0 } }
 }
 impl Default for Toggle {
     fn default() -> Self { Self { on: false, text: String::new() } }
@@ -105,7 +111,7 @@ impl Default for Output {
 impl Default for Preset {
     fn default() -> Self {
         Self {
-            id: "preset".into(), name: "Preset".into(), icon: "phone".into(), color: "blue".into(),
+            kind: "video".into(), id: "preset".into(), name: "Preset".into(), icon: "phone".into(), color: "blue".into(),
             codec: "h265".into(), bits: 8, chroma: "420".into(), container: "mp4".into(), scale: "source".into(), rotate: 0, custom_w: 0, custom_h: 0, folder: String::new(),
             bitrate: Bitrate::default(), max_quality: false, fps: Fps::default(), hdr_to_sdr: false,
             audio: Audio::default(), output: Output::default(), av_sync: true, metadata: true,
@@ -115,30 +121,65 @@ impl Default for Preset {
 
 impl Preset {
 
-    /// Presets que vêm com o app.
+    /// Presets que vêm com o app (só para quem abre pela primeira vez; os do usuário nunca são trocados).
+    /// Tudo aqui roda pela placa em qualquer RTX 20/30/40/50: H.265, 4:2:0, profundidade Original.
     pub fn defaults() -> Vec<Preset> {
         let raw = Preset {
             id: "iphone-4k60".into(), name: "RAW".into(), icon: String::new(), color: "blue".into(),
-            bitrate: Bitrate { mode: "source".into(), kbps: 50_000, rc: "cbr".into() }, max_quality: true,
-            fps: Fps { conform: true, value: "59.94".into() },
+            codec: "h265".into(), bits: 0, chroma: "420".into(), container: "source".into(),
+            bitrate: Bitrate { mode: "source".into(), kbps: 50_000, rc: "cbr".into(), level: String::new() }, max_quality: true,
+            fps: Fps { conform: true, value: "source".into() },
+            // HDR automático: converte para Rec. 709 só quando o vídeo é HDR
+            hdr_to_sdr: true,
             audio: Audio { codec: "copy".into(), ..Audio::default() },
+            output: Output { delete_source: false, ..Output::default() },
+            ..Preset::default()
+        };
+        let mut v = vec![
+            raw.clone(),
+            Preset { id: "backup".into(), name: "Backup".into(), color: "yellow".into(), bits: 10,
+                bitrate: Bitrate { mode: "auto".into(), kbps: 0, rc: "vbr".into(), level: "balanced".into() },
+                output: Output { suffix: Toggle { on: true, text: "_backup".into() }, subfolder: Toggle { on: true, text: "backup".into() }, delete_source: false },
+                ..raw.clone() },
+            Preset { id: "proxy".into(), name: "Proxy".into(), color: "green".into(), scale: "25".into(), bits: 8, container: "mp4".into(),
+                bitrate: Bitrate { mode: "auto".into(), kbps: 0, rc: "vbr".into(), level: "light".into() }, max_quality: false,
+                fps: Fps { conform: false, value: "source".into() },
+                output: Output { suffix: Toggle { on: true, text: "_proxy".into() }, subfolder: Toggle { on: true, text: "proxy".into() }, delete_source: false },
+                ..raw.clone() },
+            Preset { id: "meta-15".into(), name: "Meta Glass".into(), color: "pink".into(),
+                bitrate: Bitrate { mode: "source".into(), kbps: 15_000, rc: "cbr".into(), level: String::new() }, fps: Fps { conform: true, value: "29.97".into() },
+                audio: Audio { codec: "copy".into(), channels: "mono".into(), tracks: vec![1, 1], ..Audio::default() },
+                ..raw },
+        ];
+        v.extend(Self::audio_defaults());
+        v
+    }
+
+    /// Presets de áudio (também entram para quem já usa o app, uma vez, se não tiver nenhum).
+    pub fn audio_defaults() -> Vec<Preset> {
+        let a = |id: &str, name: &str, color: &str, codec: &str, kbps: u32, bits: u32| Preset {
+            kind: "audio".into(), id: id.into(), name: name.into(), color: color.into(), container: String::new(),
+            audio: Audio { codec: codec.into(), channels: "source".into(), tracks: vec![1, 2], kbps, rate: 0, bits },
+            output: Output { suffix: Toggle { on: false, text: String::new() }, subfolder: Toggle { on: false, text: "audio".into() }, delete_source: false },
             ..Preset::default()
         };
         vec![
-            raw.clone(),
-            Preset { id: "iphone-4k60-hdr".into(), name: "RAW HDR".into(), color: "orange".into(), bits: 10, hdr_to_sdr: true,
-                output: Output { delete_source: true, ..Output::default() }, ..raw.clone() },
-            Preset { id: "proxy".into(), name: "Proxy".into(), color: "green".into(), scale: "25".into(),
-                bitrate: Bitrate { mode: "auto".into(), kbps: 0, rc: "vbr".into() }, max_quality: false,
-                fps: Fps { conform: false, value: "59.94".into() },
-                output: Output { suffix: Toggle { on: true, text: "_proxy".into() }, subfolder: Toggle { on: true, text: "proxy".into() }, delete_source: false },
-                ..raw.clone() },
-            Preset { id: "meta-15".into(), name: "Meta HDR".into(), color: "pink".into(), hdr_to_sdr: true,
-                bitrate: Bitrate { mode: "source".into(), kbps: 15_000, rc: "cbr".into() }, fps: Fps { conform: true, value: "29.97".into() },
-                audio: Audio { codec: "copy".into(), channels: "mono".into(), tracks: vec![1, 1], kbps: 256, rate: 48000 },
-                output: Output { delete_source: true, ..Output::default() }, ..raw },
+            a("audio-wav", "WAV", "teal", "wav", 0, 24),
+            a("audio-mp3", "MP3 320", "purple", "mp3", 320, 0),
+            a("audio-m4a", "AAC 256", "indigo", "aac", 256, 0),
+            a("audio-flac", "FLAC", "teal", "flac", 0, 0),
         ]
     }
+
+    /// RTX 50 (Blackwell): preset extra que mantém 4:2:2 (nessas placas vai pela GPU).
+    pub fn camera_422() -> Preset {
+        let mut p = Self::defaults().remove(0);
+        p.id = "camera-422".into(); p.name = "Igual à câmera".into(); p.color = "orange".into();
+        p.codec = "source".into(); p.chroma = "source".into();
+        p
+    }
+
+    pub fn is_audio(&self) -> bool { self.kind == "audio" }
 
     /// Frame rate como fração exata ("59.94" -> 60000/1001).
     pub fn fps_rational(&self) -> (u32, u32) { fps_rational(&self.fps.value) }

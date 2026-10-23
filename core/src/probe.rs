@@ -47,6 +47,8 @@ pub struct AudioInfo {
     pub sample_rate: u32,
     /// 0 quando o arquivo não informa.
     pub bitrate_kbps: u32,
+    /// Bits por amostra (16, 24...); 0 quando não se aplica (MP3, AAC).
+    pub bits: u32,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -85,7 +87,7 @@ pub fn probe(ffprobe: &Path, path: &Path) -> Result<MediaInfo, String> {
     let mut info = parse_flat(&String::from_utf8_lossy(&out.stdout));
     info.path = path.to_path_buf();
     if let Ok(m) = std::fs::metadata(path) { info.size_bytes = m.len(); }
-    if info.video.is_none() { return Err("no video stream".into()); }
+    if info.video.is_none() && info.audio.is_empty() { return Err("no video or audio stream".into()); }
     Ok(info)
 }
 
@@ -171,6 +173,8 @@ pub fn parse_flat(text: &str) -> MediaInfo {
                 channels: g("channels").parse().unwrap_or(2),
                 sample_rate: g("sample_rate").parse().unwrap_or(48000),
                 bitrate_kbps: g("bit_rate").parse::<u64>().map_or(0, |b| (b / 1000) as u32),
+                bits: g("bits_per_raw_sample").parse::<u32>().ok().filter(|b| *b > 0)
+                    .or_else(|| g("bits_per_sample").parse::<u32>().ok().filter(|b| *b > 0)).unwrap_or(0),
             }),
             _ => {}
         }

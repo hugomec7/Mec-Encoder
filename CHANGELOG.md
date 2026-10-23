@@ -1,5 +1,23 @@
 # Changelog · Novidades
 
+## 0.2.0
+
+**English**
+- **Convert audio**: audio files (MP3, WAV, M4A, AAC, FLAC, OGG, AIFF…) now go into the same queue. New audio presets: **WAV** (24-bit), **MP3 320**, **AAC 256 (.m4a)** and **FLAC**, with Quality, Bits, Sample rate and Channels (all with Source). Pick an audio preset for a video to **extract its audio**. Existing users get the audio presets once; your own presets are not changed.
+- **HDR → Rec. 709 is now Automatic / Off**: Automatic converts only when the video is HDR, so one preset works for SDR and HDR footage.
+- **Auto bitrate level**: High · Balanced · Light (Light makes much smaller backups).
+- **Protected presets**: if the presets file can't be fully read, the app keeps a copy (presets.broken-….json) and tells you, instead of silently going back to defaults. One broken preset no longer affects the others.
+- **New defaults for new users** (only on first run): RAW, Backup, Proxy, Meta Glass and the audio presets. All video defaults use H.265 4:2:0 with Source bit depth, so they run on the GPU on any RTX 20/30/40/50, and Delete original starts off. On an RTX 50, a "Like the camera" (4:2:2) preset is added too.
+- The CPU warning now says exactly why (4:2:2 or 10-bit H.264) and what to change to use the GPU. The line under the preview always shows the chroma (4:2:0 or 4:2:2).
+
+**Português**
+- **Converter áudio**: arquivos de áudio (MP3, WAV, M4A, AAC, FLAC, OGG, AIFF…) agora entram na mesma fila. Novos presets de áudio: **WAV** (24-bit), **MP3 320**, **AAC 256 (.m4a)** e **FLAC**, com Qualidade, Bits, Taxa e Canais (todos com Original). Escolha um preset de áudio para um vídeo para **extrair o áudio** dele. Quem já usa o app recebe os presets de áudio uma vez; os seus presets não mudam.
+- **HDR → Rec. 709 agora é Automático / Desligado**: o Automático converte só quando o vídeo é HDR, então um preset só serve para vídeo normal e HDR.
+- **Nível do bitrate Auto**: Alta · Equilibrada · Leve (o Leve deixa backups bem menores).
+- **Presets protegidos**: se o arquivo de presets não puder ser lido por inteiro, o app guarda uma cópia (presets.broken-….json) e avisa, em vez de voltar aos padrões sem dizer nada. Um preset com problema não afeta mais os outros.
+- **Padrões novos para quem baixar** (só na primeira vez): RAW, Backup, Proxy, Meta Glass e os presets de áudio. Todos os de vídeo usam H.265 4:2:0 com profundidade Original, então rodam pela placa em qualquer RTX 20/30/40/50, e o Apagar o original vem desligado. Numa RTX 50 entra também um preset "Igual à câmera" (4:2:2).
+- O aviso de CPU agora diz o motivo certo (4:2:2 ou H.264 10-bit) e o que mudar para usar a placa. A linha embaixo da prévia sempre mostra o croma (4:2:0 ou 4:2:2).
+
 ## 0.1.8
 
 **English**
