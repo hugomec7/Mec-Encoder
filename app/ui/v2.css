@@ -314,3 +314,12 @@
 /* editando preset sem mudanças: sem barra de título */
 .insp-title.hide{display:none}
 .preset-input{height:30px;border-radius:15px;padding:0 12px;border:0;outline:0;background:var(--fill-2);color:var(--text);font:inherit;font-size:12.5px;font-weight:600;width:120px;box-shadow:0 0 0 2px color-mix(in srgb,var(--c) 60%,transparent)}
+/* ⓘ com explicação ao passar o mouse */
+.lbl-i{display:inline-flex;align-items:center;gap:5px}
+.info{position:relative;display:inline-grid;place-items:center;width:16px;height:16px;color:var(--text-3);cursor:help;border-radius:50%;outline:0}
+.info svg{width:14px;height:14px}
+.info:hover,.info:focus-visible{color:var(--blue)}
+#tip{position:fixed;z-index:200;max-width:240px;padding:8px 10px;border-radius:9px;background:var(--menu);color:var(--text);font-size:11.5px;line-height:1.4;
+  -webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);box-shadow:0 8px 28px rgba(0,0,0,.35),0 0 0 .5px var(--sep);opacity:0;transform:translateY(4px);pointer-events:none;transition:opacity .18s,transform .18s}
+#tip.show{opacity:1;transform:none}
+.row .lbl .pill-tag{margin-top:3px}

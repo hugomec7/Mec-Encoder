@@ -18,6 +18,7 @@
     teal: 'var(--teal)', yellow: 'var(--yellow)', pink: 'var(--pink)', indigo: 'var(--indigo)', red: 'var(--red)' };
   const PALETTE = Object.keys(COLORS);
   const ICONS = {
+    info: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="8" cy="8" r="6.3"/><path d="M8 7.3v3.9"/><circle cx="8" cy="5" r=".4" fill="currentColor"/></svg>',
     clock: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="6"/><path d="M8 4.8V8l2.2 1.4"/></svg>',
     phone: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="6.5" y="2.5" width="11" height="19" rx="3"/><path d="M10.5 18.5h3"/></svg>',
     hdr: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor"/></svg>',
@@ -139,6 +140,18 @@
   const fmtMB = (mb) => mb >= 1000 ? num(mb / 1000, 2) + ' GB' : Math.round(mb) + ' MB';
   const fmtK = (k) => num(k / 1000) + ' Mb/s';
   const fpsTxt = (v) => S.set.lang === 'pt' ? String(v).replace('.', ',') : String(v).replace(',', '.');
+  // "Original" no FPS: padrão mais próximo do arquivo (igual ao motor): iPhone 59,93 VFR → 60; FX30 → 59,94
+  const STD_FPS = [23.976, 24, 25, 29.97, 30, 48, 50, 59.94, 60, 119.88, 120];
+  function srcFps(src) {
+    const pick = (f) => { if (!(f > 0)) return null; const s = STD_FPS.reduce((a, b) => (Math.abs(b - f) < Math.abs(a - f) ? b : a)); return Math.abs(s - f) / s < 0.01 ? String(s) : null; };
+    const avg = parseFloat(String(src.fps).replace(',', '.'));
+    return pick(src.fpsNom) || pick(avg) || String(avg || 59.94);
+  }
+  // valor que vai sair (resolve as opções "Original"); null = depende do arquivo
+  const fpsOut = (c, src) => (c.fps.value === 'source' ? (src ? srcFps(src) : null) : c.fps.value);
+  const bitsOut = (c, src) => (c.codec === 'h264' ? 8 : c.bits ? c.bits : src ? (src.bits >= 10 ? 10 : 8) : null);
+  const bitsTxt = (c, src) => { const b = bitsOut(c, src); return b ? b + '-bit' : L.sourceBits; };
+  const fpsCfrTxt = (c, src) => { const f = fpsOut(c, src); return (f ? fpsTxt(f) : L.source) + ' CFR'; };
   const pad = (n) => String(n).padStart(2, '0');
   function tc(seconds, fps = 60) {
     const s = Math.max(0, seconds); const ss = Math.floor(s); const f = Math.floor((s - ss) * Math.round(fps || 60));
@@ -150,7 +163,7 @@
     const v = info.video || {};
     return {
       w: v.width, h: v.height, codec: CODECS[v.codec] || String(v.codec || '?').toUpperCase(), bits: v.bitDepth || 8,
-      fps: (v.fps || v.fpsNominal || 0).toFixed(2).replace(/\.?0+$/, ''), fpsNum: v.fps || v.fpsNominal || 60, vfr: !!v.vfr,
+      fps: (v.fps || v.fpsNominal || 0).toFixed(2).replace(/\.?0+$/, ''), fpsNum: v.fps || v.fpsNominal || 60, fpsNom: v.fpsNominal || 0, vfr: !!v.vfr,
       dur: tc(info.duration, v.fpsNominal || v.fps), durS: info.duration, kbps: v.bitrateKbps || info.bitrateKbps || 0,
       audio: (info.audio || []).length, hdr: v.hdr || false, rot: v.rotation || 0, mb: (info.sizeBytes || 0) / 1e6,
     };
@@ -224,6 +237,19 @@
     el.smoothTo = (y) => { target = clamp(y, 0, max()); if (!raf) { cur = el.scrollTop; raf = requestAnimationFrame(step); } };
   }
   $$('.smooth').forEach(smooth);
+
+  /* ---------- dica do ⓘ (fixa na janela, nunca cortada pelo painel) ---------- */
+  const tip = document.createElement('div'); tip.id = 'tip'; tip.setAttribute('role', 'tooltip'); document.body.append(tip);
+  const showTip = (el) => {
+    tip.textContent = el.dataset.tip; tip.classList.add('show');
+    const r = el.getBoundingClientRect(); const w = tip.offsetWidth; const h = tip.offsetHeight;
+    tip.style.left = clamp(r.left + r.width / 2 - w / 2, 8, innerWidth - w - 8) + 'px';
+    tip.style.top = (r.top - h - 8 < 8 ? r.bottom + 8 : r.top - h - 8) + 'px';
+  };
+  const hideTip = () => tip.classList.remove('show');
+  document.addEventListener('pointerover', (e) => { const i = e.target.closest('[data-tip]'); if (i) showTip(i); else hideTip(); });
+  document.addEventListener('focusin', (e) => { const i = e.target.closest('[data-tip]'); if (i) showTip(i); });
+  document.addEventListener('focusout', hideTip);
 
   /* ---------- menu suspenso / de contexto ---------- */
   const menu = $('#menu'); let menuPick = null;
@@ -479,9 +505,9 @@
 
   /* ---------- presets ---------- */
   function describe(p) {
-    const parts = [codecName(p.codec) + ' ' + (p.codec === 'h264' ? 8 : p.bits) + '-bit', p.scale === 'source' ? L.sourceRes : scaleTxt(p.scale),
+    const parts = [codecName(p.codec) + ' ' + bitsTxt(p, null), p.scale === 'source' ? L.sourceRes : scaleTxt(p.scale),
       p.bitrate.mode === 'manual' ? fmtK(p.bitrate.kbps) + ' ' + p.bitrate.rc.toUpperCase() : p.bitrate.mode === 'source' ? L.bitrateSrc : L.bitrateAuto,
-      p.fps.conform ? fpsTxt(p.fps.value) + ' fps CFR' : null, p.hdrToSdr ? 'HDR → 709' : null,
+      p.fps.conform ? fpsCfrTxt(p, null) : null, p.hdrToSdr ? 'HDR → 709' : null,
       p.audio.codec === 'copy' ? L.audioCopied : `AAC ${p.audio.channels === 'stereo' ? L.stereoL : L.monoL}`].filter(Boolean);
     return `<b>${esc(p.name)}:</b> ${parts.join(' · ')}`;
   }
@@ -797,8 +823,8 @@
     const o = outDims(q.src, q.cfg); const c = [];
     // informação de como o vídeo VAI FICAR
     const cfr = q.cfg.fps.conform;
-    c.push(chip(`${o.w}×${o.h}`), chip(`${codecName(q.cfg.codec)} ${q.cfg.codec === 'h264' ? 8 : q.cfg.bits}-bit`),
-      cfr ? chip(`${fpsTxt(q.cfg.fps.value)} fps CFR`, COLORS.green) : chip(`${fpsTxt(q.src.fps)} fps ${q.src.vfr ? 'VFR' : ''}`.trim()));
+    c.push(chip(`${o.w}×${o.h}`), chip(`${codecName(q.cfg.codec)} ${bitsTxt(q.cfg, q.src)}`),
+      cfr ? chip(`${fpsTxt(fpsOut(q.cfg, q.src))} fps CFR`, COLORS.green) : chip(`${fpsTxt(q.src.fps)} fps ${q.src.vfr ? 'VFR' : ''}`.trim()));
     if (q.src.hdr) c.push(q.cfg.hdrToSdr ? chip('Rec. 709', COLORS.green) : chip(L.hdrKept, COLORS.orange));
     if (q.cfg.rotate) c.push(chip(`${q.cfg.rotate}°`, COLORS.teal, ICONS.rot));
     c.push(chip(`≈ ${fmtMB(estMB(q))}`));
@@ -931,7 +957,7 @@
     const resHint = !src && c.scale === '1080' ? `<div class="hint">${L.scale1080Hint}</div>` : '';
     const rotTxt = c.rotate ? ` · ↻ ${c.rotate}°` : '';
     el.innerHTML = (T.isPreset ? '' : S.picked.size > 1 ? `<div class="hint top-hint multi-hint">${L.multiHint(S.picked.size)}</div>` : '')
-      + sec('video', L.video, `${codecName(c.codec)} · ${h264 ? 8 : c.bits}-bit · ${scaleTxt(c.scale)}${rotTxt} · ${c.fps.conform ? fpsTxt(c.fps.value) + ' CFR' : c.bitrate.mode === 'manual' ? fmtK(c.bitrate.kbps) : c.bitrate.mode === 'source' ? L.source : L.auto}${c.hdrToSdr ? ' · 709' : ''}`,
+      + sec('video', L.video, `${codecName(c.codec)} · ${bitsTxt(c, src)} · ${scaleTxt(c.scale)}${rotTxt} · ${c.fps.conform ? fpsCfrTxt(c, src) : c.bitrate.mode === 'manual' ? fmtK(c.bitrate.kbps) : c.bitrate.mode === 'source' ? L.source : L.auto}${c.hdrToSdr ? ' · 709' : ''}`,
         `<div class="group">
           ${row(`${L.resolution}<small class="res-out">${resLabel(c, src)}</small>`, dd('scale', c.scale, [['source', L.source], ['1080', '1080p'], ['50', '50%'], ['25', '25%'], ['custom', L.custom]]))}
           <div class="collapse ${c.scale === 'custom' ? '' : 'closed'}" style="max-height:60px">
@@ -942,13 +968,13 @@
             ${row(L.value, `<div class="field"><input class="tnum" data-k="bitrate.kbps" value="${num(c.bitrate.kbps, 0)}"><span>kb/s</span></div>${dd('bitrate.rc', c.bitrate.rc, [['cbr', 'CBR'], ['vbr', 'VBR']])}`)}
           </div>
           ${row(L.codec, dd('codec', c.codec, [['h264', 'H.264'], ['h265', 'H.265']]))}
-          ${row(L.bitDepth, dd('bits', h264 ? 8 : c.bits, [[8, '8-bit'], [10, '10-bit', h264]]))}
-          ${row(L.fps, c.fps.conform ? dd('fps.value', c.fps.value, FPS_OPTS) : `<span class="field pick dis">${L.source}${ICONS.chev}</span>`)}
+          ${row(L.bitDepth + (!h264 && !c.bits && src ? `<small class="res-out">${bitsOut(c, src)}-bit</small>` : ''), dd('bits', h264 ? 8 : c.bits, [[0, L.source, h264], [8, '8-bit'], [10, '10-bit', h264]]))}
+          ${row(L.fps + (c.fps.value === 'source' && c.fps.conform && src ? `<small class="res-out">${fpsTxt(srcFps(src))} fps</small>` : ''), dd('fps.value', c.fps.conform ? c.fps.value : 'source', [['source', L.source], ...FPS_OPTS]))}
           ${row(L.fpsMode, segH('fpsMode', c.fps.conform ? 'cfr' : 'vfr', [['vfr', 'VFR'], ['cfr', 'CFR']]))}
           ${row(L.rotate, dd('rotate', c.rotate || 0, [[0, L.rotNone], [90, L.rotCw], [180, '180°'], [270, L.rotCcw]]))}
           ${row(L.maxQuality, sw('maxQuality', c.maxQuality))}
-          ${row(L.hdr + (src && src.hdr ? ` <span class="pill-tag" style="--c:${COLORS.yellow}">${L.detected(src.hdr)}</span>` : ''), sw('hdrToSdr', c.hdrToSdr), L.hdrSub)}
-        </div>${resHint}${h264 && c.bits === 10 ? `<div class="hint">${L.h264no10}</div>` : ''}${c.bitrate.mode === 'source' && src ? `<div class="hint">${L.sameBitrate(fmtK(src.kbps))}</div>` : ''}${src && src.hdr && !c.hdrToSdr ? `<div class="hint warn-t">${L.hdrWarn}</div>` : ''}`)
+          ${row(`<span class="lbl-i">${L.hdr}<span class="info" tabindex="0" aria-label="${esc(L.hdrSub)}" data-tip="${esc(L.hdrSub)}">${ICONS.info}</span></span>` + (src && src.hdr ? `<span class="pill-tag" style="--c:${COLORS.yellow}">${L.detected(src.hdr)}</span>` : ''), sw('hdrToSdr', c.hdrToSdr))}
+        </div>${resHint}${h264 && (c.bits === 10 || (c.bits === 0 && src && src.bits >= 10)) ? `<div class="hint">${L.h264no10}</div>` : ''}${src && src.hdr && !c.hdrToSdr ? `<div class="hint warn-t">${L.hdrWarn}</div>` : ''}`)
       + sec('audio', L.audio, a.codec === 'copy' ? L.copy : `AAC · ${a.channels === 'stereo' ? L.stereo : L.mono}`,
         `<div class="group">
           ${row(L.codec, dd('audio.codec', a.codec, [['aac', 'AAC'], ['copy', L.copy]]))}
@@ -1016,7 +1042,8 @@
     if (key === 'audio.channels') T.cfg.audio.tracks = v === 'mono' ? [1, 1] : [1, 2];
     if (key === 'codec' && v === 'h264') T.cfg.bits = 8;
     if (key === 'fpsMode') { delete T.cfg.fpsMode; T.cfg.fps.conform = v === 'cfr'; }
-    if (!T.isPreset) spread(T.q, key === 'fpsMode' ? ['fps.conform'] : [key, ...(key === 'audio.channels' ? ['audio.tracks'] : []), ...(key === 'codec' ? ['bits'] : [])]);
+    if (key === 'fps.value' && v !== 'source') T.cfg.fps.conform = true;
+    if (!T.isPreset) spread(T.q, key === 'fpsMode' ? ['fps.conform'] : [key, ...(key === 'audio.channels' ? ['audio.tracks'] : []), ...(key === 'codec' ? ['bits'] : []), ...(key === 'fps.value' ? ['fps.conform'] : [])]);
     renderQueue(); renderPresets(); renderInspector(); renderPreview();
   }
   $('#inspIn').addEventListener('click', (e) => {

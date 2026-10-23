@@ -50,6 +50,30 @@ pub fn out_dims(v: &VideoInfo, p: &Preset) -> (u32, u32) {
     }
 }
 
+/// Frame rate padrão mais próximo do arquivo ("Original" no FPS). iPhone VFR (59,93 médio, 60 nominal) → "60";
+/// FX30 59,94 → "59.94". Fora dos padrões, usa o próprio valor.
+pub fn source_fps(v: &VideoInfo) -> String {
+    const STD: [(f64, &str); 11] = [(23.976, "23.976"), (24.0, "24"), (25.0, "25"), (29.97, "29.97"), (30.0, "30"), (48.0, "48"),
+        (50.0, "50"), (59.94, "59.94"), (60.0, "60"), (119.88, "119.88"), (120.0, "120")];
+    let pick = |f: f64| STD.iter().min_by(|a, b| (a.0 - f).abs().total_cmp(&(b.0 - f).abs())).filter(|s| (s.0 - f).abs() / s.0 < 0.01).map(|s| s.1.to_string());
+    // Nominal primeiro (é o que a câmera gravou); se não bater com nenhum padrão, a média.
+    [v.fps_nominal, v.fps].into_iter().filter(|f| *f > 0.0 && *f < 1000.0).find_map(pick)
+        .unwrap_or_else(|| if v.fps > 0.0 { fmt_num(v.fps) } else { "59.94".into() })
+}
+
+/// Troca as opções "Original" do preset pelo valor do arquivo: profundidade (`bits = 0`) e FPS (`"source"`).
+pub fn resolve(info: &MediaInfo, p: &Preset) -> Preset {
+    let mut r = p.clone();
+    if let Some(v) = info.video.as_ref() {
+        if r.bits == 0 { r.bits = if v.bit_depth >= 10 { 10 } else { 8 }; }
+        if r.fps.value == "source" || r.fps.value.is_empty() { r.fps.value = source_fps(v); }
+    } else {
+        if r.bits == 0 { r.bits = 8; }
+        if r.fps.value == "source" { r.fps.value = "59.94".into(); }
+    }
+    r
+}
+
 fn fmt_num(x: f64) -> String {
     let s = format!("{x:.3}");
     s.trim_end_matches('0').trim_end_matches('.').to_string()
@@ -325,6 +349,7 @@ pub fn build_opts(info: &MediaInfo, p: &Preset, enc: &Encoder, output: &Path, hw
 
 /// Comando completo escolhendo onde decodificar e filtrar.
 pub fn build_mode(info: &MediaInfo, p: &Preset, enc: &Encoder, output: &Path, dec: Decode) -> Plan {
+    let p = &resolve(info, p);
     let dec = if *enc == Encoder::Nvenc { dec } else { Decode::Cpu };
     let mut warnings = Vec::new();
     let mut args = input_args(info, enc, dec);
@@ -352,6 +377,7 @@ pub fn build_mode(info: &MediaInfo, p: &Preset, enc: &Encoder, output: &Path, de
 
 /// Um quadro JPEG da prévia, no tempo `t` (segundos). `output = true` mostra o resultado do preset.
 pub fn preview_args(info: &MediaInfo, p: &Preset, t: f64, output: bool, max: u32) -> Vec<String> {
+    let p = &resolve(info, p);
     let mut a: Vec<String> = vec!["-nostdin".into(), "-hide_banner".into(), "-v".into(), "error".into(), "-ss".into(), fmt_num(t.max(0.0))];
     if info.video.as_ref().map_or(false, |v| v.rotation != 0) { a.extend(["-display_rotation".into(), "0".into()]); }
     a.extend(["-i".into(), info.path.to_string_lossy().into_owned(), "-frames:v".into(), "1".into(), "-an".into()]);
@@ -374,6 +400,21 @@ pub fn verify(src: &MediaInfo, out: &MediaInfo) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn source_options() {
+        // iPhone VFR: média 59,93, nominal 60 → CFR em 60
+        let i = iphone(90, "");
+        assert_eq!(source_fps(i.video.as_ref().unwrap()), "60");
+        let mut p = preset("iphone-4k60"); p.fps.value = "source".into(); p.bits = 0;
+        let s = build_opts(&i, &p, &Encoder::Nvenc, Path::new("o.mp4"), true).args.join(" ");
+        assert!(s.contains("fps=60/1") && s.contains("main10"), "{s}");
+        // FX30 59,94 constante; 8-bit fica 8-bit
+        let mut f = i.clone(); { let v = f.video.as_mut().unwrap(); v.fps = 59.94006; v.fps_nominal = 59.94006; v.bit_depth = 8; }
+        assert_eq!(source_fps(f.video.as_ref().unwrap()), "59.94");
+        let s = build_opts(&f, &p, &Encoder::Nvenc, Path::new("o.mp4"), true).args.join(" ");
+        assert!(s.contains("fps=60000/1001") && s.contains("-profile:v main ") && !s.contains("main10"), "{s}");
+    }
 
     #[test]
     fn fx30_422_goes_to_cpu() {

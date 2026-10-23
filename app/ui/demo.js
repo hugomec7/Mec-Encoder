@@ -28,7 +28,7 @@
   ];
 
   // arquivos de exemplo (o que o ffprobe devolveria)
-  const iphone = { w: 2160, h: 3840, codec: 'HEVC', bits: 10, fps: '59,93', vfr: true, dur: '00:02:15:31', kbps: 49800, audio: 2 };
+  const iphone = { w: 2160, h: 3840, codec: 'HEVC', bits: 10, fps: '59,93', fpsNom: 60, vfr: true, dur: '00:02:15:31', kbps: 49800, audio: 2 };
   const queue = [
     { id: 1, file: 'IMG_4821.MOV', src: Object.assign({}, iphone, { hdr: false, rot: 0, mb: 842 }), preset: 'iphone-4k60', status: 'ready', hue: 205 },
     { id: 2, file: 'IMG_4822.MOV', src: Object.assign({}, iphone, { hdr: 'HLG', rot: 0, mb: 1210 }), preset: 'iphone-4k60', status: 'ready', hue: 28 },
