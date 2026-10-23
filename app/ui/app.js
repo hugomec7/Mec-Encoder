@@ -848,7 +848,7 @@
     const o = outDims(q.src, q.cfg); const c = [];
     // informação de como o vídeo VAI FICAR
     const cfr = q.cfg.fps.conform;
-    c.push(chip(`${o.w}×${o.h}`), chip(`${codecName(codecOut(q.cfg, q.src))} ${bitsTxt(q.cfg, q.src)}${chromaOut(q.cfg, q.src) === '422' ? ' 4:2:2' : ''}`, cpuEncode(q.cfg, q.src) ? COLORS.orange : null),
+    c.push(chip(`${o.w}×${o.h}`), chip(`${codecName(codecOut(q.cfg, q.src))} ${bitsTxt(q.cfg, q.src)}${chromaOut(q.cfg, q.src) === '422' ? ' 4:2:2' : ' 4:2:0'}`, cpuEncode(q.cfg, q.src) ? COLORS.orange : null),
       cfr ? chip(`${fpsTxt(fpsOut(q.cfg, q.src))} fps CFR`, COLORS.green) : chip(`${fpsTxt(q.src.fps)} fps ${q.src.vfr ? 'VFR' : ''}`.trim()));
     if (q.src.hdr) c.push(q.cfg.hdrToSdr ? chip('Rec. 709', COLORS.green) : chip(L.hdrKept, COLORS.orange));
     if (q.cfg.rotate) c.push(chip(`${q.cfg.rotate}°`, COLORS.teal, ICONS.rot));
@@ -1000,7 +1000,7 @@
           ${row(L.rotate, dd('rotate', c.rotate || 0, [[0, L.rotNone], [90, L.rotCw], [180, '180°'], [270, L.rotCcw]]))}
           ${row(L.maxQuality, sw('maxQuality', c.maxQuality))}
           ${row(`<span class="lbl-i">${L.hdr}<span class="info" tabindex="0" aria-label="${esc(L.hdrSub)}" data-tip="${esc(L.hdrSub)}">${ICONS.info}</span></span>` + (src && src.hdr ? `<span class="pill-tag" style="--c:${COLORS.yellow}">${L.detected(src.hdr)}</span>` : ''), sw('hdrToSdr', c.hdrToSdr))}
-        </div>${resHint}${cpuEncode(c, src) ? `<div class="hint warn-t">${L.cpuEncodeWarn}</div>` : ''}${src && src.hdr && !c.hdrToSdr ? `<div class="hint warn-t">${L.hdrWarn}</div>` : ''}`)
+        </div>${resHint}${cpuEncode(c, src) ? `<div class="hint warn-t">${chromaOut(c, src) === '422' ? L.cpuWarn422 : L.cpuWarnH264}</div>` : ''}${src && src.hdr && !c.hdrToSdr ? `<div class="hint warn-t">${L.hdrWarn}</div>` : ''}`)
       + sec('audio', L.audio, a.codec === 'copy' ? L.copy : `AAC · ${a.channels === 'stereo' ? L.stereo : L.mono}`,
         `<div class="group">
           ${row(L.codec, dd('audio.codec', a.codec, [['aac', 'AAC'], ['copy', L.copy]]))}
