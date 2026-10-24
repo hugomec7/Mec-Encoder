@@ -610,31 +610,28 @@
       p.audio.codec === 'copy' ? L.audioCopied : `AAC ${p.audio.channels === 'stereo' ? L.stereoL : L.monoL}`].filter(Boolean);
     return `<b>${esc(p.name)}:</b> ${parts.join(' · ')}`;
   }
-  /* lista de presets: soltos + pastas e subpastas (recolhíveis). Pasta = caminho "Áudio/Podcast". */
-  const parentOf = (f) => (f.includes('/') ? f.slice(0, f.lastIndexOf('/')) : '');
-  const leaf = (f) => f.slice(f.lastIndexOf('/') + 1);
+  /* lista de presets como no HandBrake: tudo em pastas recolhíveis. "Presets" é a pasta principal (presets soltos). */
+  const parentOf = () => '';
+  const leaf = (f) => f;
   function folderList() {
-    const f = (S.set.folders || []).slice();
-    const add = (x) => { if (!x) return; add(parentOf(x)); if (!f.includes(x)) f.push(x); };
-    S.presets.forEach((p) => add(p.folder)); f.slice().forEach(add);
+    const f = (S.set.folders || []).filter((x) => x && !x.includes('/'));
+    S.presets.forEach((p) => { if (p.folder && !f.includes(p.folder)) f.push(p.folder); });
     return f;
   }
-  const inside = (p, f) => p.folder === f || (p.folder || '').startsWith(f + '/');
+  const inside = (p, f) => p.folder === f;
   const pill = (p, selId) => `<button class="preset ${selId === p.id ? 'sel' : ''} ${isAudioP(p) ? 'is-audio' : ''}" data-id="${p.id}" style="--c:${COLORS[p.color] || COLORS.blue}"><i class="pdot"></i>${isAudioP(p) ? ICONS.note : ''}${esc(p.name)}</button>`;
-  function folderHtml(f, all, selId, closed) {
+  function folderHtml(f, selId, closed) {
     const list = S.presets.filter((p) => p.folder === f);
-    const kids = all.filter((x) => parentOf(x) === f);
-    const count = S.presets.filter((p) => inside(p, f)).length;
     return `<div class="pfolder ${closed[f] ? 'closed' : ''}" data-folder="${esc(f)}">
-        <button class="pf-head" data-folder="${esc(f)}">${ICONS.chev}${ICONS.folder}<span class="pf-name">${esc(leaf(f))}</span><small>${count}</small></button>
-        <div class="pf-body"><div class="pf-in">${list.length || !kids.length ? `<div class="p-row" data-folder="${esc(f)}">${list.map((p) => pill(p, selId)).join('') || `<span class="pf-empty">${L.folderEmpty}</span>`}</div>` : ''}${kids.map((k) => folderHtml(k, all, selId, closed)).join('')}</div></div></div>`;
+        <button class="pf-head" data-folder="${esc(f)}">${ICONS.chev}${ICONS.folder}<span class="pf-name">${esc(f)}</span><small>${list.length}</small></button>
+        <div class="pf-body"><div class="pf-in"><div class="p-row" data-folder="${esc(f)}">${list.map((p) => pill(p, selId)).join('') || `<span class="pf-empty">${L.folderEmpty}</span>`}</div></div></div></div>`;
   }
   function renderPresets() {
     const t = target(); const selId = t.preset && t.preset.id; const closed = S.set.folderClosed || {};
-    const loose = S.presets.filter((p) => !p.folder); const all = folderList();
-    let html = `<div class="p-row" data-folder="">${loose.map((p) => pill(p, selId)).join('')}<button class="preset add" data-menu="1"><span class="ic">${ICONS.plus}</span>${L.newPreset}</button></div>`;
-    all.filter((f) => !parentOf(f)).forEach((f) => { html += folderHtml(f, all, selId, closed); });
-    $('#presets').innerHTML = html;
+    const loose = S.presets.filter((p) => !p.folder);
+    $('#presets').innerHTML = `<div class="p-row" data-folder="">${loose.map((p) => pill(p, selId)).join('')}<button class="preset add" data-menu="1"><span class="ic">${ICONS.plus}</span>${L.newPreset}</button></div>`;
+    $('#presetFolders').innerHTML = folderList().map((f) => folderHtml(f, selId, closed)).join('');
+    $('#pfMainCount').textContent = loose.length;
     $('#presetDesc').innerHTML = t.preset ? describe(t.preset) : '';
     $('#presetsFold').classList.toggle('closed', !!S.set.foldPresets);
     $('#bFoldPresets').classList.toggle('closed', !!S.set.foldPresets);
@@ -766,7 +763,7 @@
     });
   }
 
-  function setAllFolders(closed) { const c = {}; folderList().forEach((f) => { c[f] = closed; }); S.set.folderClosed = c; saveSettings(); renderPresets(); }
+  function setAllFolders(closed) { const c = {}; folderList().forEach((f) => { c[f] = closed; }); S.set.folderClosed = c; S.set.foldPresets = closed; saveSettings(); renderPresets(); }
   $('#bManage').dataset.menu = '1';
   $('#bManage').onclick = (e) => openMenu(e.currentTarget, [
     { label: L.newPresetMenu, value: 'new', icon: ICONS.plus },
@@ -783,7 +780,7 @@
   ], (v) => ({ collapse: () => setAllFolders(true), expand: () => setAllFolders(false), new: () => newPreset(), folder: () => newFolder(''), enc: importEnc, json: importJson, export: exportPresets, open: openPresetsFolder, defaults: restoreDefaults }[v]()));
 
   const pressPreset = { justDropped: false };
-  $('#presets').addEventListener('click', (e) => {
+  $('#inspector').addEventListener('click', (e) => {
     if (pressPreset.justDropped) { pressPreset.justDropped = false; return; }
     const fh = e.target.closest('.pf-head');
     if (fh) { const f = fh.dataset.folder; S.set.folderClosed = Object.assign({}, S.set.folderClosed, { [f]: !(S.set.folderClosed || {})[f] }); saveSettings(); renderPresets(); return; }
@@ -799,18 +796,17 @@
     assign(q, b.dataset.id); renderAll(true);
     const badge = $(`.item[data-id="${q.id}"] .badge`); if (badge) badge.classList.add('bump');
   });
-  $('#presets').addEventListener('dblclick', (e) => { const fh = e.target.closest('.pf-head'); if (fh) renameFolder(fh.dataset.folder); });
-  $('#presets').addEventListener('contextmenu', (e) => {
+  $('#inspector').addEventListener('dblclick', (e) => { const fh = e.target.closest('.pf-head'); if (fh) renameFolder(fh.dataset.folder); });
+  $('#inspector').addEventListener('contextmenu', (e) => {
     const fh = e.target.closest('.pf-head');
     if (fh) {
       const f = fh.dataset.folder;
       openMenu({ x: e.clientX, y: e.clientY }, [
         { label: L.newPresetHere, value: 'new', icon: ICONS.plus },
-        { label: L.newSubfolder, value: 'sub', icon: ICONS.folder },
         { label: L.rename, value: 'rename', icon: ICONS.edit },
         { sep: true },
         { label: L.deleteFolder, value: 'del', icon: ICONS.trash, danger: true },
-      ], (v) => (v === 'new' ? newPreset(f) : v === 'sub' ? newFolder(f) : v === 'rename' ? renameFolder(f) : deleteFolder(f)));
+      ], (v) => (v === 'new' ? newPreset(f) : v === 'rename' ? renameFolder(f) : deleteFolder(f)));
       return;
     }
     const b = e.target.closest('.preset:not(.add)'); if (!b) return; const pid = b.dataset.id;
@@ -839,7 +835,7 @@
 
   /* arrastar um preset: até um vídeo, até "todos", até outro preset (reordenar) ou até uma pasta */
   const ghost = $('#ghost');
-  $('#presets').addEventListener('pointerdown', (e) => {
+  $('#inspector').addEventListener('pointerdown', (e) => {
     const b = e.target.closest('.preset:not(.add)'); if (!b || e.button !== 0) return;
     Object.assign(pressPreset, { b, pid: b.dataset.id, x0: e.clientX, y0: e.clientY, on: false });
   });

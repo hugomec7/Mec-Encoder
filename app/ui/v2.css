@@ -336,3 +336,19 @@
 .ac-in b{color:var(--text);font-size:15px;font-weight:600;word-break:break-all}
 .ac-in span{font-size:12px}
 .audio-item #bCompare{visibility:hidden}
+
+/* Presets como no HandBrake: tudo em pastas; "Presets" é a pasta principal */
+.fold-btn.pf-main{gap:6px;padding:0 6px;height:28px;margin-left:-6px;border-radius:8px}
+.fold-btn.pf-main:hover{background:var(--hover)}
+.fold-btn.pf-main .fico{width:13px;height:13px;color:var(--text-3)}
+.fold-btn.pf-main h2{font-size:13px;font-weight:650}
+.fold-btn.pf-main small{font-size:12px;color:var(--text-3);font-weight:500;margin-left:4px}
+.fold-btn.pf-main .chev{order:-1}
+#presetsFold .p-row{padding:2px 0 4px 18px}
+.pfolders{padding-top:0}
+.pf-head{font-size:13px;color:var(--text);font-weight:650;height:30px}
+.pf-head svg{width:13px;height:13px}
+.pfolder{margin-top:2px}
+#presets.presets{padding:0 10px 4px}
+.presets.pfolders{display:block;padding:0 10px 10px}
+.pf-head small{margin-left:4px;font-size:12px}
