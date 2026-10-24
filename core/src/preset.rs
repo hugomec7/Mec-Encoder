@@ -158,7 +158,7 @@ impl Preset {
     /// Presets de áudio (também entram para quem já usa o app, uma vez, se não tiver nenhum).
     pub fn audio_defaults() -> Vec<Preset> {
         let a = |id: &str, name: &str, color: &str, codec: &str, kbps: u32, bits: u32| Preset {
-            kind: "audio".into(), id: id.into(), name: name.into(), color: color.into(), container: String::new(),
+            kind: "audio".into(), id: id.into(), name: name.into(), color: color.into(), container: String::new(), folder: "Audio".into(),
             audio: Audio { codec: codec.into(), channels: "source".into(), tracks: vec![1, 2], kbps, rate: 0, bits },
             output: Output { suffix: Toggle { on: false, text: String::new() }, subfolder: Toggle { on: false, text: "audio".into() }, delete_source: false },
             ..Preset::default()

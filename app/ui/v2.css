@@ -252,13 +252,15 @@
 .pf-head:hover{background:var(--hover);color:var(--text)}
 .pf-head svg{width:12px;height:12px;flex:none;color:var(--text-3)}
 .pf-head .chev{transition:transform .4s var(--spring)}
-.pfolder.closed .pf-head .chev{transform:rotate(-90deg)}
+.pfolder.closed > .pf-head .chev{transform:rotate(-90deg)}
 .pf-head small{margin-left:auto;color:var(--text-3);font-weight:500}
 .pf-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pf-input{flex:1;min-width:0;height:22px;border:0;outline:0;border-radius:6px;padding:0 6px;background:var(--fill);font:inherit;font-weight:600;color:var(--text);box-shadow:0 0 0 2px color-mix(in srgb,var(--blue) 55%,transparent)}
 .pf-body{display:grid;grid-template-rows:1fr;transition:grid-template-rows .4s var(--ease)}
-.pfolder.closed .pf-body{grid-template-rows:0fr}
+.pfolder.closed > .pf-body{grid-template-rows:0fr}
 .pf-in{overflow:hidden;min-height:0;padding-left:18px}
+.pf-in > .pfolder{margin-top:2px}
+.pf-in > .pfolder::before{content:none}
 .pf-in .p-row{padding:2px 0 4px}
 .pf-empty{font-size:11.5px;color:var(--text-3);padding:5px 4px}
 .menu-dot{width:10px;height:10px;border-radius:50%;background:var(--c);display:block;flex:none;margin:0 2px}

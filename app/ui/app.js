@@ -610,23 +610,30 @@
       p.audio.codec === 'copy' ? L.audioCopied : `AAC ${p.audio.channels === 'stereo' ? L.stereoL : L.monoL}`].filter(Boolean);
     return `<b>${esc(p.name)}:</b> ${parts.join(' · ')}`;
   }
-  /* lista de presets: soltos + pastas (recolhíveis), só cor, sem ícone */
+  /* lista de presets: soltos + pastas e subpastas (recolhíveis). Pasta = caminho "Áudio/Podcast". */
+  const parentOf = (f) => (f.includes('/') ? f.slice(0, f.lastIndexOf('/')) : '');
+  const leaf = (f) => f.slice(f.lastIndexOf('/') + 1);
   function folderList() {
     const f = (S.set.folders || []).slice();
-    S.presets.forEach((p) => { if (p.folder && !f.includes(p.folder)) f.push(p.folder); });
+    const add = (x) => { if (!x) return; add(parentOf(x)); if (!f.includes(x)) f.push(x); };
+    S.presets.forEach((p) => add(p.folder)); f.slice().forEach(add);
     return f;
   }
+  const inside = (p, f) => p.folder === f || (p.folder || '').startsWith(f + '/');
   const pill = (p, selId) => `<button class="preset ${selId === p.id ? 'sel' : ''} ${isAudioP(p) ? 'is-audio' : ''}" data-id="${p.id}" style="--c:${COLORS[p.color] || COLORS.blue}"><i class="pdot"></i>${isAudioP(p) ? ICONS.note : ''}${esc(p.name)}</button>`;
+  function folderHtml(f, all, selId, closed) {
+    const list = S.presets.filter((p) => p.folder === f);
+    const kids = all.filter((x) => parentOf(x) === f);
+    const count = S.presets.filter((p) => inside(p, f)).length;
+    return `<div class="pfolder ${closed[f] ? 'closed' : ''}" data-folder="${esc(f)}">
+        <button class="pf-head" data-folder="${esc(f)}">${ICONS.chev}${ICONS.folder}<span class="pf-name">${esc(leaf(f))}</span><small>${count}</small></button>
+        <div class="pf-body"><div class="pf-in">${list.length || !kids.length ? `<div class="p-row" data-folder="${esc(f)}">${list.map((p) => pill(p, selId)).join('') || `<span class="pf-empty">${L.folderEmpty}</span>`}</div>` : ''}${kids.map((k) => folderHtml(k, all, selId, closed)).join('')}</div></div></div>`;
+  }
   function renderPresets() {
     const t = target(); const selId = t.preset && t.preset.id; const closed = S.set.folderClosed || {};
-    const loose = S.presets.filter((p) => !p.folder);
+    const loose = S.presets.filter((p) => !p.folder); const all = folderList();
     let html = `<div class="p-row" data-folder="">${loose.map((p) => pill(p, selId)).join('')}<button class="preset add" data-menu="1"><span class="ic">${ICONS.plus}</span>${L.newPreset}</button></div>`;
-    folderList().forEach((f) => {
-      const list = S.presets.filter((p) => p.folder === f);
-      html += `<div class="pfolder ${closed[f] ? 'closed' : ''}" data-folder="${esc(f)}">
-        <button class="pf-head" data-folder="${esc(f)}">${ICONS.chev}${ICONS.folder}<span class="pf-name">${esc(f)}</span><small>${list.length}</small></button>
-        <div class="pf-body"><div class="pf-in"><div class="p-row" data-folder="${esc(f)}">${list.map((p) => pill(p, selId)).join('') || `<span class="pf-empty">${L.folderEmpty}</span>`}</div></div></div></div>`;
-    });
+    all.filter((f) => !parentOf(f)).forEach((f) => { html += folderHtml(f, all, selId, closed); });
     $('#presets').innerHTML = html;
     $('#presetDesc').innerHTML = t.preset ? describe(t.preset) : '';
     $('#presetsFold').classList.toggle('closed', !!S.set.foldPresets);
@@ -693,27 +700,36 @@
     savePresets(); renderAll(); toast(L.presetsImported(defs.length));
   }
 
-  /* pastas */
-  function newFolder() {
-    const f = folderList(); let n = L.newFolder; let i = 2;
-    while (f.includes(n)) n = `${L.newFolder} ${i++}`;
-    S.set.folders = [...f, n]; saveSettings(); renderPresets();
-    if (S.set.foldPresets) { S.set.foldPresets = false; renderPresets(); }
+  /* pastas e subpastas */
+  function uniqueFolder(parent) {
+    const f = folderList(); const base = parent ? parent + '/' : ''; let n = L.newFolder; let i = 2;
+    while (f.includes(base + n)) n = `${L.newFolder} ${i++}`;
+    return base + n;
+  }
+  function newFolder(parent) {
+    const n = uniqueFolder(typeof parent === 'string' ? parent : '');
+    S.set.folders = [...folderList(), n];
+    if (parentOf(n)) S.set.folderClosed = Object.assign({}, S.set.folderClosed, { [parentOf(n)]: false });
+    if (S.set.foldPresets) S.set.foldPresets = false;
+    saveSettings(); renderPresets();
     setTimeout(() => renameFolder(n), 60);
   }
   function renameFolder(f) {
     const head = $(`.pf-head[data-folder="${CSS.escape(f)}"]`); if (!head) return;
     const span = head.querySelector('.pf-name');
-    const input = document.createElement('input'); input.className = 'pf-input'; input.value = f; input.spellcheck = false;
+    const input = document.createElement('input'); input.className = 'pf-input'; input.value = leaf(f); input.spellcheck = false;
     span.replaceWith(input); input.focus(); input.select();
     let done = false;
     const finish = (ok) => {
       if (done) return; done = true;
-      const v = input.value.trim();
-      if (ok && v && v !== f && !folderList().includes(v)) {
-        S.set.folders = folderList().map((x) => (x === f ? v : x));
-        S.presets.forEach((p) => { if (p.folder === f) p.folder = v; });
-        if (S.set.folderClosed && S.set.folderClosed[f]) { S.set.folderClosed[v] = true; delete S.set.folderClosed[f]; }
+      const name = input.value.trim().replace(/\//g, '-');
+      const v = (parentOf(f) ? parentOf(f) + '/' : '') + name;
+      if (ok && name && v !== f && !folderList().includes(v)) {
+        const move = (x) => (x === f ? v : x.startsWith(f + '/') ? v + x.slice(f.length) : x);
+        S.set.folders = folderList().map(move);
+        S.presets.forEach((p) => { if (p.folder) p.folder = move(p.folder); });
+        if (S.draft && S.draft.folder) S.draft.folder = move(S.draft.folder);
+        const c = {}; Object.entries(S.set.folderClosed || {}).forEach(([k, val]) => { c[move(k)] = val; }); S.set.folderClosed = c;
         saveSettings(); savePresets();
       }
       renderPresets();
@@ -722,9 +738,11 @@
     input.addEventListener('blur', () => finish(true));
     input.addEventListener('click', (e) => e.stopPropagation());
   }
+  // Excluir pasta: os presets e subpastas de dentro sobem um nível (nada é apagado)
   function deleteFolder(f) {
-    S.presets.forEach((p) => { if (p.folder === f) p.folder = ''; });
-    S.set.folders = folderList().filter((x) => x !== f);
+    const up = parentOf(f); const move = (x) => (x === f ? up : x.startsWith(f + '/') ? (up ? up + '/' : '') + x.slice(f.length + 1) : x);
+    S.presets.forEach((p) => { if (p.folder && inside(p, f)) p.folder = move(p.folder); });
+    S.set.folders = folderList().filter((x) => x !== f).map(move).filter(Boolean);
     saveSettings(); savePresets(); renderPresets();
   }
   function moveToFolder(pid, f) {
@@ -736,9 +754,9 @@
   function folderMenu(at, pid) {
     const cur = presetOf(pid).folder || '';
     openMenu(at, [{ label: L.noFolder, value: '', sel: !cur, icon: ICONS.x },
-      ...folderList().map((f) => ({ label: f, value: f, sel: cur === f, icon: ICONS.folder })),
+      ...folderList().slice().sort().map((f) => ({ label: f.replace(/\//g, ' › '), value: f, sel: cur === f, icon: ICONS.folder })),
       { sep: true }, { label: L.newFolderMenu, value: '\u0000new', icon: ICONS.plus }],
-      (v) => { if (v === '\u0000new') { const f = folderList(); let n = L.newFolder; let i = 2; while (f.includes(n)) n = `${L.newFolder} ${i++}`; S.set.folders = [...f, n]; saveSettings(); moveToFolder(pid, n); setTimeout(() => renameFolder(n), 60); } else moveToFolder(pid, v); });
+      (v) => { if (v === '\u0000new') { const n = uniqueFolder(''); S.set.folders = [...folderList(), n]; saveSettings(); moveToFolder(pid, n); setTimeout(() => renameFolder(n), 60); } else moveToFolder(pid, v); });
   }
   function colorMenu(at, pid) {
     const p = (S.draft && S.draft.id === pid) ? S.draft : presetOf(pid);
@@ -748,10 +766,13 @@
     });
   }
 
+  function setAllFolders(closed) { const c = {}; folderList().forEach((f) => { c[f] = closed; }); S.set.folderClosed = c; saveSettings(); renderPresets(); }
   $('#bManage').dataset.menu = '1';
   $('#bManage').onclick = (e) => openMenu(e.currentTarget, [
     { label: L.newPresetMenu, value: 'new', icon: ICONS.plus },
     { label: L.newFolderMenu, value: 'folder', icon: ICONS.folder },
+    { label: L.collapseAll, value: 'collapse', icon: ICONS.chev },
+    { label: L.expandAll, value: 'expand', icon: ICONS.chev },
     { sep: true },
     { label: L.importEnc, value: 'enc', icon: ICONS.down },
     { label: L.importJson, value: 'json', icon: ICONS.down },
@@ -759,7 +780,7 @@
     { label: L.openPresetsFolder, value: 'open', icon: ICONS.reveal },
     { sep: true },
     { label: L.restoreDefaults, value: 'defaults', icon: ICONS.reset },
-  ], (v) => ({ new: () => newPreset(), folder: newFolder, enc: importEnc, json: importJson, export: exportPresets, open: openPresetsFolder, defaults: restoreDefaults }[v]()));
+  ], (v) => ({ collapse: () => setAllFolders(true), expand: () => setAllFolders(false), new: () => newPreset(), folder: () => newFolder(''), enc: importEnc, json: importJson, export: exportPresets, open: openPresetsFolder, defaults: restoreDefaults }[v]()));
 
   const pressPreset = { justDropped: false };
   $('#presets').addEventListener('click', (e) => {
@@ -769,7 +790,7 @@
     const b = e.target.closest('.preset'); if (!b) return;
     if (b.classList.contains('add')) {
       openMenu(b, [{ label: L.newPresetMenu, value: 'new', icon: ICONS.plus }, { label: L.newAudioPreset, value: 'audio', icon: ICONS.note }, { label: L.newFolderMenu, value: 'folder', icon: ICONS.folder }, { label: L.importEnc, value: 'enc', icon: ICONS.down }],
-        (v) => (v === 'new' ? newPreset() : v === 'audio' ? newAudioPreset() : v === 'folder' ? newFolder() : importEnc()));
+        (v) => (v === 'new' ? newPreset() : v === 'audio' ? newAudioPreset() : v === 'folder' ? newFolder('') : importEnc()));
       return;
     }
     const q = selItem();
@@ -785,10 +806,11 @@
       const f = fh.dataset.folder;
       openMenu({ x: e.clientX, y: e.clientY }, [
         { label: L.newPresetHere, value: 'new', icon: ICONS.plus },
+        { label: L.newSubfolder, value: 'sub', icon: ICONS.folder },
         { label: L.rename, value: 'rename', icon: ICONS.edit },
         { sep: true },
         { label: L.deleteFolder, value: 'del', icon: ICONS.trash, danger: true },
-      ], (v) => (v === 'new' ? newPreset(f) : v === 'rename' ? renameFolder(f) : deleteFolder(f)));
+      ], (v) => (v === 'new' ? newPreset(f) : v === 'sub' ? newFolder(f) : v === 'rename' ? renameFolder(f) : deleteFolder(f)));
       return;
     }
     const b = e.target.closest('.preset:not(.add)'); if (!b) return; const pid = b.dataset.id;

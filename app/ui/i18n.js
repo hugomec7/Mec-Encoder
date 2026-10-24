@@ -9,7 +9,7 @@ window.MEC_I18N = {
 
     theme: 'Theme', rotate: 'Rotate', rotateSub: 'For videos shot sideways', addVideos: 'Add videos…', addFolder: 'Add folder…', importEnc: 'Import from Shutter Encoder (.enc)…', importJson: 'Import presets (.json)…',
     exportPresets: 'Export presets…', restoreDefaults: 'Restore default presets', newPresetName: 'New preset', newPresetMenu: 'New preset',
-    rename: 'Rename', duplicate: 'Duplicate', deletePreset: 'Delete preset', cantDeleteLast: 'Keep at least one preset',
+    rename: 'Rename', newSubfolder: 'New subfolder', collapseAll: 'Collapse all folders', expandAll: 'Expand all folders', duplicate: 'Duplicate', deletePreset: 'Delete preset', cantDeleteLast: 'Keep at least one preset',
     presetsImported: (n) => `${n} preset${n === 1 ? '' : 's'} imported`, presetsExported: 'Presets exported', presetDeleted: (p) => `“${p}” deleted`,
     playbackSoon: 'Video playback comes in a later update. Drag the timeline to check frames.', outputRes: 'Output',
     scale1080Hint: '1080p uses the shorter side: vertical videos stay vertical (1080×1920), horizontal ones become 1920×1080.',
@@ -93,7 +93,7 @@ window.MEC_I18N = {
 
     theme: 'Tema', rotate: 'Girar', rotateSub: 'Para vídeo gravado deitado', addVideos: 'Adicionar vídeos…', addFolder: 'Adicionar pasta…', importEnc: 'Importar do Shutter Encoder (.enc)…', importJson: 'Importar presets (.json)…',
     exportPresets: 'Exportar presets…', restoreDefaults: 'Restaurar presets padrão', newPresetName: 'Novo preset', newPresetMenu: 'Novo preset',
-    rename: 'Renomear', duplicate: 'Duplicar', deletePreset: 'Excluir preset', cantDeleteLast: 'Mantenha pelo menos um preset',
+    rename: 'Renomear', newSubfolder: 'Nova subpasta', collapseAll: 'Recolher todas as pastas', expandAll: 'Abrir todas as pastas', duplicate: 'Duplicar', deletePreset: 'Excluir preset', cantDeleteLast: 'Mantenha pelo menos um preset',
     presetsImported: (n) => `${n} preset${n === 1 ? '' : 's'} importado${n === 1 ? '' : 's'}`, presetsExported: 'Presets exportados', presetDeleted: (p) => `“${p}” excluído`,
     playbackSoon: 'A reprodução do vídeo chega numa próxima atualização. Arraste a linha do tempo para ver os quadros.', outputRes: 'Saída',
     scale1080Hint: '1080p usa o lado menor: vídeo vertical continua vertical (1080×1920), horizontal vira 1920×1080.',

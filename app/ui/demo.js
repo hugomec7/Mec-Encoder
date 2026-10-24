@@ -30,7 +30,7 @@
         fps: { conform: true, value: '29.97' }, audio: { codec: 'copy', channels: 'mono', tracks: [1, 1], kbps: 256, rate: 48000 },
         output: { suffix: { on: true, text: '_{codec}' }, subfolder: { on: false, text: 'proxy' }, deleteSource: false } }),
   ];
-  const A = (id, name, color, codec, kbps, bits) => P({ kind: 'audio', id, name, color, container: '',
+  const A = (id, name, color, codec, kbps, bits) => P({ kind: 'audio', id, name, color, container: '', folder: codec === 'wav' || codec === 'flac' ? 'Audio/Lossless' : 'Audio',
     audio: { codec, channels: 'source', tracks: [1, 2], kbps, rate: 0, bits },
     output: { suffix: { on: false, text: '' }, subfolder: { on: false, text: 'audio' }, deleteSource: false } });
   const audioDefaults = [A('audio-wav', 'WAV', 'teal', 'wav', 0, 24), A('audio-mp3', 'MP3 320', 'purple', 'mp3', 320, 0),
@@ -50,6 +50,6 @@
     { id: 5, file: 'IMG_4801.MOV', src: Object.assign({}, iphone, { hdr: false, rot: 0, mb: 1034 }), preset: 'iphone-4k60', status: 'done', hue: 330 },
   ];
 
-  const settings = { lang: 'en', theme: 'oled', lastDark: 'oled', defaultPreset: 'iphone-4k60', clearWhenDone: true, notify: true };
+  const settings = { folders: ['Audio', 'Audio/Lossless', 'Images'], lang: 'en', theme: 'oled', lastDark: 'oled', defaultPreset: 'iphone-4k60', clearWhenDone: true, notify: true };
   window.MEC_DEMO = { presets, queue, settings, audioDefaults };
 })();
