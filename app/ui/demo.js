@@ -36,6 +36,10 @@
   const audioDefaults = [A('audio-wav', 'WAV', 'teal', 'wav', 0, 24), A('audio-mp3', 'MP3 320', 'purple', 'mp3', 320, 0),
     A('audio-m4a', 'AAC 256', 'indigo', 'aac', 256, 0), A('audio-flac', 'FLAC', 'teal', 'flac', 0, 0)];
   presets.push(...audioDefaults.map((p) => JSON.parse(JSON.stringify(p))));
+  const I = (id, name, color, format, quality) => P({ kind: 'image', id, name, color, container: '', folder: 'Images', image: { format, quality, lossless: false },
+    output: { suffix: { on: false, text: '' }, subfolder: { on: false, text: 'images' }, deleteSource: false } });
+  const imageDefaults = [I('image-jpg', 'JPG 90', 'orange', 'jpg', 90), I('image-png', 'PNG', 'green', 'png', 100), I('image-webp', 'WebP 85', 'blue', 'webp', 85)];
+  presets.push(...imageDefaults.map((p) => JSON.parse(JSON.stringify(p))));
 
   // arquivos de exemplo (o que o ffprobe devolveria)
   const iphone = { w: 2160, h: 3840, codec: 'HEVC', bits: 10, fps: '59,93', fpsNom: 60, vfr: true, aud: [{ kbps: 107, rate: 48000 }], dur: '00:02:15:31', kbps: 49800, audio: 2 };
@@ -47,6 +51,8 @@
     { id: 4, file: 'IMG_4823.MOV', src: Object.assign({}, iphone, { hdr: false, rot: 90, mb: 655 }), preset: 'proxy', status: 'ready', hue: 150 },
     { id: 6, file: 'Entrevista.mp3', dir: 'Audios', src: { audioOnly: true, codec: 'MP3', aud: [{ kbps: 192, rate: 44100, ch: 2, codec: 'mp3', bits: 0 }], dur: '00:03:12:00', durS: 192, audio: 1, mb: 4.6, hdr: false, rot: 0 },
       preset: 'audio-wav', status: 'ready', hue: 180 },
+    { id: 7, file: 'Thumbnail.png', dir: 'Imagens', src: { isImage: true, w: 1080, h: 1920, codec: 'PNG', dur: '00:00:00:00', durS: 0, audio: 0, mb: 3.2, hdr: false, rot: 0 },
+      preset: 'image-jpg', status: 'ready', hue: 40 },
     { id: 5, file: 'IMG_4801.MOV', src: Object.assign({}, iphone, { hdr: false, rot: 0, mb: 1034 }), preset: 'iphone-4k60', status: 'done', hue: 330 },
   ];
 

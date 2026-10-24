@@ -133,8 +133,8 @@ async fn pick(app: AppHandle, folder: bool) -> Result<usize, String> {
         if folder {
             d.blocking_pick_folder().and_then(|p| p.into_path().ok()).map(|p| vec![p]).unwrap_or_default()
         } else {
-            let all: Vec<&str> = scan::VIDEO_EXT.iter().chain(scan::AUDIO_EXT.iter()).copied().collect();
-            d.add_filter("Video / Audio", &all)
+            let all: Vec<&str> = scan::VIDEO_EXT.iter().chain(scan::AUDIO_EXT.iter()).chain(scan::IMAGE_EXT.iter()).copied().collect();
+            d.add_filter("Video / Audio / Image", &all)
                 .blocking_pick_files()
                 .map(|v| v.into_iter().filter_map(|p| p.into_path().ok()).collect())
                 .unwrap_or_default()
@@ -286,6 +286,19 @@ fn do_render(app: &AppHandle, engine: &Engine, info: &MediaInfo, cfg: &Preset, i
         command::output_path(&info.path, cfg).with_extension(ext)
     } else { command::output_path(&info.path, cfg) };
     if let Some(dir) = out.parent() { std::fs::create_dir_all(dir).map_err(|e| e.to_string())?; }
+    if info.is_image && !cfg.is_image() { return Err("need-image-preset".into()); }
+    if cfg.is_image() {
+        // Imagem: um quadro, sem placa de vídeo.
+        if !info.is_image { return Err("not-image".into()); }
+        let plan = command::build_image(info, cfg, &out);
+        log(app, &format!("{} | image | ffmpeg {}", info.path.display(), plan.args.join(" ")));
+        if let Err(e) = run_ffmpeg(app, &ffmpeg, &plan, id, 0.0, children, cancel, "image") {
+            let _ = std::fs::remove_file(&out);
+            log(app, &format!("{} | failed (image): {}", info.path.display(), e.replace('\n', " / ")));
+            return Err(e);
+        }
+        return finish(&ffprobe, info, cfg, out, vec![]);
+    }
     if cfg.is_audio() {
         // Converter só áudio (ou extrair o áudio de um vídeo): um comando, sem placa de vídeo.
         if info.audio.is_empty() { return Err("no-audio".into()); }
@@ -390,6 +403,7 @@ fn get_state(app: AppHandle, state: State<'_, AppState>) -> Value {
         "firstRun": loaded.first_run,
         "presetsRecovered": loaded.recovered,
         "audioDefaults": Preset::audio_defaults(),
+        "imageDefaults": Preset::image_defaults(),
         "cameraPreset": Preset::camera_422(),
         "settings": store::load_settings(&app),
         "engine": {

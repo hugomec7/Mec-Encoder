@@ -42,6 +42,20 @@ pub struct Audio {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(rename_all = "camelCase", default))]
+pub struct Image {
+    /// "jpg", "png" ou "webp".
+    pub format: String,
+    /// 1–100 (JPG e WebP).
+    pub quality: u32,
+    /// WebP sem perda.
+    pub lossless: bool,
+}
+impl Default for Image {
+    fn default() -> Self { Self { format: "jpg".into(), quality: 90, lossless: false } }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(rename_all = "camelCase", default))]
 pub struct Toggle {
     pub on: bool,
     pub text: String,
@@ -58,7 +72,7 @@ pub struct Output {
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(rename_all = "camelCase", default))]
 pub struct Preset {
-    /// "video" ou "audio" (converte só o áudio: WAV, MP3, AAC, FLAC).
+    /// "video", "audio" (converte só o áudio: WAV, MP3, AAC, FLAC) ou "image" (JPG, PNG, WebP).
     pub kind: String,
     pub id: String,
     pub name: String,
@@ -86,6 +100,7 @@ pub struct Preset {
     pub fps: Fps,
     pub hdr_to_sdr: bool,
     pub audio: Audio,
+    pub image: Image,
     pub output: Output,
     pub av_sync: bool,
     pub metadata: bool,
@@ -114,7 +129,7 @@ impl Default for Preset {
             kind: "video".into(), id: "preset".into(), name: "Preset".into(), icon: "phone".into(), color: "blue".into(),
             codec: "h265".into(), bits: 8, chroma: "420".into(), container: "mp4".into(), scale: "source".into(), rotate: 0, custom_w: 0, custom_h: 0, folder: String::new(),
             bitrate: Bitrate::default(), max_quality: false, fps: Fps::default(), hdr_to_sdr: false,
-            audio: Audio::default(), output: Output::default(), av_sync: true, metadata: true,
+            audio: Audio::default(), image: Image::default(), output: Output::default(), av_sync: true, metadata: true,
         }
     }
 }
@@ -152,7 +167,23 @@ impl Preset {
                 ..raw },
         ];
         v.extend(Self::audio_defaults());
+        v.extend(Self::image_defaults());
         v
+    }
+
+    /// Presets de imagem (pasta "Images"; também entram uma vez para quem já usa o app).
+    pub fn image_defaults() -> Vec<Preset> {
+        let i = |id: &str, name: &str, color: &str, format: &str, quality: u32, lossless: bool| Preset {
+            kind: "image".into(), id: id.into(), name: name.into(), color: color.into(), container: String::new(), folder: "Images".into(),
+            image: Image { format: format.into(), quality, lossless },
+            output: Output { suffix: Toggle { on: false, text: String::new() }, subfolder: Toggle { on: false, text: "images".into() }, delete_source: false },
+            ..Preset::default()
+        };
+        vec![
+            i("image-jpg", "JPG 90", "orange", "jpg", 90, false),
+            i("image-png", "PNG", "green", "png", 100, false),
+            i("image-webp", "WebP 85", "blue", "webp", 85, false),
+        ]
     }
 
     /// Presets de áudio (também entram para quem já usa o app, uma vez, se não tiver nenhum).
@@ -180,6 +211,7 @@ impl Preset {
     }
 
     pub fn is_audio(&self) -> bool { self.kind == "audio" }
+    pub fn is_image(&self) -> bool { self.kind == "image" }
 
     /// Frame rate como fração exata ("59.94" -> 60000/1001).
     pub fn fps_rational(&self) -> (u32, u32) { fps_rational(&self.fps.value) }

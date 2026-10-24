@@ -11,6 +11,7 @@ pub struct Found {
     pub dir: String,
 }
 
+pub const IMAGE_EXT: &[&str] = &["png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff", "gif", "heic", "heif", "avif"];
 pub const AUDIO_EXT: &[&str] = &["mp3", "wav", "m4a", "aac", "flac", "ogg", "opus", "aif", "aiff", "wma", "caf"];
 
 pub fn is_video(p: &Path) -> bool {
@@ -19,8 +20,11 @@ pub fn is_video(p: &Path) -> bool {
 pub fn is_audio(p: &Path) -> bool {
     p.extension().and_then(|e| e.to_str()).map_or(false, |e| AUDIO_EXT.contains(&e.to_ascii_lowercase().as_str()))
 }
-/// Vídeo ou áudio que o app aceita na fila.
-pub fn is_media(p: &Path) -> bool { is_video(p) || is_audio(p) }
+pub fn is_image(p: &Path) -> bool {
+    p.extension().and_then(|e| e.to_str()).map_or(false, |e| IMAGE_EXT.contains(&e.to_ascii_lowercase().as_str()))
+}
+/// Vídeo, áudio ou imagem que o app aceita na fila.
+pub fn is_media(p: &Path) -> bool { is_video(p) || is_audio(p) || is_image(p) }
 
 fn hidden(p: &Path) -> bool {
     let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");

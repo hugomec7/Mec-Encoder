@@ -312,6 +312,7 @@ pub fn aac_quality(info: &MediaInfo, p: &Preset) -> (u32, u32) {
 }
 
 fn codec_tag(p: &Preset) -> &'static str {
+    if p.is_image() { return match p.image.format.as_str() { "png" => "PNG", "webp" => "WEBP", _ => "JPG" }; }
     if p.is_audio() { return match p.audio.codec.as_str() { "wav" => "WAV", "mp3" => "MP3", "flac" => "FLAC", "aac" => "AAC", _ => "AUDIO" }; }
     if p.codec == "h264" { "H264" } else { "H265" }
 }
@@ -340,7 +341,7 @@ pub fn output_path(src: &Path, p: &Preset) -> PathBuf {
     let suffix = if p.output.suffix.on {
         clean(&p.output.suffix.text.replace("{codec}", codec_tag(p)).replace("{preset}", &p.name))
     } else { String::new() };
-    let ext = if p.is_audio() { audio_ext(src, p, "") } else {
+    let ext = if p.is_image() { image_ext(p).to_string() } else if p.is_audio() { audio_ext(src, p, "") } else {
         match p.container.as_str() { "mov" => "mov", "source" => source_container(src), _ => "mp4" }.to_string()
     };
     let mut out = dir.join(format!("{stem}{suffix}.{ext}"));
@@ -500,6 +501,49 @@ pub fn build_audio(info: &MediaInfo, p: &Preset, output: &Path) -> Plan {
     args.extend(["-progress", "pipe:1", "-nostats", "-y"].map(String::from));
     args.push(output.to_string_lossy().into_owned());
     Plan { args, output: output.to_path_buf(), width: 0, height: 0, warnings: vec![] }
+}
+
+pub fn image_ext(p: &Preset) -> &'static str { match p.image.format.as_str() { "png" => "png", "webp" => "webp", _ => "jpg" } }
+
+/// Converte uma imagem: JPG (fundo branco onde era transparente), PNG ou WebP; opcionalmente redimensiona e gira.
+pub fn build_image(info: &MediaInfo, p: &Preset, output: &Path) -> Plan {
+    let mut args: Vec<String> = vec!["-nostdin".into(), "-hide_banner".into(), "-v".into(), "error".into(), "-i".into(), info.path.to_string_lossy().into_owned()];
+    let mut f: Vec<String> = Vec::new();
+    let (mut w, mut h) = (0, 0);
+    if let Some(v) = info.video.as_ref() {
+        // Imagem: o "tamanho do arquivo" já está em pé; a rotação é só a escolhida pelo usuário.
+        let mut vv = v.clone(); vv.rotation = 0; vv.width = v.coded_width.max(v.width); vv.height = v.coded_height.max(v.height);
+        if v.coded_width > 0 { vv.width = v.coded_width; vv.height = v.coded_height; }
+        let (ow, oh) = out_dims(&vv, p);
+        let rot = p.rotate % 360;
+        let (pw, ph) = if rot % 180 == 90 { (oh, ow) } else { (ow, oh) };
+        if (pw, ph) != (vv.width, vv.height) { f.push(format!("scale={pw}:{ph}:flags=lanczos")); }
+        match rot { 90 => f.push("transpose=clock".into()), 180 => f.push("hflip,vflip".into()), 270 => f.push("transpose=cclock".into()), _ => {} }
+        w = ow; h = oh;
+    }
+    let q = p.image.quality.clamp(1, 100);
+    match p.image.format.as_str() {
+        "png" => {
+            if !f.is_empty() { args.extend(["-vf".into(), f.join(",")]); }
+            args.extend(["-c:v".into(), "png".into()]);
+        }
+        "webp" => {
+            if !f.is_empty() { args.extend(["-vf".into(), f.join(",")]); }
+            args.extend(["-c:v".into(), "libwebp".into()]);
+            if p.image.lossless { args.extend(["-lossless".into(), "1".into()]); } else { args.extend(["-quality".into(), q.to_string()]); }
+        }
+        _ => {
+            // JPG não tem transparência: o que era transparente vira branco (e não preto).
+            let pre = if f.is_empty() { String::new() } else { format!("{},", f.join(",")) };
+            args.extend(["-filter_complex".into(), format!("[0:v]{pre}format=rgba,split[a][b];[a]drawbox=c=white:t=fill[bg];[bg][b]overlay=format=auto,format=yuvj420p[v]"), "-map".into(), "[v]".into()]);
+            // qualidade 100 → q 2 (máxima), 1 → q 31
+            let qv = (31.0 - (q as f64 - 1.0) * 29.0 / 99.0).round() as u32;
+            args.extend(["-c:v".into(), "mjpeg".into(), "-q:v".into(), qv.clamp(2, 31).to_string()]);
+        }
+    }
+    args.extend(["-frames:v", "1", "-update", "1", "-an", "-progress", "pipe:1", "-nostats", "-y"].map(String::from));
+    args.push(output.to_string_lossy().into_owned());
+    Plan { args, output: output.to_path_buf(), width: w, height: h, warnings: vec![] }
 }
 
 /// Um quadro JPEG da prévia, no tempo `t` (segundos). `output = true` mostra o resultado do preset.
@@ -771,9 +815,9 @@ mod tests {
     fn defaults_for_new_users() {
         let d = Preset::defaults();
         let names: Vec<_> = d.iter().map(|p| p.name.as_str()).collect();
-        assert_eq!(names, vec!["RAW", "Backup", "Proxy", "Meta Glass", "WAV", "MP3 320", "AAC 256", "FLAC"]);
+        assert_eq!(names, vec!["RAW", "Backup", "Proxy", "Meta Glass", "WAV", "MP3 320", "AAC 256", "FLAC", "JPG 90", "PNG", "WebP 85"]);
         // Tudo que é vídeo roda pela placa em qualquer RTX 20+ e nada apaga o original sem o usuário pedir.
-        for p in d.iter().filter(|p| !p.is_audio()) {
+        for p in d.iter().filter(|p| !p.is_audio() && !p.is_image()) {
             assert!(p.codec == "h265" && p.chroma == "420" && !p.output.delete_source && p.hdr_to_sdr, "{}", p.name);
             assert!(!needs_ext_encoder(&resolve(&iphone(90, "HLG"), p)), "{}", p.name);
         }

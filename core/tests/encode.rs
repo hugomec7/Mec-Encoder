@@ -207,3 +207,46 @@ fn audio_only() {
     mec_core::command::verify(&vinfo, &o).unwrap();
     let _ = std::fs::remove_dir_all(&d);
 }
+
+
+/// Converter imagens: PNG transparente → JPG (fundo branco) com metade do tamanho, → WebP, e JPG → PNG.
+#[test]
+fn images() {
+    let (Some(ff), Some(fp)) = (tool("ffmpeg"), tool("ffprobe")) else { eprintln!("sem ffmpeg, pulando"); return };
+    let d = dir("img");
+    let png = d.join("logo.png");
+    assert!(Command::new(&ff).args(["-v", "error", "-y", "-f", "lavfi", "-i",
+        "testsrc2=s=800x600,format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='if(lt(X,400),0,255)'", "-frames:v", "1"]).arg(&png).status().unwrap().success());
+    let info = probe(&fp, &png).unwrap();
+    assert!(info.is_image);
+    let presets = Preset::image_defaults();
+    let get = |id: &str| presets.iter().find(|p| p.id == id).unwrap().clone();
+    // PNG → JPG 50%
+    let mut jpg = get("image-jpg"); jpg.scale = "50".into();
+    let out = output_path(&png, &jpg);
+    assert!(out.to_string_lossy().ends_with("logo.jpg"));
+    run(&ff, &mec_core::command::build_image(&info, &jpg, &out).args);
+    let o = probe(&fp, &out).unwrap();
+    let v = o.video.as_ref().unwrap();
+    assert_eq!((v.codec.as_str(), v.width, v.height), ("mjpeg", 400, 300));
+    mec_core::command::verify(&info, &o).unwrap();
+    // o lado que era transparente ficou branco
+    let px = Command::new(&ff).args(["-v", "error", "-i"]).arg(&out).args(["-vf", "crop=2:2:10:150,format=gray", "-f", "rawvideo", "-"]).output().unwrap().stdout;
+    assert!(px[0] > 240, "fundo deveria ser branco: {}", px[0]);
+    // PNG → WebP
+    let webp = get("image-webp");
+    let wo = output_path(&png, &webp);
+    if Command::new(&ff).args(["-hide_banner", "-encoders"]).output().map_or(false, |o| String::from_utf8_lossy(&o.stdout).contains("libwebp")) {
+        run(&ff, &mec_core::command::build_image(&info, &webp, &wo).args);
+        assert_eq!(probe(&fp, &wo).unwrap().video.unwrap().codec, "webp");
+    }
+    // JPG → PNG (girando 90)
+    let ji = probe(&fp, &out).unwrap();
+    let mut pp = get("image-png"); pp.rotate = 90;
+    let po = output_path(&out, &pp);
+    run(&ff, &mec_core::command::build_image(&ji, &pp, &po).args);
+    let o = probe(&fp, &po).unwrap();
+    let v = o.video.unwrap();
+    assert_eq!((v.codec.as_str(), v.width, v.height), ("png", 300, 400));
+    let _ = std::fs::remove_dir_all(&d);
+}

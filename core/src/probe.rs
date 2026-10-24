@@ -60,6 +60,8 @@ pub struct MediaInfo {
     pub bitrate_kbps: u32,
     pub video: Option<VideoInfo>,
     pub audio: Vec<AudioInfo>,
+    /// Arquivo de imagem (PNG, JPG, WebP, HEIC...).
+    pub is_image: bool,
     /// Timecode do primeiro quadro (ex.: "07:51:07:46"), vazio se o arquivo não tiver.
     /// Na Sony FX30 vem da trilha de metadados (rtmd).
     pub timecode: String,
@@ -88,6 +90,11 @@ pub fn probe(ffprobe: &Path, path: &Path) -> Result<MediaInfo, String> {
     info.path = path.to_path_buf();
     if let Ok(m) = std::fs::metadata(path) { info.size_bytes = m.len(); }
     if info.video.is_none() && info.audio.is_empty() { return Err("no video or audio stream".into()); }
+    if crate::scan::is_image(path) {
+        info.is_image = true;
+        info.duration = 0.0;
+        if let Some(v) = info.video.as_mut() { v.vfr = false; }
+    }
     Ok(info)
 }
 

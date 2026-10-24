@@ -18,6 +18,7 @@
     teal: 'var(--teal)', yellow: 'var(--yellow)', pink: 'var(--pink)', indigo: 'var(--indigo)', red: 'var(--red)' };
   const PALETTE = Object.keys(COLORS);
   const ICONS = {
+    image: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.2" y="3" width="11.6" height="10" rx="2"/><circle cx="6" cy="6.6" r="1.1"/><path d="M13.6 10.6l-3.2-3.1L4 13"/></svg>',
     again: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 8a5 5 0 1 1-1.6-3.7"/><path d="M13 2.8v2.8h-2.8"/></svg>',
     dup: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><rect x="5.2" y="5.2" width="8" height="8" rx="1.8"/><path d="M10.8 5.2V4a1.6 1.6 0 0 0-1.6-1.6H4A1.6 1.6 0 0 0 2.4 4v5.2A1.6 1.6 0 0 0 4 10.8h1.2"/></svg>',
     note: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 12.2V3.4l7-1.4v8.6"/><circle cx="4.3" cy="12.2" r="1.8" fill="currentColor"/><circle cx="11.3" cy="10.6" r="1.8" fill="currentColor"/></svg>',
@@ -140,7 +141,7 @@
   /* ---------- mídia ---------- */
   const secs = (tc) => { const [h, m, s, f] = tc.split(':').map(Number); return h * 3600 + m * 60 + s + f / 60; };
   const num = (n, d = 1) => Number(n || 0).toLocaleString(S.set.lang === 'pt' ? 'pt-BR' : 'en-US', { maximumFractionDigits: d });
-  const fmtMB = (mb) => mb >= 1000 ? num(mb / 1000, 2) + ' GB' : Math.round(mb) + ' MB';
+  const fmtMB = (mb) => mb >= 1000 ? num(mb / 1000, 2) + ' GB' : mb >= 10 ? Math.round(mb) + ' MB' : mb >= 1 ? num(mb, 1) + ' MB' : Math.max(1, Math.round(mb * 1000)) + ' KB';
   const fmtK = (k) => num(k / 1000) + ' Mb/s';
   const fpsTxt = (v) => S.set.lang === 'pt' ? String(v).replace('.', ',') : String(v).replace(',', '.');
   // "Original" no FPS: padrão mais próximo do arquivo (igual ao motor): iPhone 59,93 VFR → 60; FX30 → 59,94
@@ -182,7 +183,7 @@
     const s = Math.max(0, seconds); const ss = Math.floor(s); const f = Math.floor((s - ss) * Math.round(fps || 60));
     return [Math.floor(ss / 3600), Math.floor(ss / 60) % 60, ss % 60, f].map(pad).join(':');
   }
-  const CODECS = { hevc: 'HEVC', h264: 'H.264', prores: 'ProRes', av1: 'AV1', vp9: 'VP9', mpeg2video: 'MPEG-2', dnxhd: 'DNxHD', mjpeg: 'MJPEG' };
+  const CODECS = { png: 'PNG', mjpeg: 'JPG', webp: 'WebP', bmp: 'BMP', tiff: 'TIFF', gif: 'GIF', hevc: 'HEVC', h264: 'H.264', prores: 'ProRes', av1: 'AV1', vp9: 'VP9', mpeg2video: 'MPEG-2', dnxhd: 'DNxHD', mjpeg: 'MJPEG' };
   // MediaInfo do Rust → formato usado pela interface
   function mapSrc(info) {
     const v = info.video || {};
@@ -194,7 +195,7 @@
       codecId: v.codec || '', pix: v.pixFmt || '', ext: String(info.path || '').split('.').pop().toLowerCase(), tc: info.timecode || '',
       pcm: (info.audio || []).some((a) => String(a.codec).startsWith('pcm_')),
       aud: (info.audio || []).map((a) => ({ kbps: a.bitrateKbps || 0, rate: a.sampleRate || 48000, ch: a.channels || 2, codec: a.codec || '', bits: a.bits || 0 })),
-      audioOnly: !info.video,
+      audioOnly: !info.video, isImage: !!info.isImage,
     };
   }
   const durOf = (q) => q.src.durS || secs(q.src.dur);
@@ -218,6 +219,16 @@
     const o = outDims(src, cfg); return Math.round(o.w * o.h * 60 * 0.07 * k / 1000 / 100) * 100;
   }
   const isAudioP = (c) => c && c.kind === 'audio';
+  const isImageP = (c) => c && c.kind === 'image';
+  const IEXT = { jpg: 'jpg', png: 'png', webp: 'webp' };
+  const IFMT = { jpg: 'JPG', png: 'PNG', webp: 'WebP' };
+  // o que um preset de imagem vai gerar: "JPG · 90% · 400 × 300"
+  function imageOutTxt(c, src) {
+    const im = c.image || { format: 'jpg', quality: 90 };
+    const q = im.format === 'png' ? null : im.format === 'webp' && im.lossless ? L.lossless : (im.quality || 90) + '%';
+    const d = src && src.w ? outDims(src, c) : null;
+    return [IFMT[im.format] || 'JPG', q, d ? `${d.w} × ${d.h}` : null].filter(Boolean).join(' · ');
+  }
   const ACODEC = { wav: 'WAV', mp3: 'MP3', aac: 'AAC', flac: 'FLAC', copy: null };
   const AEXT = { wav: 'wav', mp3: 'mp3', aac: 'm4a', flac: 'flac' };
   const srcAud = (src) => (src && src.aud && src.aud[0]) || null;
@@ -239,7 +250,9 @@
     if (a.codec === 'copy') return s0.kbps || 256;
     return a.kbps || Math.min(320, Math.max(64, s0.kbps || 256));
   }
-  const estMB = (q) => (isAudioP(q.cfg) ? audioKbps(q) : videoKbps(q.src, q.cfg) + (q.cfg.audio.codec === 'copy' ? 256 : q.cfg.audio.kbps || 256)) * durOf(q) / 8 / 1000;
+  const imageMB = (q) => { const d = outDims(q.src, q.cfg); const im = q.cfg.image || {}; const px = d.w * d.h;
+    return px * (im.format === 'png' ? 1.6 : (im.format === 'webp' ? 0.6 : 1) * (im.lossless ? 1.2 : 0.08 + (im.quality || 90) / 100 * 0.35)) / 1e6; };
+  const estMB = (q) => (isImageP(q.cfg) ? imageMB(q) : (isAudioP(q.cfg) ? audioKbps(q) : videoKbps(q.src, q.cfg) + (q.cfg.audio.codec === 'copy' ? 256 : q.cfg.audio.kbps || 256)) * durOf(q) / 8 / 1000);
   const warnings = (q) => (q.src.hdr && !q.cfg.hdrToSdr ? [L.hdrMismatch(q.src.hdr)] : []);
   const codecName = (c) => (c === 'h265' ? 'H.265' : c === 'h264' ? 'H.264' : L.source);
   const scaleTxt = (s) => (s === 'source' ? L.source : s === '1080' ? '1080p' : s === 'custom' ? L.custom : s + '%');
@@ -262,7 +275,7 @@
       <rect y="${H * .74}" width="${W}" height=".6" fill="hsl(${hue + 20},90%,75%)" opacity=".5"/>
     </svg>`;
   }
-  const thumbHtml = (q) => q.src.audioOnly ? `<i class="thumb-audio">${ICONS.note}</i>` : q.thumb ? `<img src="${q.thumb}" alt="">` : REAL ? '<i class="thumb-ph"></i>' : scene(q.hue, q.src.h > q.src.w);
+  const thumbHtml = (q) => q.src.isImage && !q.thumb && !REAL ? `<i class="thumb-audio">${ICONS.image}</i>` : q.src.audioOnly ? `<i class="thumb-audio">${ICONS.note}</i>` : q.thumb ? `<img src="${q.thumb}" alt="">` : REAL ? '<i class="thumb-ph"></i>' : scene(q.hue, q.src.h > q.src.w);
 
   /* ---------- scroll suave com efeito elástico nas pontas ---------- */
   function smooth(el) {
@@ -327,6 +340,7 @@
   document.addEventListener('pointerdown', (e) => { if (!e.target.closest('#menu') && !e.target.closest('[data-menu]')) closeMenu(); });
   document.addEventListener('contextmenu', (e) => { if (!e.target.closest('input')) e.preventDefault(); });
   const defaultAudioId = () => (presetOf(S.set.defaultAudioPreset) && isAudioP(presetOf(S.set.defaultAudioPreset)) ? S.set.defaultAudioPreset : (S.presets.find(isAudioP) || S.presets[0]).id);
+  const defaultImageId = () => (isImageP(presetOf(S.set.defaultImagePreset)) ? S.set.defaultImagePreset : (S.presets.find(isImageP) || S.presets[0]).id);
   const presetItems = (cur) => S.presets.map((p) => ({ label: p.name, value: p.id, color: COLORS[p.color] || COLORS.blue, sel: p.id === cur }));
 
   /* ---------- fila ---------- */
@@ -382,7 +396,7 @@
         <div class="thumb">${thumbHtml(q)}${q.src.hdr ? '<span class="hdr">HDR</span>' : ''}</div>
         <div class="meta">
           <div class="name" title="${esc(q.path || q.file)}">${esc(q.file)}</div>
-          <div class="spec">${q.status === 'running' ? timeLine(q) : q.src.audioOnly ? `${dir}${audioSrcTxt(q.src)}` : `${dir}${q.src.w}×${q.src.h} · ${q.src.codec} · ${fpsTxt(q.src.fps)} fps${q.src.vfr ? ' VFR' : ''}`}</div>
+          <div class="spec">${q.status === 'running' ? timeLine(q) : q.src.audioOnly ? `${dir}${audioSrcTxt(q.src)}` : q.src.isImage ? `${dir}${q.src.codec} · ${q.src.w}×${q.src.h}` : `${dir}${q.src.w}×${q.src.h} · ${q.src.codec} · ${fpsTxt(q.src.fps)} fps${q.src.vfr ? ' VFR' : ''}`}</div>
           <div class="row2"><span class="badge" style="--c:${c}"><i></i>${esc(p.name)}${same(q.cfg, p) ? '' : '*'}</span>
             ${w.length ? `<span class="warn" title="${esc(w.join('\n'))}">${ICONS.warn}</span>` : ''}${st}</div>
         </div>
@@ -588,21 +602,24 @@
 
   function assign(q, pid) {
     if (q.src.audioOnly && !isAudioP(presetOf(pid))) { toast(L.needAudioPreset); return false; }
+    if (q.src.isImage !== isImageP(presetOf(pid))) { toast(q.src.isImage ? L.needImagePreset : L.imagePresetOnlyImages); return false; }
     q.preset = pid; q.cfg = clone(presetOf(pid)); return true;
   }
   function assignPicked(pid) {
-    const list = pickedItems().filter((q) => q.status !== 'running' && (isAudioP(presetOf(pid)) || !q.src.audioOnly)); list.forEach((q) => assign(q, pid)); renderAll();
+    const fits = (q) => (isAudioP(presetOf(pid)) || !q.src.audioOnly) && !!q.src.isImage === isImageP(presetOf(pid));
+    const list = pickedItems().filter((q) => q.status !== 'running' && fits(q)); list.forEach((q) => assign(q, pid)); renderAll();
     list.forEach((q) => { const b = $(`.item[data-id="${q.id}"] .badge`); if (b) b.classList.add('bump'); });
     toast(L.assigned(presetOf(pid).name, list.length));
   }
   function assignAll(pid) {
-    const list = pending().filter((q) => isAudioP(presetOf(pid)) || !q.src.audioOnly); list.forEach((q) => assign(q, pid)); renderAll();
+    const list = pending().filter((q) => (isAudioP(presetOf(pid)) || !q.src.audioOnly) && !!q.src.isImage === isImageP(presetOf(pid))); list.forEach((q) => assign(q, pid)); renderAll();
     $$('.item:not(.is-done) .badge').forEach((b) => b.classList.add('bump'));
     toast(L.assigned(presetOf(pid).name, list.length));
   }
 
   /* ---------- presets ---------- */
   function describe(p) {
+    if (isImageP(p)) return `<b>${esc(p.name)}:</b> ${imageOutTxt(p, null)} · ${L.imageOnlyDesc}`;
     if (isAudioP(p)) return `<b>${esc(p.name)}:</b> ${audioOutTxt(p, null)} · ${L.audioOnlyDesc}`;
     const parts = [codecName(p.codec) + ' ' + bitsTxt(p, null) + ((p.chroma || '420') === '420' ? '' : ' ' + (p.chroma === '422' ? '4:2:2' : L.sourceChroma)), p.scale === 'source' ? L.sourceRes : scaleTxt(p.scale),
       p.bitrate.mode === 'manual' ? fmtK(p.bitrate.kbps) + ' ' + p.bitrate.rc.toUpperCase() : p.bitrate.mode === 'source' ? L.bitrateSrc : L.bitrateAuto,
@@ -619,7 +636,7 @@
     return f;
   }
   const inside = (p, f) => p.folder === f;
-  const pill = (p, selId) => `<button class="preset ${selId === p.id ? 'sel' : ''} ${isAudioP(p) ? 'is-audio' : ''}" data-id="${p.id}" style="--c:${COLORS[p.color] || COLORS.blue}"><i class="pdot"></i>${isAudioP(p) ? ICONS.note : ''}${esc(p.name)}</button>`;
+  const pill = (p, selId) => `<button class="preset ${selId === p.id ? 'sel' : ''} ${isAudioP(p) || isImageP(p) ? 'is-audio' : ''}" data-id="${p.id}" style="--c:${COLORS[p.color] || COLORS.blue}"><i class="pdot"></i>${isAudioP(p) ? ICONS.note : isImageP(p) ? ICONS.image : ''}${esc(p.name)}</button>`;
   function folderHtml(f, selId, closed) {
     const list = S.presets.filter((p) => p.folder === f);
     return `<div class="pfolder ${closed[f] ? 'closed' : ''}" data-folder="${esc(f)}">
@@ -675,6 +692,12 @@
     const base = clone(S.presets.find(isAudioP) || S.audioDefaults[0] || {});
     if (!base.audio) return;
     Object.assign(base, { kind: 'audio', id: uid(), name: L.newPresetName, color: PALETTE[S.presets.length % PALETTE.length], folder: '' });
+    addPresets([base], false); editPreset(base.id, true);
+  }
+  function newImagePreset() {
+    const base = clone(S.presets.find(isImageP) || (S.imageDefaults || [])[0] || {});
+    if (!base.image) return;
+    Object.assign(base, { kind: 'image', id: uid(), name: L.newPresetName, color: PALETTE[S.presets.length % PALETTE.length], folder: base.folder || '' });
     addPresets([base], false); editPreset(base.id, true);
   }
   function deletePreset(pid) {
@@ -786,8 +809,8 @@
     if (fh) { const f = fh.dataset.folder; S.set.folderClosed = Object.assign({}, S.set.folderClosed, { [f]: !(S.set.folderClosed || {})[f] }); saveSettings(); renderPresets(); return; }
     const b = e.target.closest('.preset'); if (!b) return;
     if (b.classList.contains('add')) {
-      openMenu(b, [{ label: L.newPresetMenu, value: 'new', icon: ICONS.plus }, { label: L.newAudioPreset, value: 'audio', icon: ICONS.note }, { label: L.newFolderMenu, value: 'folder', icon: ICONS.folder }, { label: L.importEnc, value: 'enc', icon: ICONS.down }],
-        (v) => (v === 'new' ? newPreset() : v === 'audio' ? newAudioPreset() : v === 'folder' ? newFolder('') : importEnc()));
+      openMenu(b, [{ label: L.newPresetMenu, value: 'new', icon: ICONS.plus }, { label: L.newAudioPreset, value: 'audio', icon: ICONS.note }, { label: L.newImagePreset, value: 'image', icon: ICONS.image }, { label: L.newFolderMenu, value: 'folder', icon: ICONS.folder }, { label: L.importEnc, value: 'enc', icon: ICONS.down }],
+        (v) => (v === 'new' ? newPreset() : v === 'audio' ? newAudioPreset() : v === 'image' ? newImagePreset() : v === 'folder' ? newFolder('') : importEnc()));
       return;
     }
     const q = selItem();
@@ -944,6 +967,7 @@
     $('#bCompare').classList.toggle('on', !!S.cmp);
     if (!q) { fr.innerHTML = ''; fi.innerHTML = ''; $('#pvMeta').innerHTML = ''; $('#tcEnd').textContent = '00:00:00:00'; pvSt.in.key = pvSt.out.key = ''; drawWave(); return; }
     $('#previewCard').classList.toggle('audio-item', !!q.src.audioOnly);
+    $('#previewCard').classList.toggle('image-item', !!q.src.isImage);
     if (q.src.audioOnly || isAudioP(q.cfg)) {
       // Áudio: a linha mostra o que vai sair; arquivo só de áudio mostra um cartão no lugar da imagem
       $('#pvMeta').innerHTML = [chip(audioOutTxt(q.cfg, q.src), COLORS.teal, ICONS.note), chip(`≈ ${fmtMB(estMB(q))}`)].join('<span class="dot">·</span>');
@@ -965,7 +989,8 @@
     if (q.src.hdr) c.push(q.cfg.hdrToSdr ? chip('Rec. 709', COLORS.green) : chip(L.hdrKept, COLORS.orange));
     if (q.cfg.rotate) c.push(chip(`${q.cfg.rotate}°`, COLORS.teal, ICONS.rot));
     c.push(chip(`≈ ${fmtMB(estMB(q))}`));
-    if (!isAudioP(q.cfg)) $('#pvMeta').innerHTML = c.join('<span class="dot">·</span>');
+    if (isImageP(q.cfg)) $('#pvMeta').innerHTML = [chip(imageOutTxt(q.cfg, q.src), COLORS.orange, ICONS.image), chip(`≈ ${fmtMB(estMB(q))}`)].join('<span class="dot">·</span>');
+    else if (!isAudioP(q.cfg)) $('#pvMeta').innerHTML = c.join('<span class="dot">·</span>');
     if (anim) { const m = $('#pvMeta'); m.classList.remove('swap'); void m.offsetWidth; m.classList.add('swap'); }
     paintFrame(fr, q, true);
     if (S.cmp) paintFrame(fi, q, false);
@@ -1076,6 +1101,21 @@
       <div class="sec-body"><div class="sec-inner">${body}</div></div></div>`;
   const trackBtn = (i, n) => `<button class="field pick" data-menu="1" data-track="${i}">${L.track(n)}${ICONS.chev}</button>`;
 
+  // Preset de imagem: formato, qualidade, tamanho e giro
+  function imageInspector(c, src) {
+    const im = c.image || { format: 'jpg', quality: 90, lossless: false };
+    const lossy = im.format === 'jpg' || (im.format === 'webp' && !im.lossless);
+    return sec('image', L.imageSec, imageOutTxt(c, src), `<div class="group">
+      ${row(L.format + `<small class="res-out">.${IEXT[im.format] || 'jpg'}</small>`, dd('image.format', im.format, [['jpg', 'JPG'], ['png', 'PNG'], ['webp', 'WebP']]))}
+      ${lossy ? row(L.quality, dd('image.quality', im.quality || 90, [[100, '100%'], [95, '95%'], [90, '90%'], [85, '85%'], [80, '80%'], [70, '70%'], [60, '60%']])) : ''}
+      ${im.format === 'webp' ? row(L.lossless, sw('image.lossless', !!im.lossless)) : ''}
+      ${row(`${L.resolution}${src && src.w ? `<small class="res-out">${resLabel(c, src)}</small>` : ''}`, dd('scale', c.scale, [['source', L.source], ['50', '50%'], ['25', '25%'], ['custom', L.custom]]))}
+      <div class="collapse ${c.scale === 'custom' ? '' : 'closed'}" style="max-height:60px">
+        ${row(L.size, `<div class="field"><input class="tnum" data-k="customW" value="${c.customW || ''}" placeholder="auto"><span>W</span></div><span class="times">×</span><div class="field"><input class="tnum" data-k="customH" value="${c.customH || ''}" placeholder="auto"><span>H</span></div>`)}
+      </div>
+      ${row(L.rotate, dd('rotate', c.rotate || 0, [[0, L.rotNone], [90, L.rotCw], [180, '180°'], [270, L.rotCcw]]))}
+    </div>${im.format === 'jpg' ? `<div class="hint">${L.jpgNoAlpha}</div>` : ''}`);
+  }
   // Preset de áudio: só formato, qualidade, taxa e canais
   function audioInspector(c, src) {
     const a = c.audio; const s0 = srcAud(src); const lossy = a.codec === 'mp3' || a.codec === 'aac'; const pcm = a.codec === 'wav' || a.codec === 'flac';
@@ -1094,7 +1134,7 @@
     const mod = T.isPreset ? T.dirty : T.preset && !same(c, T.preset);
     // Editando um preset: o nome e a cor ficam só nos presets lá em cima (sem repetir aqui).
     $('#inspFor').innerHTML = T.isPreset ? ''
-      : S.picked.size > 1 ? L.settingsForN(S.picked.size) : T.q && T.q.src.audioOnly ? L.thisFile : L.settingsFor;
+      : S.picked.size > 1 ? L.settingsForN(S.picked.size) : T.q && (T.q.src.audioOnly || T.q.src.isImage) ? L.thisFile : L.settingsFor;
     $('#inspFor').classList.toggle('editing', T.isPreset);
     $('.insp-title').classList.toggle('hide', !!T.isPreset && !mod);
     $('#modified').classList.toggle('show', !!mod); $('#bSavePreset').classList.toggle('show', !!mod);
@@ -1105,7 +1145,8 @@
     const resHint = !src && c.scale === '1080' ? `<div class="hint">${L.scale1080Hint}</div>` : '';
     const rotTxt = c.rotate ? ` · ↻ ${c.rotate}°` : '';
     const top = (T.isPreset ? '' : S.picked.size > 1 ? `<div class="hint top-hint multi-hint">${L.multiHint(S.picked.size)}</div>` : '');
-    if (isAudioP(c)) el.innerHTML = top + audioInspector(c, src) + sec('adv', L.advanced, c.metadata ? L.metadata : '—', `<div class="group">${row(L.metadata, sw('metadata', c.metadata), L.metadataSub)}</div>`);
+    if (isImageP(c)) el.innerHTML = top + imageInspector(c, src);
+    else if (isAudioP(c)) el.innerHTML = top + audioInspector(c, src) + sec('adv', L.advanced, c.metadata ? L.metadata : '—', `<div class="group">${row(L.metadata, sw('metadata', c.metadata), L.metadataSub)}</div>`);
     else el.innerHTML = top
       + sec('video', L.video, `${codecName(codecOut(c, src) || c.codec)} · ${bitsTxt(c, src)}${chromaOut(c, src) === '422' ? ' 4:2:2' : ''} · ${scaleTxt(c.scale)}${rotTxt} · ${c.fps.conform ? fpsCfrTxt(c, src) : c.bitrate.mode === 'manual' ? fmtK(c.bitrate.kbps) : c.bitrate.mode === 'source' ? L.source : { high: L.autoHigh, balanced: L.autoBalanced, light: L.autoLight }[autoLevel(c)]}${c.hdrToSdr ? ' · 709' : ''}`,
         `<div class="group">
@@ -1165,7 +1206,7 @@
       <div class="group">
         ${row(L.suffix, `<div class="field ${o.suffix.on ? '' : 'off'}"><input data-k="output.suffix.text" value="${esc(o.suffix.text)}" class="txt" spellcheck="false"></div>${sw('output.suffix.on', o.suffix.on)}`)}
         ${row(L.subfolder, `<div class="field ${o.subfolder.on ? '' : 'off'}"><input data-k="output.subfolder.text" value="${esc(o.subfolder.text)}" class="txt" spellcheck="false"></div>${sw('output.subfolder.on', o.subfolder.on)}`)}
-        ${isAudioP(c) ? '' : row(L.format + (c.container === 'source' && T.q ? `<small class="res-out">.${extOut(c, T.q.file)}</small>` : ''), dd('container', c.container || 'mp4', [['source', L.source], ['mp4', 'MP4'], ['mov', 'MOV']]))}
+        ${isAudioP(c) || isImageP(c) ? '' : row(L.format + (c.container === 'source' && T.q ? `<small class="res-out">.${extOut(c, T.q.file)}</small>` : ''), dd('container', c.container || 'mp4', [['source', L.source], ['mp4', 'MP4'], ['mov', 'MOV']]))}
         ${row(L.deleteSrc, sw('output.deleteSource', o.deleteSource, true), '', o.deleteSource ? 'danger' : '')}
       </div>`;
     wireDD(box);
@@ -1178,8 +1219,8 @@
   }
   function outName(file, cfg) {
     const c = cfg.output; const base = file.replace(/\.[^.]+$/, '');
-    const suf = c.suffix.on ? c.suffix.text.replace('{codec}', isAudioP(cfg) ? (ACODEC[cfg.audio.codec] || 'AUDIO') : codecName(codecOut(cfg, (target().src)) || 'h265').replace('.', '')).replace('{preset}', cfg.name || '') : '';
-    return (c.subfolder.on ? c.subfolder.text + '\\' : '') + base + suf + '.' + (isAudioP(cfg) ? (AEXT[cfg.audio.codec] || String(file).split('.').pop()) : extOut(cfg, file));
+    const suf = c.suffix.on ? c.suffix.text.replace('{codec}', isImageP(cfg) ? (IFMT[(cfg.image || {}).format] || 'JPG').toUpperCase() : isAudioP(cfg) ? (ACODEC[cfg.audio.codec] || 'AUDIO') : codecName(codecOut(cfg, (target().src)) || 'h265').replace('.', '')).replace('{preset}', cfg.name || '') : '';
+    return (c.subfolder.on ? c.subfolder.text + '\\' : '') + base + suf + '.' + (isImageP(cfg) ? (IEXT[(cfg.image || {}).format] || 'jpg') : isAudioP(cfg) ? (AEXT[cfg.audio.codec] || String(file).split('.').pop()) : extOut(cfg, file));
   }
   // copia os campos alterados do vídeo principal para os outros selecionados
   function spread(from, keys) {
@@ -1250,6 +1291,7 @@
       <div class="sec-label">${L.general}</div>
       <div class="group">
         ${row(L.newVideosUse, `<button class="field pick" data-menu="1" id="bSheetDef"><i class="dotc" style="--c:${dp ? COLORS[dp.color] : 'var(--text-3)'}"></i>${dp ? esc(dp.name) : ''}${ICONS.chev}</button>`)}
+        ${S.presets.some(isImageP) ? row(L.newImageUse, `<button class="field pick" data-menu="1" id="bSheetDefI"><i class="dotc" style="--c:${COLORS[(presetOf(defaultImageId()) || {}).color] || 'var(--text-3)'}"></i>${esc((presetOf(defaultImageId()) || {}).name || '')}${ICONS.chev}</button>`) : ''}
         ${S.presets.some(isAudioP) ? row(L.newAudioUse, `<button class="field pick" data-menu="1" id="bSheetDefA"><i class="dotc" style="--c:${COLORS[(presetOf(defaultAudioId()) || {}).color] || 'var(--text-3)'}"></i>${esc((presetOf(defaultAudioId()) || {}).name || '')}${ICONS.chev}</button>`) : ''}
         ${row(L.clearWhenDone, sw('clearWhenDone', S.set.clearWhenDone))}
         ${row(L.sound, sw('sound', S.set.sound))}
@@ -1273,7 +1315,8 @@
       if (s.dataset.k === 'parallel') { S.set.parallel = +v; saveSettings(); return; }
       S.set.lang = v; saveSettings(); applyLang(); renderAll(); renderSheet();
     }));
-    $('#bSheetDef').onclick = (e) => openMenu(e.currentTarget, presetItems(S.set.defaultPreset).filter((i) => !isAudioP(presetOf(i.value))), (v) => { S.set.defaultPreset = v; saveSettings(); renderSheet(); renderQueue(); });
+    $('#bSheetDef').onclick = (e) => openMenu(e.currentTarget, presetItems(S.set.defaultPreset).filter((i) => !isAudioP(presetOf(i.value)) && !isImageP(presetOf(i.value))), (v) => { S.set.defaultPreset = v; saveSettings(); renderSheet(); renderQueue(); });
+    const di = $('#bSheetDefI'); if (di) di.onclick = (e) => openMenu(e.currentTarget, presetItems(defaultImageId()).filter((i) => isImageP(presetOf(i.value))), (v) => { S.set.defaultImagePreset = v; saveSettings(); renderSheet(); });
     const da = $('#bSheetDefA'); if (da) da.onclick = (e) => openMenu(e.currentTarget, presetItems(defaultAudioId()).filter((i) => isAudioP(presetOf(i.value))), (v) => { S.set.defaultAudioPreset = v; saveSettings(); renderSheet(); });
     $('#bOpenLog').onclick = () => (REAL ? inv('open_log').catch((e) => toast(String(e))) : toast('render.log'));
     const cu = $('#bCheckUpdate'); if (cu) cu.onclick = () => checkUpdate(true);
@@ -1453,12 +1496,17 @@
       else if ((navigator.language || '').toLowerCase().startsWith('pt')) S.set.lang = 'pt'; // primeira vez: idioma do Windows
       if (!presetOf(S.set.defaultPreset) && S.presets[0]) S.set.defaultPreset = S.presets[0].id;
       S.engine = Object.assign(S.engine, st.engine); S.version = st.version;
-      S.audioDefaults = st.audioDefaults || []; S.cameraPreset = st.cameraPreset; S.firstRun = !!st.firstRun;
+      S.audioDefaults = st.audioDefaults || []; S.imageDefaults = st.imageDefaults || []; S.cameraPreset = st.cameraPreset; S.firstRun = !!st.firstRun;
       if (st.presetsRecovered) setTimeout(() => toast(L.presetsRecovered(st.presetsRecovered)), 1200);
       // Presets de áudio entram uma vez para quem já usava o app (os seus presets não mudam)
       if (!S.set.audioPresetsAdded && !S.presets.some(isAudioP) && S.audioDefaults.length) {
         S.presets.push(...clone(S.audioDefaults)); S.set.audioPresetsAdded = true; savePresets(); saveSettings();
       } else if (!S.set.audioPresetsAdded) { S.set.audioPresetsAdded = true; saveSettings(); }
+      const imgDefs = st.imageDefaults || [];
+      if (!S.set.imagePresetsAdded && imgDefs.length) {
+        if (!S.presets.some(isImageP)) { S.presets.push(...clone(imgDefs)); savePresets(); }
+        S.set.imagePresetsAdded = true; saveSettings();
+      }
       if (!st.engine.ffmpeg) S.engine.status = 'missing';
     } catch (e) { console.error(e); }
     applyTheme(); applyLang(); renderAll();
@@ -1469,7 +1517,7 @@
     on('scan-start', (p) => { if (p.count > 2) toast(L.scanning(p.count)); });
     on('item-added', (p) => {
       const audioOnly = !p.info.video;
-      const pid = audioOnly ? defaultAudioId() : presetOf(S.set.defaultPreset) ? S.set.defaultPreset : S.presets[0].id;
+      const pid = p.info.isImage ? defaultImageId() : audioOnly ? defaultAudioId() : presetOf(S.set.defaultPreset) ? S.set.defaultPreset : S.presets[0].id;
       const q = { id: p.id, path: p.path, file: p.file, dir: p.dir, src: mapSrc(p.info), preset: pid, cfg: clone(presetOf(pid)), status: 'ready', thumb: null };
       S.queue.push(q); batch.push(q.id); if (firstNew == null) firstNew = q.id;
       clearTimeout(batchTimer);

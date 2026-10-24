@@ -20,6 +20,7 @@ Built with **Rust** (Tauri 2) and **FFmpeg**, encoding with **NVIDIA NVENC**.
 - Converts **iPhone HDR (HLG) to Rec. 709** with real tone mapping (the same Hable filter chain HandBrake uses), automatically when the video is HDR.
 - **Keeps camera files as they are** when you want: codec, chroma (4:2:2), bit depth, frame rate, .mp4/.mov, PCM audio and timecode on Source.
 - **Converts audio** (WAV, MP3, AAC, FLAC) and extracts audio from videos.
+- **Converts images** (JPG, PNG, WebP), with resize and rotate.
 - **Drop files or whole folders**: every video inside, subfolders included, goes to the queue.
 - **Queue where each video keeps its own preset**, shown next to its name.
 - **Output preview** before rendering: rotation, scale and color, with **Compare** to see the original side by side.
