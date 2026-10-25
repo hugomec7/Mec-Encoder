@@ -27,16 +27,52 @@ pub struct Plan {
 
 fn even(x: f64) -> u32 { ((x / 2.0).round() as u32).max(1) * 2 }
 
+/// Proporção escolhida ("9:16" → 0,5625); None = Original.
+pub fn aspect_ratio(p: &Preset) -> Option<f64> {
+    let (a, b) = p.aspect.split_once(':')?;
+    let (a, b) = (a.trim().parse::<f64>().ok()?, b.trim().parse::<f64>().ok()?);
+    (a > 0.0 && b > 0.0).then(|| a / b)
+}
+
+/// Quadro em pé depois do giro e da proporção, antes da escala.
+/// Cortar: a maior área da proporção dentro da imagem. Barras: a menor área da proporção que contém a imagem.
+fn framed(v: &VideoInfo, p: &Preset) -> (u32, u32) {
+    let (vw, vh) = if p.rotate % 180 == 90 { (v.height, v.width) } else { (v.width, v.height) };
+    let Some(r) = aspect_ratio(p) else { return (vw, vh) };
+    let (w, h) = (vw as f64, vh as f64);
+    let pad = p.aspect_mode == "pad";
+    if (w / h > r) != pad { (even(h * r).min(if pad { u32::MAX } else { vw }), even(h)) } else { (even(w), even(w / r).min(if pad { u32::MAX } else { vh })) }
+}
+
+/// Recorte, escala e barras, já no sentido do quadro decodificado (antes de girar).
+struct Geometry { crop: Option<(u32, u32)>, content: (u32, u32), pad: Option<(u32, u32)> }
+
+fn geometry(v: &VideoInfo, p: &Preset, rot: u32) -> Geometry {
+    let sw = |(a, b): (u32, u32)| if rot % 180 == 90 { (b, a) } else { (a, b) };
+    let (vw, vh) = if p.rotate % 180 == 90 { (v.height, v.width) } else { (v.width, v.height) };
+    let (fw, fh) = framed(v, p);
+    let (w, h) = out_dims(v, p);
+    if aspect_ratio(p).is_none() || (fw, fh) == (vw, vh) { return Geometry { crop: None, content: sw((w, h)), pad: None }; }
+    if p.aspect_mode == "pad" {
+        let k = w as f64 / fw as f64;
+        Geometry { crop: None, content: sw((even(vw as f64 * k).min(w), even(vh as f64 * k).min(h))), pad: Some(sw((w, h))) }
+    } else {
+        Geometry { crop: Some(sw((fw, fh))), content: sw((w, h)), pad: None }
+    }
+}
+
 /// Resolução final (já em pé). "1080" usa o lado menor, então vertical continua vertical.
 pub fn out_dims(v: &VideoInfo, p: &Preset) -> (u32, u32) {
-    // Giro extra escolhido pelo usuário (90/270 troca largura e altura).
-    let (vw, vh) = if p.rotate % 180 == 90 { (v.height, v.width) } else { (v.width, v.height) };
+    // Giro extra escolhido pelo usuário (90/270 troca largura e altura) e proporção (cortar ou barras).
+    let (vw, vh) = framed(v, p);
     let (w, h) = (vw as f64, vh as f64);
     match p.scale.as_str() {
         "custom" => match (p.custom_w, p.custom_h) {
             (0, 0) => (vw, vh),
             (cw, 0) => (even(cw as f64), even(cw as f64 * h / w)),
             (0, ch) => (even(ch as f64 * w / h), even(ch as f64)),
+            // com proporção escolhida, a largura manda (a altura segue a proporção)
+            (cw, _) if aspect_ratio(p).is_some() => (even(cw as f64), even(cw as f64 * h / w)),
             (cw, ch) => (even(cw as f64), even(ch as f64)),
         },
         "50" => (even(w / 2.0), even(h / 2.0)),
@@ -141,6 +177,10 @@ pub fn video_filters(info: &MediaInfo, p: &Preset, enc: &Encoder, preview: Optio
             270 => f.push("transpose=cclock".to_string()),
             _ => {}
         }
+        if out && aspect_ratio(p).is_some() {
+            let (fw, fh) = framed(v, p);
+            f.push(if p.aspect_mode == "pad" { format!("pad={fw}:{fh}:(ow-iw)/2:(oh-ih)/2:color=black") } else { format!("crop={fw}:{fh}") });
+        }
         // Prévia: diminui logo no começo (o tone mapping fica leve) e não mexe no frame rate.
         f.push(format!("scale=w={max}:h={max}:force_original_aspect_ratio=decrease:flags=bilinear"));
         if out && p.hdr_to_sdr && !v.hdr.is_empty() { f.extend(hdr_chain(v)); }
@@ -151,9 +191,10 @@ pub fn video_filters(info: &MediaInfo, p: &Preset, enc: &Encoder, preview: Optio
     // Toda conversão usa scale com threads=0 (o scale automático do FFmpeg usa uma thread só,
     // e em 4K 10-bit isso segurava o render inteiro).
     let rot = (v.rotation + p.rotate % 360) % 360;
-    let (w, h) = out_dims(v, p);
-    let (pw, ph) = if rot % 180 == 90 { (h, w) } else { (w, h) };
-    let (cw, ch) = coded(v);
+    let g = geometry(v, p, rot);
+    let (pw, ph) = g.content;
+    let (cw, ch) = g.crop.unwrap_or(coded(v));
+    if let Some((a, b)) = g.crop { f.push(format!("crop={a}:{b}")); }
     let hdr = p.hdr_to_sdr && !v.hdr.is_empty();
     // HDR mantém 10-bit até o tone mapping.
     let deep = hdr || effective_bits(p) == 10;
@@ -168,6 +209,7 @@ pub fn video_filters(info: &MediaInfo, p: &Preset, enc: &Encoder, preview: Optio
         let size = if (pw, ph) != (cw, ch) { format!("{pw}:{ph}:flags=bicubic:") } else { String::new() };
         f.push(format!("scale={size}threads=0,format={planar}"));
     }
+    if let Some((a, b)) = g.pad { f.push(format!("pad={a}:{b}:(ow-iw)/2:(oh-ih)/2:color=black")); }
     match rot { 90 => f.push("transpose=clock".into()), 180 => f.push("hflip,vflip".into()), 270 => f.push("transpose=cclock".into()), _ => {} }
     if hdr { f.extend(hdr_chain(v)); }
     if p.fps.conform { let (n, d) = p.fps_rational(); f.push(format!("fps={n}/{d}")); }
@@ -429,6 +471,8 @@ pub fn build_opts(info: &MediaInfo, p: &Preset, enc: &Encoder, output: &Path, hw
 pub fn build_mode(info: &MediaInfo, p: &Preset, enc: &Encoder, output: &Path, dec: Decode) -> Plan {
     let p = &resolve(info, p);
     let dec = if *enc == Encoder::Nvenc { dec } else { Decode::Cpu };
+    // Proporção (cortar/barras) é feita na CPU: decodifica na placa e filtra na CPU.
+    let dec = if dec == Decode::Gpu && aspect_ratio(p).is_some() { Decode::Hw } else { dec };
     let mut warnings = Vec::new();
     let mut args = input_args(info, enc, dec);
     let (afc, aout) = audio_args(info, p);
@@ -516,8 +560,11 @@ pub fn build_image(info: &MediaInfo, p: &Preset, output: &Path) -> Plan {
         if v.coded_width > 0 { vv.width = v.coded_width; vv.height = v.coded_height; }
         let (ow, oh) = out_dims(&vv, p);
         let rot = p.rotate % 360;
-        let (pw, ph) = if rot % 180 == 90 { (oh, ow) } else { (ow, oh) };
-        if (pw, ph) != (vv.width, vv.height) { f.push(format!("scale={pw}:{ph}:flags=lanczos")); }
+        let g = geometry(&vv, p, rot);
+        if let Some((a, b)) = g.crop { f.push(format!("crop={a}:{b}")); }
+        let (pw, ph) = g.content;
+        if (pw, ph) != g.crop.unwrap_or((vv.width, vv.height)) { f.push(format!("scale={pw}:{ph}:flags=lanczos")); }
+        if let Some((a, b)) = g.pad { f.push(format!("pad={a}:{b}:(ow-iw)/2:(oh-ih)/2:color=black")); }
         match rot { 90 => f.push("transpose=clock".into()), 180 => f.push("hflip,vflip".into()), 270 => f.push("transpose=cclock".into()), _ => {} }
         w = ow; h = oh;
     }
@@ -614,6 +661,29 @@ mod tests {
         assert!(s.contains("format=p210le") && s.contains("-c:v h264_nvenc") && s.contains("-profile:v high422"), "{s}");
         // .MOV do iPhone em Original continua .mov
         assert!(output_path(Path::new("/v/IMG_1.MOV"), &p).to_string_lossy().ends_with(".mov"));
+    }
+
+    #[test]
+    fn aspect_crop_and_pad() {
+        // iPhone em pé 2160x3840 → 1:1 cortando = 2160x2160; 4:5 = 2160x2700
+        let i = iphone(90, "");
+        let mut p = preset("iphone-4k60"); p.aspect = "1:1".into();
+        assert_eq!(out_dims(i.video.as_ref().unwrap(), &p), (2160, 2160));
+        let s = build_mode(&i, &p, &Encoder::Nvenc, Path::new("o.mp4"), Decode::Gpu).args.join(" ");
+        // proporção vai pela CPU (NVDEC + filtros), cortando no quadro deitado antes de girar
+        assert!(s.contains("-hwaccel cuda -display") && s.contains("-vf crop=2160:2160,"), "{s}");
+        p.aspect = "4:5".into();
+        assert_eq!(out_dims(i.video.as_ref().unwrap(), &p), (2160, 2700));
+        let s = build_mode(&i, &p, &Encoder::Nvenc, Path::new("o.mp4"), Decode::Hw).args.join(" ");
+        assert!(s.contains("-vf crop=2700:2160,"), "{s}");
+        // 16:9 com barras num vídeo em pé: 6826x3840, vídeo no meio
+        p.aspect = "16:9".into(); p.aspect_mode = "pad".into();
+        assert_eq!(out_dims(i.video.as_ref().unwrap(), &p), (6826, 3840));
+        // + 1080p: 1920x1080 com o vídeo 608x1080 no meio
+        p.scale = "1080".into();
+        assert_eq!(out_dims(i.video.as_ref().unwrap(), &p), (1920, 1080));
+        let s = build_mode(&i, &p, &Encoder::Nvenc, Path::new("o.mp4"), Decode::Hw).args.join(" ");
+        assert!(s.contains("scale=1080:608:") && s.contains("pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black,transpose=clock"), "{s}");
     }
 
     #[test]

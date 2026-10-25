@@ -199,14 +199,20 @@
     };
   }
   const durOf = (q) => q.src.durS || secs(q.src.dur);
+  // proporção escolhida: "9:16" → 0,5625; null = Original
+  const ratioOf = (c) => { const m = /^(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)$/.exec(c.aspect || ''); return m ? +m[1] / +m[2] : null; };
+  const ev = (x) => Math.max(2, Math.round(x / 2) * 2);
   function outDims(src, cfg) {
     let { w, h } = src;
     if ((cfg.rotate || 0) % 180 === 90) [w, h] = [h, w];
+    // proporção: cortar (preenche) ou barras (nada é cortado), igual ao motor
+    const r = ratioOf(cfg);
+    if (r) { const pad = cfg.aspectMode === 'pad'; if ((w / h > r) !== pad) { w = pad ? ev(h * r) : Math.min(w, ev(h * r)); h = ev(h); } else { h = pad ? ev(w / r) : Math.min(h, ev(w / r)); w = ev(w); } }
     if (cfg.scale === '50') { w /= 2; h /= 2; } else if (cfg.scale === '25') { w /= 4; h /= 4; }
     else if (cfg.scale === '1080') { const s = Math.min(w, h); if (s > 1080) { const k = 1080 / s; w *= k; h *= k; } }
     else if (cfg.scale === 'custom') {
       const cw = +cfg.customW || 0, ch = +cfg.customH || 0;
-      if (cw && ch) { w = cw; h = ch; } else if (cw) { h = cw * h / w; w = cw; } else if (ch) { w = ch * w / h; h = ch; }
+      if (cw && ch && !r) { w = cw; h = ch; } else if (cw) { h = cw * h / w; w = cw; } else if (ch) { w = ch * w / h; h = ch; }
     }
     return { w: Math.max(2, Math.round(w / 2) * 2), h: Math.max(2, Math.round(h / 2) * 2) };
   }
@@ -958,6 +964,13 @@
       fr.innerHTML = scene(q.hue, ar.h > ar.w)
         + `<div class="grade" style="${washed ? 'opacity:1;background:rgba(170,170,185,.16);mix-blend-mode:screen' : 'opacity:0'}"></div>`;
       fr.querySelector('svg.scene').style.filter = washed ? 'saturate(.6) contrast(.82) brightness(1.04)' : 'none';
+      // Demo: barras pretas mostram a imagem inteira no meio
+      if (out && ratioOf(q.cfg) && q.cfg.aspectMode === 'pad') {
+        let { w, h } = q.src; if ((q.cfg.rotate || 0) % 180 === 90) [w, h] = [h, w];
+        const k = Math.min(ar.w / w, ar.h / h); const sv = fr.querySelector('svg.scene');
+        Object.assign(sv.style, { width: (w * k / ar.w * 100) + '%', height: (h * k / ar.h * 100) + '%', left: ((1 - w * k / ar.w) * 50) + '%', top: ((1 - h * k / ar.h) * 50) + '%' });
+        fr.style.background = '#000'; sv.outerHTML = sv.outerHTML.replace('<svg', '<svg preserveAspectRatio="none"');
+      } else fr.style.background = '';
     }
   }
   function renderPreview(anim) {
@@ -1101,6 +1114,10 @@
       <div class="sec-body"><div class="sec-inner">${body}</div></div></div>`;
   const trackBtn = (i, n) => `<button class="field pick" data-menu="1" data-track="${i}">${L.track(n)}${ICONS.chev}</button>`;
 
+  // Proporção + como encaixar (cortar ou barras)
+  const ASPECTS = [['source', null], ['9:16', '9:16'], ['16:9', '16:9'], ['1:1', '1:1'], ['4:5', '4:5'], ['4:3', '4:3'], ['3:4', '3:4'], ['21:9', '21:9']];
+  const aspectRows = (c) => `${row(`<span class="lbl-i">${L.aspect}<span class="info" tabindex="0" aria-label="${esc(L.aspectTip)}" data-tip="${esc(L.aspectTip)}">${ICONS.info}</span></span>`, dd('aspect', c.aspect || 'source', ASPECTS.map(([v, t]) => [v, t || L.source])))}
+          <div class="collapse ${ratioOf(c) ? '' : 'closed'}" style="max-height:60px">${row(L.aspectMode, segH('aspectMode', c.aspectMode || 'crop', [['crop', L.crop], ['pad', L.bars]]))}</div>`;
   // Preset de imagem: formato, qualidade, tamanho e giro
   function imageInspector(c, src) {
     const im = c.image || { format: 'jpg', quality: 90, lossless: false };
@@ -1110,6 +1127,7 @@
       ${lossy ? row(L.quality, dd('image.quality', im.quality || 90, [[100, '100%'], [95, '95%'], [90, '90%'], [85, '85%'], [80, '80%'], [70, '70%'], [60, '60%']])) : ''}
       ${im.format === 'webp' ? row(L.lossless, sw('image.lossless', !!im.lossless)) : ''}
       ${row(`${L.resolution}${src && src.w ? `<small class="res-out">${resLabel(c, src)}</small>` : ''}`, dd('scale', c.scale, [['source', L.source], ['50', '50%'], ['25', '25%'], ['custom', L.custom]]))}
+      ${aspectRows(c)}
       <div class="collapse ${c.scale === 'custom' ? '' : 'closed'}" style="max-height:60px">
         ${row(L.size, `<div class="field"><input class="tnum" data-k="customW" value="${c.customW || ''}" placeholder="auto"><span>W</span></div><span class="times">×</span><div class="field"><input class="tnum" data-k="customH" value="${c.customH || ''}" placeholder="auto"><span>H</span></div>`)}
       </div>
@@ -1148,9 +1166,10 @@
     if (isImageP(c)) el.innerHTML = top + imageInspector(c, src);
     else if (isAudioP(c)) el.innerHTML = top + audioInspector(c, src) + sec('adv', L.advanced, c.metadata ? L.metadata : '—', `<div class="group">${row(L.metadata, sw('metadata', c.metadata), L.metadataSub)}</div>`);
     else el.innerHTML = top
-      + sec('video', L.video, `${codecName(codecOut(c, src) || c.codec)} · ${bitsTxt(c, src)}${chromaOut(c, src) === '422' ? ' 4:2:2' : ''} · ${scaleTxt(c.scale)}${rotTxt} · ${c.fps.conform ? fpsCfrTxt(c, src) : c.bitrate.mode === 'manual' ? fmtK(c.bitrate.kbps) : c.bitrate.mode === 'source' ? L.source : { high: L.autoHigh, balanced: L.autoBalanced, light: L.autoLight }[autoLevel(c)]}${c.hdrToSdr ? ' · 709' : ''}`,
+      + sec('video', L.video, `${codecName(codecOut(c, src) || c.codec)} · ${bitsTxt(c, src)}${chromaOut(c, src) === '422' ? ' 4:2:2' : ''} · ${scaleTxt(c.scale)}${ratioOf(c) ? ' · ' + c.aspect : ''}${rotTxt} · ${c.fps.conform ? fpsCfrTxt(c, src) : c.bitrate.mode === 'manual' ? fmtK(c.bitrate.kbps) : c.bitrate.mode === 'source' ? L.source : { high: L.autoHigh, balanced: L.autoBalanced, light: L.autoLight }[autoLevel(c)]}${c.hdrToSdr ? ' · 709' : ''}`,
         `<div class="group">
           ${row(`${L.resolution}<small class="res-out">${resLabel(c, src)}</small>`, dd('scale', c.scale, [['source', L.source], ['1080', '1080p'], ['50', '50%'], ['25', '25%'], ['custom', L.custom]]))}
+          ${aspectRows(c)}
           <div class="collapse ${c.scale === 'custom' ? '' : 'closed'}" style="max-height:60px">
             ${row(L.size, `<div class="field"><input class="tnum" data-k="customW" value="${c.customW || ''}" placeholder="auto"><span>W</span></div><span class="times">×</span><div class="field"><input class="tnum" data-k="customH" value="${c.customH || ''}" placeholder="auto"><span>H</span></div>`)}
           </div>
@@ -1166,7 +1185,7 @@
           ${row(L.rotate, dd('rotate', c.rotate || 0, [[0, L.rotNone], [90, L.rotCw], [180, '180°'], [270, L.rotCcw]]))}
           ${row(L.maxQuality, sw('maxQuality', c.maxQuality))}
           ${row(`<span class="lbl-i">${L.hdr}<span class="info" tabindex="0" aria-label="${esc(L.hdrSub)}" data-tip="${esc(L.hdrSub)}">${ICONS.info}</span></span>` + (src && src.hdr ? `<span class="pill-tag" style="--c:${COLORS.yellow}">${L.detected(src.hdr)}</span>` : ''), dd('hdrToSdr', !!c.hdrToSdr, [[true, L.hdrAuto], [false, L.off]]))}
-        </div>${resHint}${cpuEncode(c, src) ? `<div class="hint warn-t">${chromaOut(c, src) === '422' ? L.cpuWarn422 : L.cpuWarnH264}</div>` : ''}${src && src.hdr && !c.hdrToSdr ? `<div class="hint warn-t">${L.hdrWarn}</div>` : ''}`)
+        </div>${resHint}${codecOut(c, src) === 'h264' && src && Math.max(outDims(src, c).w, outDims(src, c).h) > 4096 ? `<div class="hint warn-t">${L.h264Max}</div>` : ''}${cpuEncode(c, src) ? `<div class="hint warn-t">${chromaOut(c, src) === '422' ? L.cpuWarn422 : L.cpuWarnH264}</div>` : ''}${src && src.hdr && !c.hdrToSdr ? `<div class="hint warn-t">${L.hdrWarn}</div>` : ''}`)
       + sec('audio', L.audio, a.codec === 'copy' ? L.copy : `AAC · ${a.channels === 'stereo' ? L.stereo : L.mono}`,
         `<div class="group">
           ${row(L.codec, dd('audio.codec', a.codec, [['aac', 'AAC'], ['copy', L.copy]]))}

@@ -88,6 +88,10 @@ pub struct Preset {
     pub container: String,
     /// "source", "1080" (lado menor = 1080), "50" ou "25" (%).
     pub scale: String,
+    /// Proporção do resultado: "source" ou "9:16", "16:9", "1:1", "4:5", "4:3", "3:4"...
+    pub aspect: String,
+    /// Como chegar na proporção: "crop" (corta as bordas, preenche tudo) ou "pad" (barras pretas, nada é cortado).
+    pub aspect_mode: String,
     /// Giro extra no sentido horário: 0, 90, 180 ou 270.
     pub rotate: u32,
     /// Resolução personalizada (scale = "custom"). 0 = calcula pela proporção.
@@ -127,7 +131,7 @@ impl Default for Preset {
     fn default() -> Self {
         Self {
             kind: "video".into(), id: "preset".into(), name: "Preset".into(), icon: "phone".into(), color: "blue".into(),
-            codec: "h265".into(), bits: 8, chroma: "420".into(), container: "mp4".into(), scale: "source".into(), rotate: 0, custom_w: 0, custom_h: 0, folder: String::new(),
+            codec: "h265".into(), bits: 8, chroma: "420".into(), container: "mp4".into(), scale: "source".into(), aspect: "source".into(), aspect_mode: "crop".into(), rotate: 0, custom_w: 0, custom_h: 0, folder: String::new(),
             bitrate: Bitrate::default(), max_quality: false, fps: Fps::default(), hdr_to_sdr: false,
             audio: Audio::default(), image: Image::default(), output: Output::default(), av_sync: true, metadata: true,
         }

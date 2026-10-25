@@ -250,3 +250,38 @@ fn images() {
     assert_eq!((v.codec.as_str(), v.width, v.height), ("png", 300, 400));
     let _ = std::fs::remove_dir_all(&d);
 }
+
+/// Proporção: vídeo em pé (girado) → 1:1 cortando e 16:9 com barras; imagem → 4:5.
+#[test]
+fn aspect_ratio_e2e() {
+    let (Some(ff), Some(fp)) = (tool("ffmpeg"), tool("ffprobe")) else { eprintln!("sem ffmpeg, pulando"); return };
+    let d = dir("aspect");
+    let src = make_iphone_like(&ff, &d, false); // 360x640 em pé
+    let info = probe(&fp, &src).unwrap();
+    let cpu = Encoder::Cpu { preset: "ultrafast".into() };
+    let mut p = Preset::defaults().into_iter().find(|p| p.id == "iphone-4k60").unwrap();
+    p.aspect = "1:1".into();
+    let out = d.join("sq.mp4");
+    run(&ff, &build(&info, &p, &cpu, &out).args);
+    let v = probe(&fp, &out).unwrap().video.unwrap();
+    assert_eq!((v.width, v.height, v.rotation), (360, 360, 0));
+    p.aspect = "16:9".into(); p.aspect_mode = "pad".into();
+    let out = d.join("wide.mp4");
+    run(&ff, &build(&info, &p, &cpu, &out).args);
+    let v = probe(&fp, &out).unwrap().video.unwrap();
+    assert_eq!((v.width, v.height), (1138, 640));
+    // canto esquerdo é barra preta
+    let px = Command::new(&ff).args(["-v", "error", "-i"]).arg(&out).args(["-frames:v", "1", "-vf", "crop=2:2:10:300,format=gray", "-f", "rawvideo", "-"]).output().unwrap().stdout;
+    assert!(px[0] < 30, "barra deveria ser preta: {}", px[0]);
+    // imagem 800x600 → 4:5 cortando = 480x600
+    let png = d.join("foto.png");
+    assert!(Command::new(&ff).args(["-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=s=800x600", "-frames:v", "1"]).arg(&png).status().unwrap().success());
+    let ii = probe(&fp, &png).unwrap();
+    let mut ip = Preset::image_defaults().into_iter().find(|p| p.id == "image-png").unwrap();
+    ip.aspect = "4:5".into();
+    let io = output_path(&png, &ip);
+    run(&ff, &mec_core::command::build_image(&ii, &ip, &io).args);
+    let v = probe(&fp, &io).unwrap().video.unwrap();
+    assert_eq!((v.width, v.height), (480, 600));
+    let _ = std::fs::remove_dir_all(&d);
+}
