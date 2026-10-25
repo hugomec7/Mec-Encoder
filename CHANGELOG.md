@@ -1,5 +1,17 @@
 # Changelog · Novidades
 
+## 0.2.3
+
+**English**
+- **Aspect ratio** (Video and Image): Source · 9:16 · 16:9 · 1:1 · 4:5 · 4:3 · 3:4 · 21:9, with **Fit: Crop** (fills the frame, cuts the edges from the center) or **Bars** (keeps the whole picture, adds black bars). Resolution shows the final size with the ratio applied, and the preview shows the result. Crop/bars run on the CPU (the GPU still decodes and encodes).
+- Warning when an H.264 output would be larger than 4096 px on a side.
+- Preset folders: same spacing between all folder rows, including "Presets".
+
+**Português**
+- **Proporção** (Vídeo e Imagem): Original · 9:16 · 16:9 · 1:1 · 4:5 · 4:3 · 3:4 · 21:9, com **Encaixe: Cortar** (preenche o quadro, corta as bordas pelo centro) ou **Barras** (mantém a imagem inteira, com barras pretas). A Resolução mostra o tamanho final já com a proporção, e a prévia mostra o resultado. Cortar/barras roda na CPU (a placa continua lendo e gravando).
+- Aviso quando um H.264 passaria de 4096 px de lado.
+- Pastas de presets: o mesmo espaço entre todas as linhas, inclusive "Presets".
+
 ## 0.2.2
 
 **English**
