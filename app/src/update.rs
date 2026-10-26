@@ -94,9 +94,11 @@ fn detached(program: &str, args: &[String]) -> Result<(), String> {
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
-        const DETACHED_PROCESS: u32 = 0x0000_0008;
+        // Sem DETACHED_PROCESS: com ele o cmd fica sem console e o ping/msiexec abrem uma janela preta nova.
+        // CREATE_NO_WINDOW dá um console escondido que os filhos herdam; o processo continua depois que o app fecha.
+        const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        c.creation_flags(DETACHED_PROCESS | CREATE_NO_WINDOW);
+        c.creation_flags(CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW);
     }
     c.spawn().map(|_| ()).map_err(|e| e.to_string())
 }

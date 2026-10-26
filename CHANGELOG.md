@@ -1,5 +1,13 @@
 # Changelog · Novidades
 
+## 0.2.5
+
+**English**
+- **Update** no longer opens a black command window while installing. Only the small Windows installer progress bar shows, and the app opens again by itself. (This update itself may still show the window one last time.)
+
+**Português**
+- **Atualizar** não abre mais uma janela preta de comando durante a instalação. Só aparece a barrinha de progresso do instalador do Windows, e o app abre de novo sozinho. (Esta atualização ainda pode mostrar a janela uma última vez.)
+
 ## 0.2.4
 
 **English**

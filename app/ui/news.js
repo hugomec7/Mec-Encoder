@@ -1,6 +1,15 @@
 // Gerado por docs/release-notes/make_news.py — não edite à mão.
 window.MEC_NEWS = [
  {
+  "version": "0.2.5",
+  "en": [
+   "**Update** no longer opens a black command window while installing. Only the small Windows installer progress bar shows, and the app opens again by itself. (This update itself may still show the window one last time.)"
+  ],
+  "pt": [
+   "**Atualizar** não abre mais uma janela preta de comando durante a instalação. Só aparece a barrinha de progresso do instalador do Windows, e o app abre de novo sozinho. (Esta atualização ainda pode mostrar a janela uma última vez.)"
+  ]
+ },
+ {
   "version": "0.2.4",
   "en": [
    "**Save to**: each preset can save to the original's folder or to a **fixed folder** (e.g. D:\\Renders). With **Keep folders**, files from a dragged folder go into the same subfolders inside it.",
@@ -115,15 +124,6 @@ window.MEC_NEWS = [
    "**FPS** agora sempre tem **Original**. Com CFR, fixa no fps do próprio arquivo (iPhone gravado a 60 → 60 constante; FX30 → 59,94). Escolher um número com VFR ligado passa para CFR. O valor que vai sair aparece embaixo de \"FPS\".",
    "**Profundidade** tem **Original**: 8-bit continua 8-bit, 10-bit continua 10-bit (aparece embaixo de \"Profundidade\").",
    "**HDR → Rec. 709**: a descrição foi para o ícone ⓘ (passe o mouse). O aviso de \"mesmo bitrate do original\" saiu."
-  ]
- },
- {
-  "version": "0.1.6",
-  "en": [
-   "**NVIDIA RTX 50 (Blackwell) reads 4:2:2 on the GPU**: Sony FX30/FX3 and other H.264/HEVC 4:2:2 files are decoded on the GPU and converted to 4:2:0 there. RTX 20/30/40 cards can't read 4:2:2, so those files keep rendering through the CPU (same result, just slower). If the GPU path fails on any file, the app falls back automatically."
-  ],
-  "pt": [
-   "**NVIDIA RTX 50 (Blackwell) lê 4:2:2 pela placa**: arquivos H.264/HEVC 4:2:2 da Sony FX30/FX3 e outros são lidos pela GPU e convertidos para 4:2:0 nela mesma. As RTX 20/30/40 não leem 4:2:2, então esses arquivos continuam renderizando pela CPU (mesmo resultado, só mais lento). Se o caminho pela placa falhar em algum arquivo, o app tenta outro jeito sozinho."
   ]
  }
 ];
