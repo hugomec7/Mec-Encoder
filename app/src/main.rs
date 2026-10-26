@@ -46,6 +46,26 @@ pub struct AppState {
     children: Arc<Mutex<HashMap<u64, Child>>>,
     cancel: Arc<AtomicBool>,
     latest: Mutex<Option<update::Latest>>,
+    /// Arquivos sendo gravados agora (por vídeo). Se o app fechar no meio, são apagados.
+    partial: Mutex<HashMap<u64, PathBuf>>,
+}
+
+/// Anota (ou tira) o arquivo que está sendo gravado, em rendering.json, para apagar o que ficar pela metade.
+fn track(app: &AppHandle, id: u64, out: Option<PathBuf>) {
+    let state = app.state::<AppState>();
+    let mut m = state.partial.lock().unwrap();
+    match out { Some(p) => { m.insert(id, p); } None => { m.remove(&id); } }
+    let list: Vec<&PathBuf> = m.values().collect();
+    let _ = std::fs::write(store::dir(app).join("rendering.json"), serde_json::to_string(&list).unwrap_or_default());
+}
+
+/// Apaga o que ficou pela metade da última vez (app fechado, travado ou PC desligado no meio do render).
+fn clean_partial(app: &AppHandle) {
+    let path = store::dir(app).join("rendering.json");
+    if let Some(list) = std::fs::read_to_string(&path).ok().and_then(|t| serde_json::from_str::<Vec<PathBuf>>(&t).ok()) {
+        for f in list { if f.is_file() { let _ = std::fs::remove_file(&f); } }
+    }
+    let _ = std::fs::remove_file(path);
 }
 
 fn tool_dirs(app: &AppHandle) -> Vec<PathBuf> {
@@ -149,6 +169,57 @@ async fn pick(app: AppHandle, folder: bool) -> Result<usize, String> {
 
 #[tauri::command]
 fn add(app: AppHandle, paths: Vec<PathBuf>) { add_paths(app, paths); }
+
+/// Escolher a pasta de saída fixa.
+#[tauri::command]
+async fn pick_dir(app: AppHandle, start: Option<PathBuf>) -> Result<Option<PathBuf>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut d = app.dialog().file();
+        if let Some(s) = start.filter(|s| s.is_dir()) { d = d.set_directory(s); }
+        d.blocking_pick_folder().and_then(|p| p.into_path().ok())
+    }).await.map_err(|e| e.to_string())
+}
+
+/// Fila salva (queue.json): o app grava sozinho a cada mudança.
+#[tauri::command]
+fn save_queue(app: AppHandle, queue: Value) -> Result<(), String> { store::save_queue(&app, &queue) }
+
+/// Fila da última vez: lê cada arquivo de novo. Devolve, na mesma ordem, o id novo e os dados do arquivo,
+/// ou null se o arquivo sumiu. As miniaturas chegam depois (item-thumb).
+#[tauri::command]
+async fn restore_queue(app: AppHandle, paths: Vec<PathBuf>) -> Result<Vec<Value>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let ffprobe = state.engine.ffprobe()?;
+        let mut out = Vec::new();
+        let mut thumbs = Vec::new();
+        for p in paths {
+            match probe::probe(&ffprobe, &p) {
+                Ok(info) if p.is_file() => {
+                    let id = state.next_id.fetch_add(1, Ordering::SeqCst);
+                    let info = Arc::new(info);
+                    state.items.lock().unwrap().insert(id, info.clone());
+                    out.push(json!({ "id": id, "info": &*info }));
+                    thumbs.push((id, info));
+                }
+                _ => out.push(Value::Null),
+            }
+        }
+        if let Ok(ffmpeg) = state.engine.ffmpeg() {
+            let app2 = app.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_millis(300));
+                for (id, info) in thumbs {
+                    let t = (info.duration / 3.0).min(1.0);
+                    if let Ok(thumb) = jpeg(&ffmpeg, command::preview_args(&info, &Preset::default(), t, false, 160)) {
+                        let _ = app2.emit("item-thumb", json!({ "id": id, "thumb": thumb }));
+                    }
+                }
+            });
+        }
+        Ok(out)
+    }).await.map_err(|e| e.to_string())?
+}
 
 #[tauri::command]
 fn forget(state: State<'_, AppState>, id: u64) { state.items.lock().unwrap().remove(&id); }
@@ -273,19 +344,29 @@ fn run_ffmpeg(app: &AppHandle, ffmpeg: &PathBuf, plan: &command::Plan, id: u64, 
     }
 }
 
-fn do_render(app: &AppHandle, engine: &Engine, info: &MediaInfo, cfg: &Preset, id: u64,
+fn do_render(app: &AppHandle, engine: &Engine, info: &MediaInfo, cfg: &Preset, nm: &command::Naming, trim: Option<(f64, f64)>, id: u64,
              children: &Children, cancel: &Arc<AtomicBool>) -> Result<RenderResult, String> {
+    // Cortar trecho: só o pedaço entre início e fim (imagens não têm trecho).
+    let trim = if info.is_image { None } else { trim.and_then(|(a, b)| command::trim_range(info, a, b)) };
+    let dur = trim.map_or(info.duration, |(a, b)| b - a);
+    let cut = |plan: &mut command::Plan| if let Some((a, b)) = trim { command::apply_trim(plan, info, a, b); };
+    // o arquivo novo é conferido contra a duração do trecho
+    let mut expect = info.clone();
+    expect.duration = dur;
     let ffmpeg = engine.ffmpeg()?;
     let ffprobe = engine.ffprobe()?;
     if !info.path.exists() { return Err("source-missing".into()); }
     // Troca as opções "Original" (codec, croma, profundidade, fps, formato) pelos valores deste arquivo.
     let cfg = &command::resolve(info, cfg);
+    // Só um trecho: o original nunca vai para a Lixeira.
+    let cfg = &{ let mut c = cfg.clone(); if trim.is_some() { c.output.delete_source = false; } c };
     let out = if cfg.is_audio() && cfg.audio.codec == "copy" {
         // cópia de áudio: a extensão segue o codec de verdade
         let ext = command::audio_ext(&info.path, cfg, info.audio.first().map_or("", |a| a.codec.as_str()));
-        command::output_path(&info.path, cfg).with_extension(ext)
-    } else { command::output_path(&info.path, cfg) };
-    if let Some(dir) = out.parent() { std::fs::create_dir_all(dir).map_err(|e| e.to_string())?; }
+        command::output_path_for(&info.path, Some(info), cfg, nm).with_extension(ext)
+    } else { command::output_path_for(&info.path, Some(info), cfg, nm) };
+    if let Some(dir) = out.parent() { std::fs::create_dir_all(dir).map_err(|e| format!("{} ({})", e, dir.display()))?; }
+    track(app, id, Some(out.clone()));
     if info.is_image && !cfg.is_image() { return Err("need-image-preset".into()); }
     if cfg.is_image() {
         // Imagem: um quadro, sem placa de vídeo.
@@ -302,16 +383,17 @@ fn do_render(app: &AppHandle, engine: &Engine, info: &MediaInfo, cfg: &Preset, i
     if cfg.is_audio() {
         // Converter só áudio (ou extrair o áudio de um vídeo): um comando, sem placa de vídeo.
         if info.audio.is_empty() { return Err("no-audio".into()); }
-        let plan = command::build_audio(info, cfg, &out);
+        let mut plan = command::build_audio(info, cfg, &out);
+        cut(&mut plan);
         log(app, &format!("{} | audio | ffmpeg {}", info.path.display(), plan.args.join(" ")));
         let started = Instant::now();
-        if let Err(e) = run_ffmpeg(app, &ffmpeg, &plan, id, info.duration, children, cancel, "audio") {
+        if let Err(e) = run_ffmpeg(app, &ffmpeg, &plan, id, dur, children, cancel, "audio") {
             let _ = std::fs::remove_file(&out);
             log(app, &format!("{} | failed (audio): {}", info.path.display(), e.replace('\n', " / ")));
             return Err(e);
         }
         log(app, &format!("{} | ok (audio) | {:.1}s", info.path.display(), started.elapsed().as_secs_f64()));
-        return finish(&ffprobe, info, cfg, out, vec![]);
+        return finish(&ffprobe, &expect, cfg, out, vec![]);
     }
     let enc = engine.encoder.lock().unwrap().clone();
     // RTX 50 (Blackwell) lê e grava 4:2:2 e H.264 10-bit; as RTX 20/30/40 não.
@@ -344,8 +426,9 @@ fn do_render(app: &AppHandle, engine: &Engine, info: &MediaInfo, cfg: &Preset, i
     for (i, (e, mode)) in attempts.iter().enumerate() {
         let name = if *e == Encoder::Nvenc { mode.name() } else { "cpu-encode" };
         plan = command::build_mode(info, cfg, e, &out, *mode);
+        cut(&mut plan);
         log(app, &format!("{} | try {} ({}) | ffmpeg {}", info.path.display(), i + 1, name, plan.args.join(" ")));
-        res = run_ffmpeg(app, &ffmpeg, &plan, id, info.duration, children, cancel, name);
+        res = run_ffmpeg(app, &ffmpeg, &plan, id, dur, children, cancel, name);
         match &res {
             Ok(speed) => { log(app, &format!("{} | ok ({}) | {:.1}s | {:.2}x", info.path.display(), name, started.elapsed().as_secs_f64(), speed)); break; }
             Err(e) if e == "cancelled" => { log(app, &format!("{} | cancelled", info.path.display())); break; }
@@ -354,7 +437,7 @@ fn do_render(app: &AppHandle, engine: &Engine, info: &MediaInfo, cfg: &Preset, i
     }
     if let Err(e) = res { let _ = std::fs::remove_file(&out); return Err(e); }
 
-    finish(&ffprobe, info, cfg, out, plan.warnings.clone())
+    finish(&ffprobe, &expect, cfg, out, plan.warnings.clone())
 }
 
 /// Confere o arquivo novo e, se o preset pedir, manda o original para a Lixeira.
@@ -372,16 +455,25 @@ fn finish(ffprobe: &PathBuf, info: &MediaInfo, cfg: &Preset, out: PathBuf, mut w
 
 /// Renderiza um vídeo e só volta quando termina. A fila (ordem, um vídeo só, parar) é controlada pela interface.
 #[tauri::command]
-async fn render(app: AppHandle, state: State<'_, AppState>, id: u64, cfg: Preset) -> Result<RenderResult, String> {
+async fn render(app: AppHandle, state: State<'_, AppState>, id: u64, cfg: Preset, naming: Option<command::Naming>, trim: Option<Vec<f64>>) -> Result<RenderResult, String> {
     let info = item(&state, id)?;
     let engine = state.engine.clone();
     let children = state.children.clone();
     let cancel = state.cancel.clone();
     // Só zera o "parar" quando nada está rodando (com vários vídeos ao mesmo tempo).
     if children.lock().unwrap().is_empty() { cancel.store(false, Ordering::SeqCst); }
-    tauri::async_runtime::spawn_blocking(move || do_render(&app, &engine, &info, &cfg, id, &children, &cancel))
-        .await
-        .map_err(|e| e.to_string())?
+    let nm = naming.unwrap_or_default();
+    let trim = trim.filter(|t| t.len() == 2).map(|t| (t[0], t[1]));
+    let res = tauri::async_runtime::spawn_blocking(move || {
+        let r = do_render(&app, &engine, &info, &cfg, &nm, trim, id, &children, &cancel);
+        track(&app, id, None);
+        if let Err(e) = &r { if e != "cancelled" { log(&app, &format!("{} | error: {}", info.path.display(), command::explain(e))); } }
+        r
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+    // "código|detalhes": a interface mostra uma frase clara e guarda o texto técnico para "Copiar detalhes".
+    res.map_err(|e| match command::explain(&e) { "unknown" => e, c if c == e => e, c => format!("{c}|{e}") })
 }
 
 #[tauri::command]
@@ -406,6 +498,7 @@ fn get_state(app: AppHandle, state: State<'_, AppState>) -> Value {
         "imageDefaults": Preset::image_defaults(),
         "cameraPreset": Preset::camera_422(),
         "settings": store::load_settings(&app),
+        "queue": store::load_queue(&app),
         "engine": {
             "ffmpeg": e.ffmpeg.is_some(),
             "status": *e.status.lock().unwrap(),
@@ -499,6 +592,30 @@ fn open_url(url: String) -> Result<(), String> {
     std::process::Command::new("explorer.exe").arg(url).spawn().map(|_| ()).map_err(|e| e.to_string())
 }
 
+/// Ao terminar a fila: "sleep" (suspender) ou "shutdown" (desligar). A interface já mostrou 60 s para cancelar.
+#[tauri::command]
+fn power(action: String) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const NO_WINDOW: u32 = 0x0800_0000;
+        let mut c = match action.as_str() {
+            // sem /f: se algum programa tiver arquivo sem salvar, o Windows pergunta antes
+            "shutdown" => { let mut c = std::process::Command::new("shutdown.exe"); c.args(["/s", "/t", "0"]); c }
+            "sleep" => {
+                let mut c = std::process::Command::new("powershell.exe");
+                c.args(["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command",
+                        "Add-Type -AssemblyName System.Windows.Forms; [void][System.Windows.Forms.Application]::SetSuspendState('Suspend', $false, $false)"]);
+                c
+            }
+            _ => return Err("unknown action".into()),
+        };
+        c.creation_flags(NO_WINDOW).spawn().map(|_| ()).map_err(|e| e.to_string())
+    }
+    #[cfg(not(windows))]
+    { let _ = action; Err("not supported".into()) }
+}
+
 #[tauri::command]
 fn notify(app: AppHandle, title: String, body: String) {
     let _ = app.notification().builder().title(title).body(body).show();
@@ -560,7 +677,9 @@ fn main() {
                 children: Arc::new(Mutex::new(HashMap::new())),
                 cancel: Arc::new(AtomicBool::new(false)),
                 latest: Mutex::new(None),
+                partial: Mutex::new(HashMap::new()),
             });
+            clean_partial(&handle);
             // Testa o NVENC sem travar a abertura. Sem placa NVIDIA, usa a CPU (mais lento) e avisa.
             let h2 = handle.clone();
             std::thread::spawn(move || {
@@ -593,7 +712,7 @@ fn main() {
             }
         })
         .invoke_handler(tauri::generate_handler![
-            pick, add, forget, duplicate, preview, waveform, render, stop, get_state, save_presets, save_settings,
+            pick, add, pick_dir, save_queue, restore_queue, power, forget, duplicate, preview, waveform, render, stop, get_state, save_presets, save_settings,
             default_presets, import_enc, export_presets, import_presets, reveal, open_data_dir, open_log, open_url, notify, ready, check_update, install_update
         ])
         .build(tauri::generate_context!())
@@ -603,6 +722,10 @@ fn main() {
                 if let Some(state) = app.try_state::<AppState>() {
                     state.cancel.store(true, Ordering::SeqCst);
                     kill_all(&state.children);
+                    // espera o ffmpeg soltar o arquivo e apaga o que ficou pela metade
+                    for c in state.children.lock().unwrap().values_mut() { let _ = c.wait(); }
+                    for f in state.partial.lock().unwrap().values() { let _ = std::fs::remove_file(f); }
+                    let _ = std::fs::remove_file(store::dir(app).join("rendering.json"));
                 }
             }
         });

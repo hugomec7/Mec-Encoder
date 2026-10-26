@@ -372,8 +372,8 @@ svg{display:block}
 .sheet{position:fixed;left:50%;top:50%;z-index:41;width:440px;max-width:calc(100% - 32px);max-height:calc(100% - 80px);display:flex;flex-direction:column;
   background:var(--panel);border-radius:20px;box-shadow:0 30px 80px rgba(0,0,0,.4),0 0 0 .5px var(--stroke-2);
   transform:translate(-50%,-46%) scale(.96);opacity:0;pointer-events:none;transition:transform .5s var(--spring),opacity .25s var(--ease)}
-.sheet-open .sheet-bg{opacity:1;pointer-events:auto}
-.sheet-open .sheet{transform:translate(-50%,-50%);opacity:1;pointer-events:auto}
+.sheet-open .sheet-bg:not(.news-bg):not(.power-bg){opacity:1;pointer-events:auto}
+.sheet-open .sheet:not(.news):not(.power){transform:translate(-50%,-50%);opacity:1;pointer-events:auto}
 .sheet-head{display:flex;align-items:center;padding:16px 18px 10px}
 .sheet-head h2{margin:0;font-size:17px;font-weight:650;letter-spacing:-.3px;flex:1}
 .sheet-done{color:var(--blue);font-weight:600;font-size:14px;padding:4px 2px}

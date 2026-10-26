@@ -29,6 +29,8 @@
     proxy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><rect x="7.5" y="10.5" width="6" height="6" rx="1.5" fill="currentColor"/></svg>',
     camera: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5A2.5 2.5 0 0 1 5.5 6H7l1.5-2h7L17 6h1.5A2.5 2.5 0 0 1 21 8.5v9a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z"/><circle cx="12" cy="13" r="3.5"/></svg>',
     meta: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 15.5c0-4 2-8 4.3-8 3.4 0 4.6 9 7.6 9 1.8 0 2.6-1.6 2.6-3.6 0-3.3-1.7-5.4-3.6-5.4-2.6 0-4.3 4.2-5.6 6.4-1.2 2-2.1 2.6-3.2 2.6C4.8 16.5 4 16.2 4 15.5z"/></svg>',
+    cut: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="4.2" cy="11.8" r="2"/><circle cx="11.8" cy="11.8" r="2"/><path d="M5.6 10.4L12 2.5M10.4 10.4L4 2.5"/></svg>',
+    power: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 2v5.5"/><path d="M4.6 4.3a5 5 0 1 0 6.8 0"/></svg>',
     plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
     warn: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M7.1 2.5a1 1 0 0 1 1.8 0l5.4 9.6a1 1 0 0 1-.9 1.5H2.6a1 1 0 0 1-.9-1.5z"/><path d="M8 5.6v3.6M8 11.2v.1" stroke="#000" stroke-opacity=".55" stroke-width="1.6" stroke-linecap="round"/></svg>',
     check: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5l3 3 6-7"/></svg>',
@@ -66,6 +68,12 @@
     version: '0.1.0', update: null,
   };
   const presetOf = (id) => S.presets.find((p) => p.id === id);
+  // presets antigos (ou da demonstração) sem os campos novos da Saída
+  function normPreset(p) {
+    if (p && p.output) { if (!p.output.folder) p.output.folder = { on: false, text: '' }; if (p.output.keepTree === undefined) p.output.keepTree = true; }
+    return p;
+  }
+  S.presets.forEach(normPreset); S.queue.forEach((q) => normPreset(q.cfg));
   const itemOf = (id) => S.queue.find((q) => q.id === id);
   const selItem = () => itemOf(S.sel);
   // seleção múltipla: S.sel é o vídeo da prévia; S.picked tem todos os selecionados (inclui S.sel)
@@ -116,12 +124,14 @@
       { label: L.settings + '…', value: 'settings', icon: ICONS.gear },
       { label: L.theme, value: 'theme', icon: ICONS.theme },
       { label: L.checkUpdates, value: 'update', icon: ICONS.down },
+      { label: L.news, value: 'news', icon: ICONS.star },
       { sep: true },
       { label: `${L.version} ${S.version}`, value: 'about', icon: ICONS.info },
     ], (v) => {
       if (v === 'settings') openSheet(true);
       else if (v === 'theme') setTimeout(() => themeMenu(btn), 0);
       else if (v === 'update') checkUpdate(true);
+      else if (v === 'news') openNews(true);
       else if (v === 'about') { if (REAL) inv('open_url', { url: REPO_URL }).catch(() => {}); else window.open(REPO_URL, '_blank'); }
     });
   };
@@ -135,7 +145,8 @@
     Object.entries(txt).forEach(([id, t]) => { const el = document.getElementById(id); if (el) el.textContent = t; });
     $('#bMin').title = L.minimize; $('#bMax').title = L.maximize; $('#bClose').title = L.close;
     $('#bSetAll').title = L.setAll; $('#bFoldPresets').title = L.presetsFold; $('#bAdd').title = L.addVideos;
-    renderRenderBtn(); renderUpdateBtn();
+    $('#bIn').title = L.markIn; $('#bOut').title = L.markOut;
+    renderRenderBtn(); renderUpdateBtn(); if ($('#bAfter')) renderAfter();
   }
 
   /* ---------- mídia ---------- */
@@ -198,7 +209,9 @@
       audioOnly: !info.video, isImage: !!info.isImage,
     };
   }
-  const durOf = (q) => q.src.durS || secs(q.src.dur);
+  const fullDur = (q) => q.src.durS || secs(q.src.dur);
+  // duração que vai sair: o trecho marcado ou o arquivo inteiro
+  const durOf = (q) => (q.trim ? q.trim[1] - q.trim[0] : fullDur(q));
   // proporção escolhida: "9:16" → 0,5625; null = Original
   const ratioOf = (c) => { const m = /^(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)$/.exec(c.aspect || ''); return m ? +m[1] / +m[2] : null; };
   const ev = (x) => Math.max(2, Math.round(x / 2) * 2);
@@ -390,11 +403,12 @@
     const p = presetOf(q.preset) || S.presets[0]; const c = COLORS[p.color] || COLORS.blue; const w = warnings(q);
     const st = q.status === 'done' ? `<span class="state done">${ICONS.check}${L.ready}${q.took ? ` · ${fmtDur(q.took)}` : ''}</span>`
       : q.status === 'running' ? `<span class="state tnum">${runTxt(q)}</span>`
-      : q.status === 'err' ? `<span class="state err" title="${esc(q.error || '')}">${L.error}</span>`
+      : q.status === 'err' ? `<span class="state err">${L.error}</span>`
       : q.queued ? `<span class="state">${L.busy}</span>`
       : `<span class="state tnum">${fmtMB(estMB(q))}</span>`;
     const dir = q.dir ? `<span class="dir">${ICONS.folder}${esc(q.dir.replace(/\//g, ' › '))}</span>` : '';
-    const acts = (q.status === 'ready' || q.status === 'err' ? `<button class="a a-render" data-act="render" title="${L.renderThis}">${ICONS.playc}</button>` : '')
+    const acts = (q.status === 'ready' || q.status === 'err' ? `<button class="a a-render" data-act="render" title="${q.status === 'err' ? L.retry : L.renderThis}">${q.status === 'err' ? ICONS.again : ICONS.playc}</button>` : '')
+      + (q.status === 'err' ? `<button class="a" data-act="copyerr" title="${L.copyDetails}">${ICONS.copy}</button>` : '')
       + (q.status === 'done' ? `<button class="a" data-act="again" title="${L.renderAgain}">${ICONS.again}</button>` : '')
       + `<button class="a" data-act="reveal" title="${q.status === 'done' ? L.showOutput : L.showInFolder}">${ICONS.reveal}</button>`
       + (q.status !== 'running' ? `<button class="a" data-act="remove" title="${L.remove}">${ICONS.x}</button>` : '');
@@ -402,8 +416,8 @@
         <div class="thumb">${thumbHtml(q)}${q.src.hdr ? '<span class="hdr">HDR</span>' : ''}</div>
         <div class="meta">
           <div class="name" title="${esc(q.path || q.file)}">${esc(q.file)}</div>
-          <div class="spec">${q.status === 'running' ? timeLine(q) : q.src.audioOnly ? `${dir}${audioSrcTxt(q.src)}` : q.src.isImage ? `${dir}${q.src.codec} · ${q.src.w}×${q.src.h}` : `${dir}${q.src.w}×${q.src.h} · ${q.src.codec} · ${fpsTxt(q.src.fps)} fps${q.src.vfr ? ' VFR' : ''}`}</div>
-          <div class="row2"><span class="badge" style="--c:${c}"><i></i>${esc(p.name)}${same(q.cfg, p) ? '' : '*'}</span>
+          ${q.status === 'err' ? `<div class="spec err-line" title="${esc(q.error || '')}">${esc(errText(q))}</div>` : `<div class="spec">${q.status === 'running' ? timeLine(q) : q.src.audioOnly ? `${dir}${audioSrcTxt(q.src)}` : q.src.isImage ? `${dir}${q.src.codec} · ${q.src.w}×${q.src.h}` : `${dir}${q.src.w}×${q.src.h} · ${q.src.codec} · ${fpsTxt(q.src.fps)} fps${q.src.vfr ? ' VFR' : ''}`}</div>`}
+          <div class="row2"><span class="badge" style="--c:${c}"><i></i>${esc(p.name)}${same(q.cfg, p) ? '' : '*'}</span>${q.trim ? `<span class="trim-tag" title="${esc(L.trimLbl)}">${ICONS.cut}${fmtDur(q.trim[1] - q.trim[0])}</span>` : ''}
             ${w.length ? `<span class="warn" title="${esc(w.join('\n'))}">${ICONS.warn}</span>` : ''}${st}</div>
         </div>
         <div class="acts">${acts}</div>
@@ -419,6 +433,41 @@
     renderFoot();
     $('#tEta').textContent = S.engine.status === 'nvenc' ? 'NVENC' : S.engine.status === 'cpu' ? 'CPU' : '';
     $('#bRender').disabled = !S.queue.some((q) => q.status === 'ready' || q.status === 'err') && !S.job;
+    saveQueue();
+  }
+  /* Fila salva: grava sozinha (queue.json) e volta ao abrir o app. O que estava renderizando volta como "pronto". */
+  let tQueue = 0; let lastQueue = '';
+  function saveQueue(now) {
+    if (!REAL || !S.restored) return Promise.resolve();
+    const data = S.queue.filter((q) => q.path).map((q) => ({ path: q.path, file: q.file, dir: q.dir || '', preset: q.preset, cfg: q.cfg,
+      status: q.status === 'done' || q.status === 'err' ? q.status : 'ready', out: q.out || null, outMb: q.outMb || 0, took: q.took || 0,
+      error: q.status === 'err' ? q.error || null : null, errCode: q.status === 'err' ? q.errCode || null : null, trim: q.trim || null }));
+    const txt = JSON.stringify(data);
+    clearTimeout(tQueue);
+    if (txt === lastQueue) return Promise.resolve();
+    const go = () => { lastQueue = txt; return inv('save_queue', { queue: data }).catch(() => {}); };
+    if (now) return go();
+    tQueue = setTimeout(go, 700); return Promise.resolve();
+  }
+  async function restoreQueue(saved) {
+    if (!Array.isArray(saved) || !saved.length) { S.restored = true; return; }
+    let res = [];
+    try { res = await inv('restore_queue', { paths: saved.map((x) => x.path) }); } catch (e) { console.error(e); }
+    let missing = 0; const ids = [];
+    saved.forEach((x, i) => {
+      const r = res[i];
+      if (!r) { if (x.status !== 'done') missing++; return; }
+      const src = mapSrc(r.info);
+      const pid = presetOf(x.preset) ? x.preset : src.isImage ? defaultImageId() : src.audioOnly ? defaultAudioId() : presetOf(S.set.defaultPreset) ? S.set.defaultPreset : S.presets[0].id;
+      const cfg = x.cfg && x.cfg.output ? normPreset(x.cfg) : clone(presetOf(pid));
+      S.queue.push({ id: r.id, path: x.path, file: x.file, dir: x.dir || '', src, preset: pid, cfg, status: x.status === 'done' || x.status === 'err' ? x.status : 'ready',
+        out: x.out || null, outMb: x.outMb || 0, took: x.took || 0, error: x.error || null, errCode: x.errCode || null, trim: Array.isArray(x.trim) ? x.trim : null, thumb: null, p: x.status === 'done' ? 1 : 0 });
+      ids.push(r.id);
+    });
+    S.restored = true;
+    if (ids.length && S.sel == null) { selectOnly(ids[0]); S.t = 0.15; }
+    renderAll(true, ids);
+    if (ids.length || missing) setTimeout(() => toast([ids.length ? L.queueRestored(ids.length) : null, missing ? L.queueMissing(missing) : null].filter(Boolean).join(' · '), !missing), 900);
   }
   function patchItem(q) {
     const el = $(`.item[data-id="${q.id}"]`);
@@ -439,25 +488,39 @@
   }
   // Renderizar de novo (ex.: testar outra configuração). O arquivo anterior fica; o novo ganha " (2)".
   function renderAgain(q) {
-    Object.assign(q, { status: 'ready', p: 0, took: 0, speed: 0, eta: null, out: null, error: null, t0: 0 });
+    Object.assign(q, { status: 'ready', p: 0, took: 0, speed: 0, eta: null, out: null, error: null, errCode: null, t0: 0 });
     renderQueue(); renderOne(q.id);
   }
   // Duplicar na fila: o mesmo arquivo, para renderizar com outro preset e comparar
   async function duplicateItem(q) {
     let id = Math.max(0, ...S.queue.map((x) => x.id)) + 1;
     if (REAL) { try { id = await inv('duplicate', { id: q.id }); } catch (e) { toast(String(e)); return; } }
-    const c = Object.assign(clone({ ...q, thumb: null, wave: undefined }), { id, status: 'ready', p: 0, took: 0, out: null, error: null, queued: false, thumb: q.thumb, wave: q.wave });
+    const c = Object.assign(clone({ ...q, thumb: null, wave: undefined }), { id, status: 'ready', p: 0, took: 0, out: null, error: null, errCode: null, queued: false, thumb: q.thumb, wave: q.wave });
     const before = rects();
     S.queue.splice(S.queue.indexOf(q) + 1, 0, c); selectOnly(id); renderAll(true, [id]); flip(before);
   }
   function itemAction(act, id) {
     const q = itemOf(id); if (!q) return;
-    if (act === 'render') { if (q.status === 'err') { q.status = 'ready'; q.error = null; } renderOne(id); }
+    if (act === 'render') { if (q.status === 'err') { q.status = 'ready'; q.error = null; q.errCode = null; } renderOne(id); }
     else if (act === 'again') renderAgain(q);
+    else if (act === 'copyerr') copyErr(q);
     else if (act === 'dup') duplicateItem(q);
     else if (act === 'reveal') reveal(q);
     else if (act === 'remove') removeItem(id);
     else if (act === 'top') { const before = rects(); S.queue = [q, ...S.queue.filter((x) => x !== q)]; renderQueue(); flip(before); }
+  }
+  // Erros: o motor manda "código|detalhes"; a fila mostra uma frase clara e guarda os detalhes para copiar.
+  function parseErr(e) {
+    const s = String(e); const m = /^([a-z0-9-]+)\|([\s\S]*)$/.exec(s);
+    return { code: m ? m[1] : L.errs[s] ? s : null, details: m ? m[2] : s };
+  }
+  const errText = (q) => (q.errCode && L.errs[q.errCode]) || String(q.error || '').split('\n').filter(Boolean).pop() || L.error;
+  function copyErr(q) {
+    const txt = [`Mec Encoder ${S.version}`, q.path || q.file, `Preset: ${(q.cfg && q.cfg.name) || ''}`, `GPU: ${S.engine.gpu || '-'} (${S.engine.status})`,
+      `Error: ${q.errCode || 'unknown'}`, errText(q), '', q.error || ''].join('\n');
+    const ok = () => toast(L.copied, true);
+    const old = () => { const t = document.createElement('textarea'); t.value = txt; document.body.append(t); t.select(); try { document.execCommand('copy'); ok(); } catch {} t.remove(); };
+    try { navigator.clipboard.writeText(txt).then(ok, old); } catch { old(); }
   }
   function reveal(q) {
     if (REAL) inv('reveal', { path: q.status === 'done' && q.out ? q.out : q.path }).catch((e) => toast(String(e)));
@@ -494,15 +557,16 @@
         { sep: true },
         { label: L.removeN(n), value: 'remove', icon: ICONS.trash, danger: true },
       ], (act) => {
-        if (act === 'render') list.forEach((x) => { if (x.status === 'err') { x.status = 'ready'; x.error = null; } renderOne(x.id, true); });
+        if (act === 'render') list.forEach((x) => { if (x.status === 'err') { x.status = 'ready'; x.error = null; x.errCode = null; } renderOne(x.id, true); });
         if (act === 'remove') list.forEach((x) => removeItem(x.id));
         if (act === 'preset') openMenu({ x: e.clientX, y: e.clientY }, presetItems(null), (pid) => assignPicked(pid));
       });
       return;
     }
     openMenu({ x: e.clientX, y: e.clientY }, [
-      ...(q.status === 'ready' || q.status === 'err' ? [{ label: L.renderThis, value: 'render', icon: ICONS.playc }] : []),
+      ...(q.status === 'ready' || q.status === 'err' ? [{ label: q.status === 'err' ? L.retry : L.renderThis, value: 'render', icon: q.status === 'err' ? ICONS.again : ICONS.playc }] : []),
       ...(q.status === 'done' ? [{ label: L.renderAgain, value: 'again', icon: ICONS.again }] : []),
+      ...(q.status === 'err' ? [{ label: L.copyDetails, value: 'copyerr', icon: ICONS.copy }] : []),
       { label: L.duplicate, value: 'dup', icon: ICONS.dup },
       { label: q.status === 'done' ? L.showOutput : L.showInFolder, value: 'reveal', icon: ICONS.reveal },
       { label: L.moveTop, value: 'top', icon: ICONS.top },
@@ -927,7 +991,7 @@
   function requestPreview(q, out) {
     if (!REAL) return;
     const side = out ? 'out' : 'in'; const st = pvSt[side]; const fr = $(out ? '#frame' : '#frameIn');
-    const t = durOf(q) * S.t; const key = JSON.stringify([q.id, out, Math.round(t * 30), out ? q.cfg : 0]);
+    const t = fullDur(q) * S.t; const key = JSON.stringify([q.id, out, Math.round(t * 30), out ? q.cfg : 0]);
     if (key === st.key) return; st.key = key;
     clearTimeout(st.timer);
     st.timer = setTimeout(() => {
@@ -978,12 +1042,13 @@
     $('#previewCard').classList.toggle('no-video', !q);
     $('.stage').classList.toggle('compare', !!S.cmp);
     $('#bCompare').classList.toggle('on', !!S.cmp);
+    renderTrim();
     if (!q) { fr.innerHTML = ''; fi.innerHTML = ''; $('#pvMeta').innerHTML = ''; $('#tcEnd').textContent = '00:00:00:00'; pvSt.in.key = pvSt.out.key = ''; drawWave(); return; }
     $('#previewCard').classList.toggle('audio-item', !!q.src.audioOnly);
     $('#previewCard').classList.toggle('image-item', !!q.src.isImage);
     if (q.src.audioOnly || isAudioP(q.cfg)) {
       // Áudio: a linha mostra o que vai sair; arquivo só de áudio mostra um cartão no lugar da imagem
-      $('#pvMeta').innerHTML = [chip(audioOutTxt(q.cfg, q.src), COLORS.teal, ICONS.note), chip(`≈ ${fmtMB(estMB(q))}`)].join('<span class="dot">·</span>');
+      $('#pvMeta').innerHTML = [chip(audioOutTxt(q.cfg, q.src), COLORS.teal, ICONS.note), trimChip(q), chip(`≈ ${fmtMB(estMB(q))}`)].filter(Boolean).join('<span class="dot">·</span>');
       if (q.src.audioOnly) {
         S.cmp = false; $('.stage').classList.remove('compare');
         fr.className = 'frame audio-card'; fr.dataset.id = q.id; fr.dataset.ar = 16 / 10; fr.dataset.label = '';
@@ -1001,6 +1066,7 @@
       cfr ? chip(`${fpsTxt(fpsOut(q.cfg, q.src))} fps CFR`, COLORS.green) : chip(`${fpsTxt(q.src.fps)} fps ${q.src.vfr ? 'VFR' : ''}`.trim()));
     if (q.src.hdr) c.push(q.cfg.hdrToSdr ? chip('Rec. 709', COLORS.green) : chip(L.hdrKept, COLORS.orange));
     if (q.cfg.rotate) c.push(chip(`${q.cfg.rotate}°`, COLORS.teal, ICONS.rot));
+    if (q.trim) c.push(trimChip(q));
     c.push(chip(`≈ ${fmtMB(estMB(q))}`));
     if (isImageP(q.cfg)) $('#pvMeta').innerHTML = [chip(imageOutTxt(q.cfg, q.src), COLORS.orange, ICONS.image), chip(`≈ ${fmtMB(estMB(q))}`)].join('<span class="dot">·</span>');
     else if (!isAudioP(q.cfg)) $('#pvMeta').innerHTML = c.join('<span class="dot">·</span>');
@@ -1066,16 +1132,50 @@
   function setT(t, quiet) {
     S.t = clamp(t, 0, 1); tl.style.setProperty('--t', S.t * 100 + '%');
     const q = selItem(); if (!q) { $('#tcNow').textContent = '00:00:00:00'; return; }
-    $('#tcNow').textContent = tc(durOf(q) * S.t, q.src.fpsNum || 60);
+    $('#tcNow').textContent = tc(fullDur(q) * S.t, q.src.fpsNum || 60);
     if (!quiet && REAL) requestFrames(q);
   }
   tl.addEventListener('pointerdown', (e) => {
-    if (!selItem()) return;
-    const r = tl.getBoundingClientRect(); const mv = (ev) => setT((ev.clientX - r.left) / r.width);
+    const q = selItem(); if (!q) return;
+    const r = tl.getBoundingClientRect();
+    const edge = e.target.closest('.edge');
+    if (edge && q.trim) {
+      // arrastar a borda do trecho
+      const k = edge.dataset.edge; const d = fullDur(q); tl.setPointerCapture(e.pointerId);
+      tl.onpointermove = (ev) => {
+        const t = clamp((ev.clientX - r.left) / r.width, 0, 1); const [a, b] = q.trim;
+        q.trim = k === 'a' ? [Math.min(t * d, b - 0.1), b] : [a, Math.max(t * d, a + 0.1)];
+        renderTrim(); setT((k === 'a' ? q.trim[0] : q.trim[1]) / d);
+      };
+      tl.onpointerup = () => { tl.onpointermove = null; setTrim(q, q.trim[0], q.trim[1]); };
+      return;
+    }
+    const mv = (ev) => setT((ev.clientX - r.left) / r.width);
     mv(e); tl.setPointerCapture(e.pointerId); tl.onpointermove = mv; tl.onpointerup = () => { tl.onpointermove = null; };
   });
-  const ctl = $$('.controls .ctl');
-  const stepBy = (s) => { const q = selItem(); if (q) setT(S.t + s / durOf(q)); };
+  /* Cortar trecho: início (I) e fim (O) no ponto da linha do tempo; arrastar as bordas ajusta */
+  function setTrim(q, a, b) {
+    const d = fullDur(q); a = clamp(a, 0, d); b = clamp(b, 0, d);
+    q.trim = b - a < 0.1 || (a < 0.01 && b > d - 0.01) ? null : [a, b];
+    renderQueue(); renderPreview(); renderInspector();
+  }
+  function markTrim(k) {
+    const q = selItem(); if (!q || q.src.isImage || q.status === 'running') return;
+    const d = fullDur(q); const t = d * S.t; let [a, b] = q.trim || [0, d];
+    if (k === 'a') { a = t; if (b <= a + 0.1) b = d; } else { b = t; if (b <= a + 0.1) a = 0; }
+    setTrim(q, a, b);
+  }
+  function renderTrim() {
+    const q = selItem(); const on = !!(q && q.trim); const d = q ? fullDur(q) : 1;
+    tl.classList.toggle('trimmed', on);
+    if (on) { tl.style.setProperty('--a', q.trim[0] / d * 100 + '%'); tl.style.setProperty('--b', q.trim[1] / d * 100 + '%'); }
+    $('#bIn').classList.toggle('set', on && q.trim[0] > 0.001); $('#bOut').classList.toggle('set', on && q.trim[1] < d - 0.001);
+  }
+  $('#bIn').onclick = () => markTrim('a'); $('#bOut').onclick = () => markTrim('b');
+  $('#pvMeta').addEventListener('click', (e) => { if (e.target.closest('[data-trimclear]')) { const q = selItem(); if (q) setTrim(q, 0, fullDur(q)); } });
+  const trimChip = (q) => (q.trim ? `<button class="chip hl trim-chip" style="--c:${COLORS.yellow}" data-trimclear title="${esc(L.trimClear)}">${ICONS.cut}${L.trimLbl} ${fmtDur(q.trim[0])}–${fmtDur(q.trim[1])} · ${fmtDur(q.trim[1] - q.trim[0])}</button>` : '');
+  const ctl = $$('.controls .ctl:not(.trim-btn)');
+  const stepBy = (s) => { const q = selItem(); if (q) setT(S.t + s / fullDur(q)); };
   ctl[0].onclick = () => { const q = selItem(); if (q) stepBy(-1 / (q.src.fpsNum || 60)); };
   ctl[1].onclick = () => stepBy(-5);
   ctl[3].onclick = () => stepBy(5);
@@ -1086,7 +1186,7 @@
     if (!selItem()) return;
     S.playing = !S.playing; $('#playIco').innerHTML = S.playing ? ICONS.pause : ICONS.play;
     cancelAnimationFrame(playRaf);
-    if (S.playing) { let last = performance.now(); const dur = durOf(selItem());
+    if (S.playing) { let last = performance.now(); const dur = fullDur(selItem());
       const step = (now) => { setT(S.t + (now - last) / 1000 / dur); last = now; if (S.t < 1 && S.playing) playRaf = requestAnimationFrame(step); };
       playRaf = requestAnimationFrame(step); }
   };
@@ -1219,27 +1319,79 @@
     }; });
   }
   function renderOutput(T) {
-    const c = T.cfg; const o = c.output; const box = $('#outPanel');
-    const sum = [o.suffix.on ? o.suffix.text : null, o.subfolder.on ? o.subfolder.text + '\\' : null].filter(Boolean).map(esc).join(' · ') || L.sameFolder;
-    box.innerHTML = `<div class="out-head"><span>${L.output}</span><small title="${esc(outName(T.q ? T.q.file : 'IMG_0001.MOV', c))}">${sum}</small></div>
+    const c = T.cfg; const o = c.output; const box = $('#outPanel'); const fo = o.folder || { on: false, text: '' };
+    const fixed = fo.on && fo.text;
+    const file = T.q ? T.q.file : 'IMG_0001.MOV';
+    box.innerHTML = `<div class="out-head"><span>${L.output}</span><small class="out-name" title="${esc(outPath(file, c, T.q))}">${esc(outName(file, c, T.q))}</small></div>
       <div class="group">
-        ${row(L.suffix, `<div class="field ${o.suffix.on ? '' : 'off'}"><input data-k="output.suffix.text" value="${esc(o.suffix.text)}" class="txt" spellcheck="false"></div>${sw('output.suffix.on', o.suffix.on)}`)}
+        ${row(L.saveIn, dd('output.dest', fixed ? 'folder' : 'same', [['same', L.sameAsOriginal], ...(fo.text ? [['folder', esc(lastPart(fo.text))]] : []), ['pick', L.chooseFolder]]))}
+        ${fixed ? row(`<span class="lbl-i">${L.keepTree}<span class="info" tabindex="0" aria-label="${esc(L.keepTreeTip)}" data-tip="${esc(L.keepTreeTip)}">${ICONS.info}</span></span>`, sw('output.keepTree', o.keepTree !== false)) : ''}
+        ${row(L.suffix, `<div class="field tagged ${o.suffix.on ? '' : 'off'}"><input data-k="output.suffix.text" value="${esc(o.suffix.text)}" class="txt" spellcheck="false"><button class="tag-btn" data-menu="1" data-tags="output.suffix.text" title="${esc(L.tagsTitle)}" aria-label="${esc(L.tagsTitle)}">{ }</button></div>${sw('output.suffix.on', o.suffix.on)}`)}
         ${row(L.subfolder, `<div class="field ${o.subfolder.on ? '' : 'off'}"><input data-k="output.subfolder.text" value="${esc(o.subfolder.text)}" class="txt" spellcheck="false"></div>${sw('output.subfolder.on', o.subfolder.on)}`)}
         ${isAudioP(c) || isImageP(c) ? '' : row(L.format + (c.container === 'source' && T.q ? `<small class="res-out">.${extOut(c, T.q.file)}</small>` : ''), dd('container', c.container || 'mp4', [['source', L.source], ['mp4', 'MP4'], ['mov', 'MOV']]))}
         ${row(L.deleteSrc, sw('output.deleteSource', o.deleteSource, true), '', o.deleteSource ? 'danger' : '')}
       </div>`;
     wireDD(box);
   }
+  const lastPart = (p) => String(p).split(/[\\/]/).filter(Boolean).pop() || String(p);
+  // Pasta de saída: mesma do original, a escolhida, ou escolher outra
+  async function setDest(v) {
+    const T = target(); const o = T.cfg.output; const fo = o.folder || { on: false, text: '' };
+    if (v === 'pick') {
+      let dir = null;
+      if (REAL) { try { dir = await inv('pick_dir', { start: fo.text || null }); } catch (e) { toast(String(e)); } } else dir = 'D:\\Renders';
+      if (!dir) return;
+      o.folder = { on: true, text: dir };
+    } else o.folder = { on: v === 'folder', text: fo.text };
+    if (o.keepTree === undefined) o.keepTree = true;
+    if (!T.isPreset) spread(T.q, ['output.folder', 'output.keepTree']);
+    renderQueue(); renderPresets(); renderInspector(); renderPreview();
+  }
+  // Etiquetas no nome: {codec} {preset} {data} {hora} {res} {fps} {bits} {n} (iguais às do motor)
+  function nowTags() { const d = new Date(); return { date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`, time: `${pad(d.getHours())}-${pad(d.getMinutes())}` }; }
+  function tagMap(cfg, q) {
+    const src = q && q.src; const t = nowTags();
+    const vid = !!(src && !src.audioOnly && !isAudioP(cfg));
+    const d = vid && src.w ? outDims(src, cfg) : null;
+    const codec = isImageP(cfg) ? ({ png: 'PNG', webp: 'WEBP' }[(cfg.image || {}).format] || 'JPG') : isAudioP(cfg) ? (ACODEC[cfg.audio.codec] || 'AUDIO') : (codecOut(cfg, src) === 'h264' ? 'H264' : 'H265');
+    const fps = vid && !isImageP(cfg) ? (cfg.fps.conform && cfg.fps.value !== 'source' ? cfg.fps.value : srcFps(src)) : '';
+    const bits = isAudioP(cfg) ? (['wav', 'flac'].includes(cfg.audio.codec) ? Math.max(16, cfg.audio.bits || 0) + 'bit' : '') : isImageP(cfg) ? '' : (bitsOut(cfg, src) || 8) + 'bit';
+    const i = q ? S.queue.indexOf(q) : -1;
+    return { codec, preset: cfg.name || '', data: t.date, date: t.date, hora: t.time, time: t.time, res: d ? `${d.w}x${d.h}` : '', fps, bits, n: pad(i >= 0 ? i + 1 : 1) };
+  }
+  const cleanName = (s) => String(s).replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').trim();
+  const applyTags = (text, cfg, q) => { const m = tagMap(cfg, q); return String(text).replace(/\{(\w+)\}/g, (x, k) => (k in m ? m[k] : x)); };
+  function tagMenu(btn) {
+    const k = btn.dataset.tags; const input = btn.parentElement.querySelector('input'); const T = target(); const m = tagMap(T.cfg, T.q);
+    openMenu(btn, Object.keys(L.tagDesc).map((t) => ({ label: `{${t}}  ${L.tagDesc[t]}${m[t] ? ' · ' + m[t] : ''}`, value: t })), (t) => {
+      const v = input.value; const a = input.selectionStart ?? v.length; const b = input.selectionEnd ?? a;
+      const nv = v.slice(0, a) + `{${t}}` + v.slice(b);
+      const ks = k.split('.'); ks.pop(); const tog = ks.reduce((o, x) => o[x], T.cfg);
+      if (tog && tog.on === false) { tog.on = true; if (!T.isPreset) spread(T.q, [ks.join('.') + '.on']); }
+      set(k, nv);
+    });
+  }
+  // texto da resolução final ao lado de "Resolução"
   // texto da resolução final ao lado de "Resolução"
   function resLabel(c, src) {
     if (src) { const d = outDims(src, c); return `${d.w} × ${d.h}`; }
     if (c.scale === 'custom') return c.customW || c.customH ? `${c.customW || 'auto'} × ${c.customH || 'auto'}` : L.source;
     return { source: L.sameAsSource, '1080': L.shortSide1080, '50': L.halfOfSource, '25': L.quarterOfSource }[c.scale] || '';
   }
-  function outName(file, cfg) {
+  function outName(file, cfg, q) {
     const c = cfg.output; const base = file.replace(/\.[^.]+$/, '');
-    const suf = c.suffix.on ? c.suffix.text.replace('{codec}', isImageP(cfg) ? (IFMT[(cfg.image || {}).format] || 'JPG').toUpperCase() : isAudioP(cfg) ? (ACODEC[cfg.audio.codec] || 'AUDIO') : codecName(codecOut(cfg, (target().src)) || 'h265').replace('.', '')).replace('{preset}', cfg.name || '') : '';
-    return (c.subfolder.on ? c.subfolder.text + '\\' : '') + base + suf + '.' + (isImageP(cfg) ? (IEXT[(cfg.image || {}).format] || 'jpg') : isAudioP(cfg) ? (AEXT[cfg.audio.codec] || String(file).split('.').pop()) : extOut(cfg, file));
+    const suf = c.suffix.on ? cleanName(applyTags(c.suffix.text, cfg, q || null)) : '';
+    return base + suf + '.' + (isImageP(cfg) ? (IEXT[(cfg.image || {}).format] || 'jpg') : isAudioP(cfg) ? (AEXT[cfg.audio.codec] || String(file).split('.').pop()) : extOut(cfg, file));
+  }
+  // caminho completo (para a dica): pasta escolhida + subpastas de origem + subpasta + nome
+  function outPath(file, cfg, q) {
+    const c = cfg.output; const fo = c.folder || {};
+    const parts = [];
+    if (fo.on && fo.text) { parts.push(fo.text.replace(/[\\/]+$/, '')); if (c.keepTree !== false && q && q.dir) parts.push(...q.dir.split('/').map(cleanName).filter(Boolean)); }
+    else parts.push(q && q.path ? q.path.replace(/[\\/][^\\/]*$/, '') : L.sameAsOriginal);
+    if (c.subfolder.on && cleanName(applyTags(c.subfolder.text, cfg, q))) parts.push(cleanName(applyTags(c.subfolder.text, cfg, q)));
+    parts.push(outName(file, cfg, q));
+    return parts.join('\\');
   }
   // copia os campos alterados do vídeo principal para os outros selecionados
   function spread(from, keys) {
@@ -1251,6 +1403,7 @@
     });
   }
   function set(key, v) {
+    if (key === 'output.dest') { setDest(v); return; }
     const T = target();
     const ks = key.split('.'); let o = T.cfg; ks.slice(0, -1).forEach((k) => { o = o[k]; });
     const last = ks[ks.length - 1];
@@ -1274,6 +1427,8 @@
         (k) => { T.cfg.audio.tracks[i] = k; if (!T.isPreset) spread(T.q, ['audio.tracks']); renderAll(); }); }
   });
   $('#inspIn').addEventListener('change', (e) => { const i = e.target.closest('input[data-k]'); if (i) set(i.dataset.k, i.value); });
+  // { } das etiquetas: abre no pointerdown para o campo não perder o foco (nem o que foi digitado)
+  $('#outPanel').addEventListener('pointerdown', (e) => { const tb = e.target.closest('[data-tags]'); if (tb) { e.preventDefault(); tagMenu(tb); } });
   $('#outPanel').addEventListener('click', (e) => { const s = e.target.closest('.switch'); if (s) { s.classList.toggle('on'); setTimeout(() => set(s.dataset.k), 180); } });
   $('#outPanel').addEventListener('change', (e) => { const i = e.target.closest('input[data-k]'); if (i) set(i.dataset.k, i.value); });
   // Salvar: do vídeo para o preset, ou o rascunho do preset (só grava quando clica)
@@ -1351,10 +1506,13 @@
     $('#bDone').onclick = () => openSheet(false);
   $('#sheetBg').onclick = () => openSheet(false);
   addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') { openSheet(false); closeMenu(); if (S.picked.size > 1 && !e.target.closest('input')) { selectOnly(S.sel); renderAll(); } }
+    if (e.key === 'Escape') { if (S.powerEnd) { S.powerEnd(); return; } openNews(false); openSheet(false); closeMenu(); if (S.picked.size > 1 && !e.target.closest('input')) { selectOnly(S.sel); renderAll(); } }
     if (e.target.closest('input')) return;
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'o') { e.preventDefault(); if (REAL) inv('pick', { folder: e.shiftKey }); }
     if (e.key === ' ' && selItem() && $('#bPlay')) { e.preventDefault(); $('#bPlay').click(); }
+    if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === 'i') markTrim('a');
+    if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === 'o') markTrim('b');
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'x' && selItem()) { e.preventDefault(); const q = selItem(); setTrim(q, 0, fullDur(q)); }
     if (e.key === 'ArrowLeft' && selItem()) ctl[e.shiftKey ? 1 : 0].click();
     if (e.key === 'ArrowRight' && selItem()) ctl[e.shiftKey ? 3 : 4].click();
     if (e.key === 'Delete' && S.picked.size) pickedItems().forEach((q) => removeItem(q.id));
@@ -1435,18 +1593,20 @@
       while (S.job === J) {
         const q = nextItem(J);
         if (!q) break;
-        q.status = 'running'; q.queued = false; q.p = 0; q.speed = 0; q.eta = null; q.error = null; q.t0 = Date.now(); q.jobId = J.id; q.took = 0; renderQueue(); updateFill();
+        q.status = 'running'; q.queued = false; q.p = 0; q.speed = 0; q.eta = null; q.error = null; q.errCode = null; q.t0 = Date.now(); q.jobId = J.id; q.took = 0; renderQueue(); updateFill();
         try {
           const twin = q.path && S.queue.some((x) => x !== q && x.path === q.path && x.status !== 'done');
           if (twin && q.cfg.output.deleteSource) toast(L.keptForCopy);
-          const r = await inv('render', { id: q.id, cfg: twin ? Object.assign(clone(q.cfg), { output: Object.assign(clone(q.cfg.output), { deleteSource: false }) }) : q.cfg });
+          const naming = Object.assign({ dir: q.dir || '', n: S.queue.indexOf(q) + 1 }, nowTags());
+          if (q.trim && q.cfg.output.deleteSource) toast(L.trimKeep);
+          const r = await inv('render', { id: q.id, naming, trim: q.trim || null, cfg: twin ? Object.assign(clone(q.cfg), { output: Object.assign(clone(q.cfg.output), { deleteSource: false }) }) : q.cfg });
           q.status = 'done'; q.p = 1; q.out = r.output; q.outMb = r.size / 1e6; q.took = elapsedOf(q); J.done++;
           if (r.deleted) toast(L.deletedOrig);
           if (J.mode === 'single') notify(L.rendered(q.file) + ' · ' + fmtDur(q.took));
         } catch (e) {
           if (S.stopping || S.job !== J) { q.status = 'ready'; q.p = 0; break; }
-          q.status = 'err'; q.error = String(e === 'source-missing' ? L.sourceMissing : e); failed++;
-          notify(L.renderFailed(q.file) + (q.error ? ': ' + q.error.split('\n').pop() : ''), true);
+          const pe = parseErr(e); q.status = 'err'; q.errCode = pe.code; q.error = pe.details; failed++;
+          notify(L.renderFailed(q.file) + ': ' + errText(q), true);
         }
         renderQueue(); renderInspector(); updateFill();
       }
@@ -1476,14 +1636,60 @@
       notify(J.done ? L.queueTook(fmtDur(S.lastRun.took), J.done) : L.queueDone);
       if (S.set.clearWhenDone && !failed) setTimeout(() => clearDone(false), 1600);
     }
+    if (J && J.done && S.after !== 'none') {
+      const act = S.after; S.after = 'none'; renderAfter();
+      if (failed) setTimeout(() => toast(L.powerSkipped), 2000); else powerCountdown(act);
+    }
     renderQueue();
   }
   $('#bRender').onclick = () => {
     if (S.job) { stopJob(); return; }
-    S.queue.forEach((q) => { if (q.status === 'err') { q.status = 'ready'; q.error = null; } });
+    S.queue.forEach((q) => { if (q.status === 'err') { q.status = 'ready'; q.error = null; q.errCode = null; } });
     const n = S.queue.filter((q) => q.status === 'ready').length; if (!n) return;
     startJob({ mode: 'queue', total: n });
   };
+
+  /* ---------- novidades (notas da versão, iguais às do GitHub) ---------- */
+  const md = (t) => esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+  function openNews(on) {
+    if (on) {
+      const lang = S.set.lang === 'pt' ? 'pt' : 'en';
+      $('#lNews').textContent = L.news; $('#bNewsDone').textContent = L.done;
+      $('#newsBody').innerHTML = (window.MEC_NEWS || []).map((v) => `<section class="news-v ${v.version === S.version ? '' : 'old'}"><h3>${esc(v.version)}${v.version === S.version ? `<small>${L.thisVersion}</small>` : ''}</h3>
+        <ul>${(v[lang] && v[lang].length ? v[lang] : v.en).map((li) => `<li>${md(li)}</li>`).join('')}</ul></section>`).join('');
+      $('#newsBody').scrollTop = 0;
+    }
+    root.classList.toggle('news-open', !!on);
+  }
+  $('#bNewsDone').onclick = () => openNews(false);
+  $('#newsBg').onclick = () => openNews(false);
+
+  /* ---------- ao terminar: nada, suspender ou desligar ---------- */
+  S.after = 'none';
+  function renderAfter() {
+    const b = $('#bAfter'); const on = S.after !== 'none';
+    b.classList.toggle('on', on); b.title = on ? L.afterTitle + ': ' + (S.after === 'sleep' ? L.afterSleep : L.afterShutdown) : L.afterTitle;
+    b.innerHTML = ICONS.power + (on ? `<span>${L.afterOn[S.after]}</span>` : '');
+  }
+  $('#bAfter').onclick = (e) => openMenu(e.currentTarget, [['none', L.afterNone], ['sleep', L.afterSleep], ['shutdown', L.afterShutdown]]
+    .map(([v, t]) => ({ label: t, value: v, sel: S.after === v, icon: v === 'none' ? ICONS.x : ICONS.power })), (v) => { S.after = v; renderAfter(); });
+  // 60 segundos para cancelar; depois suspende ou desliga (a fila já está salva)
+  function powerCountdown(act) {
+    let n = 60; const ring = $('.power-ring');
+    $('#powerTitle').textContent = L.powerTitle(act); $('#powerSub').textContent = L.powerSub;
+    $('#bPowerCancel').textContent = L.cancel; $('#bPowerNow').textContent = L.powerNow(act);
+    const draw = () => { $('#powerN').textContent = n; ring.style.setProperty('--k', n / 60); };
+    let timer = 0;
+    const end = () => { clearInterval(timer); S.powerEnd = null; root.classList.remove('power-open'); };
+    const go = async () => {
+      end(); await saveQueue(true);
+      if (REAL) inv('power', { action: act }).catch((e) => toast(String(e))); else toast(L.powerNow(act) + ' (demo)');
+    };
+    draw(); root.classList.add('power-open'); S.powerEnd = end;
+    if (REAL) inv('ready').catch(() => {});
+    timer = setInterval(() => { n--; draw(); if (n <= 0) go(); }, 1000);
+    $('#bPowerCancel').onclick = end; $('#bPowerNow').onclick = go;
+  }
 
   /* ---------- toast ---------- */
   let tt; function toast(t, ok) {
@@ -1502,20 +1708,27 @@
     $('#bClose').onclick = () => {
       if (S.job && Date.now() - closeArmed > 3000) { closeArmed = Date.now(); toast(L.quitWhileRendering); return; }
       if (S.job) inv('stop').catch(() => {});
-      w.close();
+      saveQueue(true).finally(() => w.close());
     };
   }
 
   /* ---------- início ---------- */
   async function bootReal() {
+    let st0 = null;
     try {
-      const st = await inv('get_state');
-      S.presets = st.presets || [];
+      const st = await inv('get_state'); st0 = st;
+      S.presets = (st.presets || []).map(normPreset);
       if (st.settings && typeof st.settings === 'object') Object.assign(S.set, st.settings);
       else if ((navigator.language || '').toLowerCase().startsWith('pt')) S.set.lang = 'pt'; // primeira vez: idioma do Windows
       if (!presetOf(S.set.defaultPreset) && S.presets[0]) S.set.defaultPreset = S.presets[0].id;
       S.engine = Object.assign(S.engine, st.engine); S.version = st.version;
       S.audioDefaults = st.audioDefaults || []; S.imageDefaults = st.imageDefaults || []; S.cameraPreset = st.cameraPreset; S.firstRun = !!st.firstRun;
+      // Novidades: abre sozinha uma vez depois de atualizar (não na primeira instalação)
+      if (S.set.seenVersion !== S.version) {
+        const show = !S.firstRun && (window.MEC_NEWS || []).some((v) => v.version === S.version);
+        S.set.seenVersion = S.version; saveSettings();
+        if (show) setTimeout(() => openNews(true), 900);
+      }
       if (st.presetsRecovered) setTimeout(() => toast(L.presetsRecovered(st.presetsRecovered)), 1200);
       // Presets de áudio entram uma vez para quem já usava o app (os seus presets não mudam)
       if (!S.set.audioPresetsAdded && !S.presets.some(isAudioP) && S.audioDefaults.length) {
@@ -1530,6 +1743,7 @@
     } catch (e) { console.error(e); }
     applyTheme(); applyLang(); renderAll();
     requestAnimationFrame(() => inv('ready').catch(() => {}));
+    restoreQueue(st0 && st0.queue);
     if (S.engine.status === 'missing') toast(L.ffmpegMissing);
 
     let batch = []; let batchTimer = 0; let firstNew = null;
@@ -1584,10 +1798,18 @@
     if (qs.get('open')) qs.get('open').split(',').forEach((k) => { S.open[k] = true; });
     if (qs.get('fold')) S.set.foldPresets = true;
     if (qs.get('update')) S.update = { version: '0.2.0' };
+    S.version = ((window.MEC_NEWS || [])[0] || {}).version || S.version;
+    if (qs.get('trim')) { const [a, b] = qs.get('trim').split(',').map(Number); const q = selItem(); if (q) q.trim = [a, b]; }
+    if (qs.get('after')) S.after = qs.get('after');
+    if (qs.get('err')) { const q = S.queue[+(qs.get('erri') || 3)]; Object.assign(q, { status: 'err', errCode: qs.get('err'), error: '[out#0/mp4 @ 000001] Error writing trailer: No space left on device\nError closing file D:\\Renders\\IMG_4823_proxy.mp4: No space left on device' }); }
+    if (qs.get('dest')) S.presets.forEach((p) => { if (p.kind !== 'audio' && p.kind !== 'image') p.output.folder = { on: true, text: 'D:\\Renders' }; }), S.queue.forEach((q) => { q.cfg.output.folder = { on: true, text: 'D:\\Renders' }; });
     renderAll(); setT(S.t, true);
     requestAnimationFrame(drawWave);
     if (qs.get('cmp')) { S.cmp = true; renderPreview(); }
     if (qs.get('sheet')) openSheet(true);
+    if (qs.get('news')) openNews(true);
+    if (qs.get('power')) powerCountdown(qs.get('power'));
+    renderAfter();
     if (qs.get('folder')) setTimeout(addFolder, 300);
     if (qs.get('run')) setTimeout(() => $('#bRender').click(), 50);
     renderUpdateBtn();

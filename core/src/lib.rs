@@ -17,6 +17,6 @@ pub mod progress;
 pub mod scan;
 pub mod tools;
 
-pub use command::{build, output_path, preview_args, Encoder, Plan};
+pub use command::{build, output_path, output_path_for, preview_args, Encoder, Naming, Plan};
 pub use preset::Preset;
 pub use probe::{MediaInfo, VideoInfo};

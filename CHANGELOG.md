@@ -1,5 +1,25 @@
 # Changelog · Novidades
 
+## 0.2.4
+
+**English**
+- **Save to**: each preset can save to the original's folder or to a **fixed folder** (e.g. D:\Renders). With **Keep folders**, files from a dragged folder go into the same subfolders inside it.
+- **Name tags**: the **{ }** button next to Suffix inserts {date}, {time}, {res}, {fps}, {bits}, {n} (number in queue), {codec} and {preset}. The final file name shows next to "Output". Subfolder accepts tags too (e.g. {date} = one folder per day).
+- **Clear error messages**: a failed video says what happened and what to do (disk full, file open in another program, drive disconnected, damaged file, graphics card busy…). **Try again** and **Copy error details** are on the video and in the right-click menu.
+- **Queue is saved**: closing the app (or a crash) no longer loses the queue. What was rendering comes back ready, and the half-written file is deleted.
+- **Trim**: mark **In** and **Out** on the timeline (I and O keys, or the buttons) and only that part is converted. Drag the edges to adjust; Duplicate lets you cut several parts of the same video. The camera timecode follows the start of the part. The original is never deleted when trimming.
+- **When finished: Nothing · Sleep · Shut down**, next to the totals. You get 60 seconds to cancel, it only happens if the queue finished without errors, and it goes back to "Nothing" after use.
+- **What's new** window after an update (also in the Mec Encoder menu).
+
+**Português**
+- **Salvar em**: cada preset pode salvar na pasta do original ou numa **pasta fixa** (ex.: D:\Renders). Com **Manter pastas**, os arquivos de uma pasta arrastada vão para as mesmas subpastas lá dentro.
+- **Etiquetas no nome**: o botão **{ }** ao lado do Sufixo insere {data}, {hora}, {res}, {fps}, {bits}, {n} (número na fila), {codec} e {preset}. O nome final aparece ao lado de "Saída". A Subpasta também aceita etiquetas (ex.: {data} = uma pasta por dia).
+- **Mensagens de erro claras**: um vídeo que falhou diz o que aconteceu e o que fazer (disco cheio, arquivo aberto em outro programa, disco desconectado, arquivo corrompido, placa de vídeo ocupada…). **Tentar de novo** e **Copiar detalhes do erro** ficam no vídeo e no botão direito.
+- **Fila salva**: fechar o app (ou ele travar) não perde mais a fila. O que estava renderizando volta como pronto, e o arquivo pela metade é apagado.
+- **Cortar trecho**: marque **Início** e **Fim** na linha do tempo (teclas I e O, ou os botões) e só esse pedaço é convertido. Arraste as bordas para ajustar; com Duplicar dá para tirar vários trechos do mesmo vídeo. O timecode da câmera acompanha o início do trecho. O original nunca é apagado quando você corta.
+- **Ao terminar: Nada · Suspender · Desligar**, ao lado dos totais. Você tem 60 segundos para cancelar, só acontece se a fila terminou sem erro, e volta para "Nada" depois de usar.
+- Janela de **Novidades** depois de atualizar (também no menu Mec Encoder).
+
 ## 0.2.3
 
 **English**

@@ -74,3 +74,13 @@ pub fn save_settings(app: &AppHandle, settings: &Value) -> Result<(), String> {
     let text = serde_json::to_string_pretty(settings).map_err(|e| e.to_string())?;
     write_atomic(&dir(app).join("settings.json"), &text)
 }
+
+/// Fila salva: a interface manda o que precisa (arquivos, presets, o que já ficou pronto).
+pub fn load_queue(app: &AppHandle) -> Value {
+    read_json(&dir(app).join("queue.json")).unwrap_or(Value::Null)
+}
+
+pub fn save_queue(app: &AppHandle, queue: &Value) -> Result<(), String> {
+    let text = serde_json::to_string(queue).map_err(|e| e.to_string())?;
+    write_atomic(&dir(app).join("queue.json"), &text)
+}

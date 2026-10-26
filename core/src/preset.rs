@@ -67,6 +67,10 @@ pub struct Output {
     pub suffix: Toggle,
     pub subfolder: Toggle,
     pub delete_source: bool,
+    /// Pasta de saída fixa (ex.: D:\Renders). Desligada: salva na pasta do original.
+    pub folder: Toggle,
+    /// Com pasta fixa: repete as subpastas de onde o arquivo veio (pasta arrastada → mesma estrutura).
+    pub keep_tree: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -124,7 +128,8 @@ impl Default for Toggle {
 }
 impl Default for Output {
     fn default() -> Self {
-        Self { suffix: Toggle { on: true, text: "_{codec}".into() }, subfolder: Toggle { on: false, text: "proxy".into() }, delete_source: false }
+        Self { suffix: Toggle { on: true, text: "_{codec}".into() }, subfolder: Toggle { on: false, text: "proxy".into() }, delete_source: false,
+               folder: Toggle::default(), keep_tree: true }
     }
 }
 impl Default for Preset {
@@ -158,12 +163,12 @@ impl Preset {
             raw.clone(),
             Preset { id: "backup".into(), name: "Backup".into(), color: "yellow".into(), bits: 10,
                 bitrate: Bitrate { mode: "auto".into(), kbps: 0, rc: "vbr".into(), level: "balanced".into() },
-                output: Output { suffix: Toggle { on: true, text: "_backup".into() }, subfolder: Toggle { on: true, text: "backup".into() }, delete_source: false },
+                output: Output { suffix: Toggle { on: true, text: "_backup".into() }, subfolder: Toggle { on: true, text: "backup".into() }, delete_source: false, ..Output::default() },
                 ..raw.clone() },
             Preset { id: "proxy".into(), name: "Proxy".into(), color: "green".into(), scale: "25".into(), bits: 8, container: "mp4".into(),
                 bitrate: Bitrate { mode: "auto".into(), kbps: 0, rc: "vbr".into(), level: "light".into() }, max_quality: false,
                 fps: Fps { conform: false, value: "source".into() },
-                output: Output { suffix: Toggle { on: true, text: "_proxy".into() }, subfolder: Toggle { on: true, text: "proxy".into() }, delete_source: false },
+                output: Output { suffix: Toggle { on: true, text: "_proxy".into() }, subfolder: Toggle { on: true, text: "proxy".into() }, delete_source: false, ..Output::default() },
                 ..raw.clone() },
             Preset { id: "meta-15".into(), name: "Meta Glass".into(), color: "pink".into(),
                 bitrate: Bitrate { mode: "source".into(), kbps: 15_000, rc: "cbr".into(), level: String::new() }, fps: Fps { conform: true, value: "29.97".into() },
@@ -180,7 +185,7 @@ impl Preset {
         let i = |id: &str, name: &str, color: &str, format: &str, quality: u32, lossless: bool| Preset {
             kind: "image".into(), id: id.into(), name: name.into(), color: color.into(), container: String::new(), folder: "Images".into(),
             image: Image { format: format.into(), quality, lossless },
-            output: Output { suffix: Toggle { on: false, text: String::new() }, subfolder: Toggle { on: false, text: "images".into() }, delete_source: false },
+            output: Output { suffix: Toggle { on: false, text: String::new() }, subfolder: Toggle { on: false, text: "images".into() }, delete_source: false, ..Output::default() },
             ..Preset::default()
         };
         vec![
@@ -195,7 +200,7 @@ impl Preset {
         let a = |id: &str, name: &str, color: &str, codec: &str, kbps: u32, bits: u32| Preset {
             kind: "audio".into(), id: id.into(), name: name.into(), color: color.into(), container: String::new(), folder: "Audio".into(),
             audio: Audio { codec: codec.into(), channels: "source".into(), tracks: vec![1, 2], kbps, rate: 0, bits },
-            output: Output { suffix: Toggle { on: false, text: String::new() }, subfolder: Toggle { on: false, text: "audio".into() }, delete_source: false },
+            output: Output { suffix: Toggle { on: false, text: String::new() }, subfolder: Toggle { on: false, text: "audio".into() }, delete_source: false, ..Output::default() },
             ..Preset::default()
         };
         vec![

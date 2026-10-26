@@ -285,3 +285,20 @@ fn aspect_ratio_e2e() {
     assert_eq!((v.width, v.height), (480, 600));
     let _ = std::fs::remove_dir_all(&d);
 }
+
+#[test]
+fn trim_e2e() {
+    let (Some(ff), Some(fp)) = (tool("ffmpeg"), tool("ffprobe")) else { eprintln!("sem ffmpeg, pulando"); return };
+    let d = dir("trim");
+    let src = make_iphone_like(&ff, &d, false);
+    let info = probe(&fp, &src).unwrap();
+    let p = mec_core::command::resolve(&info, &Preset::defaults().into_iter().find(|p| p.id == "iphone-4k60").unwrap());
+    let out = d.join("trecho.mp4");
+    let mut plan = build(&info, &p, &Encoder::Cpu { preset: "ultrafast".into() }, &out);
+    let (a, b) = mec_core::command::trim_range(&info, 0.5, 2.0).unwrap();
+    mec_core::command::apply_trim(&mut plan, &info, a, b);
+    run(&ff, &plan.args);
+    let o = probe(&fp, &out).unwrap();
+    assert!((o.duration - 1.5).abs() < 0.1, "duração do trecho: {}", o.duration);
+    assert!(!o.audio.is_empty());
+}

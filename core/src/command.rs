@@ -353,7 +353,7 @@ pub fn aac_quality(info: &MediaInfo, p: &Preset) -> (u32, u32) {
     (kbps, rate)
 }
 
-fn codec_tag(p: &Preset) -> &'static str {
+pub fn codec_tag(p: &Preset) -> &'static str {
     if p.is_image() { return match p.image.format.as_str() { "png" => "PNG", "webp" => "WEBP", _ => "JPG" }; }
     if p.is_audio() { return match p.audio.codec.as_str() { "wav" => "WAV", "mp3" => "MP3", "flac" => "FLAC", "aac" => "AAC", _ => "AUDIO" }; }
     if p.codec == "h264" { "H264" } else { "H265" }
@@ -375,14 +375,63 @@ fn clean(s: &str) -> String {
     s.chars().map(|c| if r#"<>:"/\|?*"#.contains(c) || c.is_control() { '_' } else { c }).collect::<String>().trim().to_string()
 }
 
+/// O que a fila sabe do arquivo e o sistema não: de que pasta arrastada ele veio, a posição na fila,
+/// e a data/hora local (o app manda pronta, no formato do nome de arquivo).
+#[derive(Clone, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize), serde(rename_all = "camelCase", default))]
+pub struct Naming {
+    /// Pasta relativa à pasta arrastada ("Hug Challenge x Ella/Cam B"). Vazio para arquivo solto.
+    pub dir: String,
+    /// Posição na fila (1, 2, 3...).
+    pub n: u32,
+    /// "2026-10-26"
+    pub date: String,
+    /// "14-32"
+    pub time: String,
+}
+
+/// Troca as etiquetas do nome: {codec} {preset} {data}/{date} {hora}/{time} {res} {fps} {bits} {n}.
+pub fn tags(text: &str, info: Option<&MediaInfo>, p: &Preset, nm: &Naming) -> String {
+    if !text.contains('{') { return text.to_string(); }
+    let v = info.and_then(|i| i.video.as_ref());
+    let res = v.filter(|_| !p.is_audio()).map(|v| { let (w, h) = out_dims(v, p); format!("{w}x{h}") }).unwrap_or_default();
+    let fps = v.filter(|_| !p.is_audio() && !p.is_image()).map(|v| if p.fps.conform && p.fps.value != "source" && !p.fps.value.is_empty() { p.fps.value.clone() } else { source_fps(v) }).unwrap_or_default();
+    let bits = if p.is_audio() {
+        if p.audio.codec == "wav" || p.audio.codec == "flac" { format!("{}bit", p.audio.bits.max(16)) } else { String::new() }
+    } else if p.is_image() { String::new() } else {
+        let b = if p.bits > 0 { p.bits } else { v.map_or(8, |v| if v.bit_depth >= 10 { 10 } else { 8 }) };
+        format!("{b}bit")
+    };
+    let n = if nm.n > 0 { format!("{:02}", nm.n) } else { String::new() };
+    let mut s = text.to_string();
+    for (k, val) in [("{codec}", codec_tag(p).to_string()), ("{preset}", p.name.clone()), ("{data}", nm.date.clone()), ("{date}", nm.date.clone()),
+                     ("{hora}", nm.time.clone()), ("{time}", nm.time.clone()), ("{res}", res), ("{fps}", fps), ("{bits}", bits), ("{n}", n)] {
+        s = s.replace(k, &val);
+    }
+    s
+}
+
 /// Caminho de saída. Nunca sobrescreve: se já existir, acrescenta " (2)", " (3)"...
-pub fn output_path(src: &Path, p: &Preset) -> PathBuf {
-    let mut dir = src.parent().map(Path::to_path_buf).unwrap_or_default();
-    if p.output.subfolder.on && !clean(&p.output.subfolder.text).is_empty() { dir = dir.join(clean(&p.output.subfolder.text)); }
+pub fn output_path(src: &Path, p: &Preset) -> PathBuf { output_path_for(src, None, p, &Naming::default()) }
+
+/// Caminho de saída com pasta fixa, estrutura de pastas e etiquetas no nome.
+pub fn output_path_for(src: &Path, info: Option<&MediaInfo>, p: &Preset, nm: &Naming) -> PathBuf {
+    let o = &p.output;
+    let fixed = o.folder.text.trim();
+    let mut dir = if o.folder.on && !fixed.is_empty() {
+        let mut d = PathBuf::from(fixed);
+        if o.keep_tree {
+            for part in nm.dir.split(['/', '\\']) {
+                let c = clean(part);
+                if !c.is_empty() && c != "." && c != ".." { d.push(c); }
+            }
+        }
+        d
+    } else { src.parent().map(Path::to_path_buf).unwrap_or_default() };
+    let sub = clean(&tags(&o.subfolder.text, info, p, nm));
+    if o.subfolder.on && !sub.is_empty() && sub != "." && sub != ".." { dir = dir.join(sub); }
     let stem = src.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "video".into());
-    let suffix = if p.output.suffix.on {
-        clean(&p.output.suffix.text.replace("{codec}", codec_tag(p)).replace("{preset}", &p.name))
-    } else { String::new() };
+    let suffix = if o.suffix.on { clean(&tags(&o.suffix.text, info, p, nm)) } else { String::new() };
     let ext = if p.is_image() { image_ext(p).to_string() } else if p.is_audio() { audio_ext(src, p, "") } else {
         match p.container.as_str() { "mov" => "mov", "source" => source_container(src), _ => "mp4" }.to_string()
     };
@@ -393,6 +442,64 @@ pub fn output_path(src: &Path, p: &Preset) -> PathBuf {
         i += 1;
     }
     out
+}
+
+/// Trecho escolhido (início e fim em segundos), ou None se for o vídeo inteiro.
+pub fn trim_range(info: &MediaInfo, a: f64, b: f64) -> Option<(f64, f64)> {
+    let dur = info.duration;
+    let a = a.max(0.0);
+    let b = if dur > 0.0 { b.min(dur) } else { b };
+    if !(a.is_finite() && b.is_finite()) || b - a < 0.05 { return None; }
+    if a < 0.001 && (dur <= 0.0 || b >= dur - 0.001) { return None; }
+    Some((a, b))
+}
+
+/// Timecode "HH:MM:SS:FF" somado de `secs` (para o trecho começar no timecode certo).
+pub fn shift_timecode(tc: &str, secs: f64, fps: f64) -> String {
+    let sep = if tc.contains(';') { ';' } else { ':' };
+    let parts: Vec<u64> = tc.split([':', ';']).filter_map(|x| x.parse().ok()).collect();
+    if parts.len() != 4 { return tc.to_string(); }
+    let base = (fps.round() as u64).max(1);
+    let total = ((parts[0] * 3600 + parts[1] * 60 + parts[2]) * base + parts[3]) + (secs * fps).round() as u64;
+    let f = total % base; let s = total / base;
+    format!("{:02}:{:02}:{:02}{sep}{:02}", (s / 3600) % 24, (s / 60) % 60, s % 60, f)
+}
+
+/// Corta o plano para o trecho: `-ss` antes do arquivo (pula rápido e continua exato, porque reconverte)
+/// e `-t` com a duração antes da saída. O timecode da câmera acompanha o início.
+pub fn apply_trim(plan: &mut Plan, info: &MediaInfo, a: f64, b: f64) {
+    let fmt = |x: f64| format!("{x:.3}");
+    if let Some(i) = plan.args.iter().position(|x| x == "-i") {
+        plan.args.splice(i..i, ["-ss".to_string(), fmt(a)]);
+    }
+    if let Some(i) = plan.args.iter().position(|x| x == "-timecode") {
+        let fps = info.video.as_ref().map_or(30.0, |v| if v.fps_nominal > 0.0 { v.fps_nominal } else { v.fps });
+        if let Some(v) = plan.args.get_mut(i + 1) { *v = shift_timecode(v, a, fps); }
+    }
+    let at = plan.args.len().saturating_sub(1);
+    plan.args.splice(at..at, ["-t".to_string(), fmt(b - a)]);
+}
+
+/// Traduz um erro (do FFmpeg ou do sistema) num código que a interface explica em português/inglês.
+/// Devolve "unknown" quando não reconhece.
+pub fn explain(err: &str) -> &'static str {
+    let e = err.to_ascii_lowercase();
+    let has = |xs: &[&str]| xs.iter().any(|x| e.contains(x));
+    for code in ["source-missing", "need-image-preset", "not-image", "no-audio", "ffmpeg-missing", "cancelled"] {
+        if e.trim() == code { return code; }
+    }
+    if has(&["no space left", "not enough space", "os error 112", "os error 28", "disk full", "disk quota"]) { return "disk-full"; }
+    if has(&["os error 206", "filename or extension is too long", "file name too long"]) { return "path-long"; }
+    if has(&["os error 32", "being used by another process"]) { return "file-busy"; }
+    if has(&["permission denied", "access is denied", "os error 5)", "os error 13)", "read-only file system"]) { return "no-permission"; }
+    if has(&["openencodesessionex failed", "out of memory (10)", "incompatible client key", "nvenc session"]) { return "gpu-busy"; }
+    if has(&["no capable devices", "cannot load nvcuda", "cannot load nvencodeapi", "driver does not support", "minimum required nvidia driver", "cuda_error_no_device"]) { return "gpu-driver"; }
+    if has(&["frame dimension", "width not within range", "height not within range", "less than the minimum supported", "exceeds the maximum"]) { return "gpu-size"; }
+    if has(&["decoder (codec", "unknown decoder", "no decoder found", "decoding requested, but no decoder"]) { return "codec-unsupported"; }
+    if has(&["moov atom not found", "invalid data found when processing input", "error while decoding", "invalid nal unit", "corrupt", "truncat", "partial file", "end of file"]) { return "corrupt"; }
+    if has(&["os error 3)", "os error 2)", "cannot find the path", "no such file or directory", "cannot find the file", "os error 21)", "os error 53)"]) { return "path-missing"; }
+    if has(&["output check failed", "duration mismatch", "output has no video", "output has no audio"]) { return "output-check"; }
+    "unknown"
 }
 
 /// Onde o vídeo é decodificado e filtrado.
@@ -779,7 +886,7 @@ mod tests {
             "iphone-1080p60" => Preset { scale: "1080".into(), ..base },
             "proxy" => Preset { scale: "25".into(), fps: crate::preset::Fps { conform: false, value: "59.94".into() },
                 output: crate::preset::Output { suffix: crate::preset::Toggle { on: true, text: "_proxy".into() },
-                    subfolder: crate::preset::Toggle { on: true, text: "proxy".into() }, delete_source: false }, ..base },
+                    subfolder: crate::preset::Toggle { on: true, text: "proxy".into() }, delete_source: false, ..Default::default() }, ..base },
             _ => base,
         }
     }
@@ -907,5 +1014,65 @@ mod tests {
         v.max_cll = 1000.0; assert_eq!(hdr_peak(&v), 10.0);
         v.max_cll = 0.0; v.hdr = "PQ".into(); assert_eq!(hdr_peak(&v), 100.0);
         v.mastering_max = 4000.0; assert_eq!(hdr_peak(&v), 40.0);
+    }
+
+    #[test]
+    fn naming_tags_and_fixed_folder() {
+        use crate::preset::Toggle;
+        let i = iphone(90, "");
+        let mut p = preset("iphone-4k60");
+        p.output.suffix = Toggle { on: true, text: "_{res}_{fps}_{bits}_{n}_{data}_{hora}_{preset}".into() };
+        let nm = Naming { dir: "Hug Challenge x Ella/Cam B".into(), n: 3, date: "2026-10-26".into(), time: "14-32".into() };
+        let r = resolve(&i, &p);
+        let o = output_path_for(Path::new("/nao/existe/IMG_1.MOV"), Some(&i), &r, &nm);
+        assert_eq!(o, PathBuf::from(format!("/nao/existe/IMG_1_2160x3840_59.94_8bit_03_2026-10-26_14-32_{}.mp4", p.name)));
+        // pasta fixa com a mesma estrutura de pastas + subpasta com etiqueta
+        let mut q = r.clone();
+        q.output.suffix.on = false;
+        q.output.folder = Toggle { on: true, text: "/renders".into() };
+        q.output.subfolder = Toggle { on: true, text: "{data}".into() };
+        let o = output_path_for(Path::new("/nao/existe/IMG_1.MOV"), Some(&i), &q, &nm);
+        assert_eq!(o, PathBuf::from("/renders/Hug Challenge x Ella/Cam B/2026-10-26/IMG_1.mp4"));
+        q.output.keep_tree = false;
+        assert_eq!(output_path_for(Path::new("/x/IMG_1.MOV"), Some(&i), &q, &nm), PathBuf::from("/renders/2026-10-26/IMG_1.mp4"));
+        // pasta fixa desligada: volta para a pasta do original; ".." não sai da pasta
+        q.output.folder.on = false;
+        q.output.subfolder.text = "..".into();
+        assert_eq!(output_path_for(Path::new("/x/IMG_1.MOV"), Some(&i), &q, &nm), PathBuf::from("/x/IMG_1.mp4"));
+        // sem dados (prévia antiga): etiquetas somem sem quebrar
+        assert_eq!(tags("_{res}{codec}", None, &r, &Naming::default()), "_H265");
+    }
+
+    #[test]
+    fn errors_explained() {
+        assert_eq!(explain("source-missing"), "source-missing");
+        assert_eq!(explain("[out#0/mp4] Error writing trailer: No space left on device"), "disk-full");
+        assert_eq!(explain("There is not enough space on the disk. (os error 112)"), "disk-full");
+        assert_eq!(explain("Access is denied. (os error 5)"), "no-permission");
+        assert_eq!(explain("The process cannot access the file because it is being used by another process. (os error 32)"), "file-busy");
+        assert_eq!(explain("[h264_nvenc] OpenEncodeSessionEx failed: out of memory (10): (no details)"), "gpu-busy");
+        assert_eq!(explain("[hevc_nvenc] Frame Dimension less than the minimum supported value."), "gpu-size");
+        assert_eq!(explain("[mov,mp4,m4a,3gp,3g2,mj2] moov atom not found\nIMG.MOV: Invalid data found when processing input"), "corrupt");
+        assert_eq!(explain("The system cannot find the path specified. (os error 3)"), "path-missing");
+        assert_eq!(explain("output check failed: duration mismatch: 10.00s vs 4.00s"), "output-check");
+        assert_eq!(explain("something else"), "unknown");
+    }
+
+    #[test]
+    fn trim_segment() {
+        let mut i = iphone(90, "");
+        i.timecode = "07:51:07:46".into();
+        assert_eq!(trim_range(&i, 0.0, 10.0), None);
+        assert_eq!(trim_range(&i, 2.0, 2.01), None);
+        assert_eq!(trim_range(&i, 2.0, 99.0), Some((2.0, 10.0)));
+        let p = resolve(&i, &preset("iphone-4k60"));
+        let mut plan = build_mode(&i, &p, &Encoder::Nvenc, Path::new("/o/x.mp4"), Decode::Gpu);
+        apply_trim(&mut plan, &i, 2.5, 7.0);
+        let s = plan.args.join(" ");
+        assert!(s.contains("-ss 2.500 -i /v/IMG_0001.MOV"), "{s}");
+        assert!(s.ends_with("-t 4.500 /o/x.mp4"), "{s}");
+        assert!(s.contains("-timecode 07:51:10:16"), "{s}");
+        assert_eq!(shift_timecode("00:00:59:59", 1.0 / 60.0, 60.0), "00:01:00:00");
+        assert_eq!(shift_timecode("01:00:00;00", 1.0, 29.97), "01:00:01;00");
     }
 }

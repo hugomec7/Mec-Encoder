@@ -46,7 +46,7 @@
       </div>
       <div class="out-panel" id="outPanel"></div>
       <div class="queue-foot">
-        <div class="totals"><span id="tTotal"></span><span id="tEta">NVENC · RTX</span></div>
+        <div class="totals"><span id="tTotal"></span><button class="after-btn" id="bAfter" data-menu="1"></button><span id="tEta">NVENC · RTX</span></div>
         <button class="btn" id="bRender"><i class="fillbar" id="renderFill"></i>
           <svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 2.6v10.8c0 .5.6.8 1 .5l8.3-5.4a.6.6 0 0 0 0-1L5 2.1c-.4-.3-1 0-1 .5z"/></svg>
           <span id="renderTxt"></span></button>
@@ -67,15 +67,17 @@
       </div>
       <div class="pv-meta" id="pvMeta"></div>
       <div class="transport">
-        <div class="timeline" id="timeline"><div class="played"></div><canvas id="wave"></canvas><div class="head"></div></div>
+        <div class="timeline" id="timeline"><div class="played"></div><canvas id="wave"></canvas><div class="trim" id="trimBox"><i class="cut l"></i><i class="cut r"></i><b class="edge l" data-edge="a"></b><b class="edge r" data-edge="b"></b></div><div class="head"></div></div>
         <div class="controls">
           <span class="tc tnum" id="tcNow">00:00:00:00</span>
           <div class="mid">
+            <button class="ctl trim-btn" id="bIn"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 2.5H4v11h2.5"/><path d="M9 8h4M11 6l2 2-2 2"/></svg></button>
             <button class="ctl" title="←"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3.5L5.5 8l4.5 4.5"/></svg></button>
             <button class="ctl"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M7.6 3.4v9.2L1.8 8zM14.2 3.4v9.2L8.4 8z"/></svg></button>
             <button class="ctl play" id="bPlay"><svg viewBox="0 0 16 16" fill="currentColor" id="playIco"><path d="M4.5 2.6v10.8c0 .5.6.8 1 .5l8-5.4a.6.6 0 0 0 0-1l-8-5.4c-.4-.3-1 0-1 .5z"/></svg></button>
             <button class="ctl"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M1.8 3.4v9.2L7.6 8zM8.4 3.4v9.2L14.2 8z"/></svg></button>
             <button class="ctl" title="→"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5L10.5 8 6 12.5"/></svg></button>
+            <button class="ctl trim-btn" id="bOut"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2.5H12v11H9.5"/><path d="M7 8H3M5 6L3 8l2 2"/></svg></button>
           </div>
           <span class="tc end tnum" id="tcEnd">00:00:00:00</span>
         </div>
@@ -107,12 +109,28 @@
   <div class="sheet-body smooth" id="sheetScroll"><div class="sc" id="sheetBody"></div></div>
 </div>
 
+<!-- novidades -->
+<div class="sheet-bg news-bg" id="newsBg"></div>
+<div class="sheet news" id="news" role="dialog" aria-labelledby="lNews">
+  <div class="sheet-head"><h2 id="lNews"></h2><button class="sheet-done" id="bNewsDone"></button></div>
+  <div class="sheet-body smooth" id="newsBody"></div>
+</div>
+
+<!-- desligar / suspender ao terminar -->
+<div class="sheet-bg power-bg" id="powerBg"></div>
+<div class="sheet power" id="power" role="alertdialog" aria-labelledby="powerTitle">
+  <div class="power-in"><div class="power-ring"><svg viewBox="0 0 44 44"><circle cx="22" cy="22" r="19"/><circle class="arc" cx="22" cy="22" r="19"/></svg><b id="powerN">60</b></div>
+    <h2 id="powerTitle"></h2><p id="powerSub"></p>
+    <div class="power-btns"><button class="btn" id="bPowerCancel"></button><button class="link" id="bPowerNow"></button></div></div>
+</div>
+
 <div class="menu" id="menu"></div>
 <div class="drag-ghost" id="ghost"></div>
 <div class="toast" id="toast"><i></i><span id="toastTxt"></span></div>
 <audio id="sfxDone" src="sounds/done.mp3" preload="auto"></audio>
 
 <script src="i18n.js"></script>
+<script src="news.js"></script>
 <script src="demo.js"></script>
 <script src="app.js"></script>
 </body>
