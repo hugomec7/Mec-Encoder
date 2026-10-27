@@ -1,5 +1,19 @@
 # Changelog · Novidades
 
+## 0.2.6
+
+**English**
+- **Watch folders** (Settings): pick a folder and a preset; new files that land there are converted by themselves. It waits for the copy to finish, looks only at the folder itself (not subfolders), and files that were already there are left alone. Files that arrive while the app is closed are converted when it opens. Each folder can be turned on/off.
+- **Jobs folder (automation)**: with Mec Encoder open, drop a .json with the files and the preset into the jobs folder (Settings › Automation › Open) and it goes into the queue and renders by itself. Progress goes to `<name>.status.json` (state, progress, output and error of each file). Output folder, suffix, subfolder and trim can be set in the job. Format in jobs\README.txt.
+- **Command line: mec.exe** (in the app's bin folder): `mec convert <files or folders> --preset RAW`, with `--out`, `--suffix`, `--trim`, `--parallel`, `--dry-run` and `--json` (one line per event). Also `mec presets`, `mec probe` and `mec engine`. Same presets and same engine as the app. Settings › Automation › Copy path.
+- The render engine now lives in the core, shared by the app and mec.exe.
+
+**Português**
+- **Pastas vigiadas** (Configurações): escolha uma pasta e um preset; arquivo novo que cair lá é convertido sozinho. Espera a cópia terminar, olha só a própria pasta (sem as subpastas) e o que já estava lá fica como está. Arquivos que chegarem com o app fechado são convertidos quando ele abrir. Cada pasta pode ser ligada/desligada.
+- **Pasta de tarefas (automação)**: com o Mec Encoder aberto, coloque um .json com os arquivos e o preset na pasta de tarefas (Configurações › Automação › Abrir) e ele entra na fila e renderiza sozinho. O andamento vai para `<nome>.status.json` (situação, progresso, saída e erro de cada arquivo). Dá para pedir pasta de saída, sufixo, subpasta e trecho. O formato está em jobs\README.txt.
+- **Linha de comando: mec.exe** (na pasta bin do app): `mec convert <arquivos ou pastas> --preset RAW`, com `--out`, `--suffix`, `--trim`, `--parallel`, `--dry-run` e `--json` (uma linha por evento). Também `mec presets`, `mec probe` e `mec engine`. Mesmos presets e mesmo motor do app. Configurações › Automação › Copiar caminho.
+- O motor de render agora fica no núcleo, o mesmo para o app e o mec.exe.
+
 ## 0.2.5
 
 **English**

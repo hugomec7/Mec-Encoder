@@ -1,6 +1,6 @@
 [package]
 name = "mec-encoder"
-version = "0.2.5"
+version = "0.2.6"
 edition = "2021"
 description = "Mec Encoder — fast, minimal NVENC video converter for Windows"
 license = "MIT"
