@@ -417,3 +417,18 @@
 .news-v li{font-size:12.5px;line-height:1.5;color:var(--text-2)}
 .news-v li b{color:var(--text);font-weight:600}
 .news-v.old li{color:var(--text-3)}
+
+/* pastas vigiadas e automação */
+.watch-row{gap:8px}
+.watch-row .lbl{display:grid;grid-template-columns:14px 1fr;column-gap:7px;align-items:center;min-width:0;flex:1}
+.watch-row .lbl svg{width:14px;height:14px;color:var(--text-3);grid-row:span 2}
+.watch-row .lbl .wname{font-weight:550;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.watch-row .lbl small{grid-column:2;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:var(--mono);font-size:10.5px}
+.watch-row.off .lbl,.watch-row.off .field{opacity:.45}
+.watch-row .field.pick{flex:none;max-width:130px;white-space:nowrap;overflow:hidden}
+.watch-row .w-del{flex:none;width:22px;height:22px;display:grid;place-items:center;border-radius:6px;color:var(--text-3)}
+.watch-row .w-del:hover{background:var(--fill);color:var(--red)}
+.watch-row .w-del svg{width:9px;height:9px}
+.add-watch{display:inline-flex;align-items:center;gap:6px;font-size:13px}
+.add-watch svg{width:13px;height:13px}
+.sheet-body .lbl small code{font-family:var(--mono);font-size:10.5px;color:var(--text-3)}

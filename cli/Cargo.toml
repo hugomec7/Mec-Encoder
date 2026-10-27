@@ -1,0 +1,15 @@
+[package]
+name = "mec-cli"
+version = "0.2.6"
+edition = "2021"
+description = "Mec Encoder pela linha de comando (mec.exe): os mesmos presets e o mesmo motor do app"
+license = "MIT"
+
+[[bin]]
+name = "mec"
+path = "src/main.rs"
+
+[dependencies]
+mec-core = { path = "../core", features = ["serde"] }
+serde_json = "1"
+trash = "5"

@@ -6,6 +6,7 @@
 //! - [`scan`]: transforma arquivos e pastas arrastados em uma lista de vídeos.
 //! - [`enc`]: importa presets `.enc` do Shutter Encoder.
 //! - [`tools`]: acha o ffmpeg/ffprobe e roda sem abrir janela de console.
+//! - [`render`]: renderiza um arquivo inteiro (tentativas GPU → CPU, progresso, conferência); usado pelo app e pelo mec.exe.
 //!
 //! Só usa a biblioteca padrão; `serde` entra pela feature `serde` (usada pelo app).
 
@@ -14,6 +15,7 @@ pub mod enc;
 pub mod preset;
 pub mod probe;
 pub mod progress;
+pub mod render;
 pub mod scan;
 pub mod tools;
 

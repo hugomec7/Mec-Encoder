@@ -25,6 +25,8 @@ jobs:
       - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
       - name: Unit + end-to-end tests
         run: cargo test -p mec-core --features serde
+      - name: Command line (mec)
+        run: cargo test -p mec-cli
 
   windows:
     name: Windows x64 (MSI + portable)
@@ -68,6 +70,15 @@ jobs:
             exit 1; }
           grep "test result" test.log
 
+      - name: Command line (mec.exe) into app/bin
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo build --release -p mec-cli 2>&1 | tee build.log
+          cp target/release/mec.exe app/bin/
+          app/bin/mec.exe version
+          app/bin/mec.exe engine
+
       - name: Build (Tauri)
         working-directory: app
         shell: bash
@@ -82,8 +93,9 @@ jobs:
         run: |
           python - <<'PY'
           import re, os
-          if not os.path.exists("build.log"): raise SystemExit
-          log = open("build.log", encoding="utf-8", errors="replace").read()
+          paths = [p for p in ("build.log", "../build.log") if os.path.exists(p)]
+          if not paths: raise SystemExit
+          log = "\n".join(open(p, encoding="utf-8", errors="replace").read() for p in paths)
           log = re.sub(r"\x1b\[[0-9;]*m", "", log)
           blocks = re.findall(r"(?ms)^error(?:\[E\d+\])?:.*?(?=^\s*$|^error|^warning)", log)
           if not blocks:

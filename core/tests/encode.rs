@@ -302,3 +302,34 @@ fn trim_e2e() {
     assert!((o.duration - 1.5).abs() < 0.1, "duração do trecho: {}", o.duration);
     assert!(!o.audio.is_empty());
 }
+
+#[test]
+fn render_api() {
+    use mec_core::render::{render, Engine, Hooks};
+    use std::sync::{atomic::AtomicBool, Mutex};
+    let (Some(ff), Some(fp)) = (tool("ffmpeg"), tool("ffprobe")) else { eprintln!("sem ffmpeg, pulando"); return };
+    let d = dir("render");
+    let src = make_iphone_like(&ff, &d, false);
+    let info = probe(&fp, &src).unwrap();
+    let e = Engine { ffmpeg: ff, ffprobe: fp, encoder: Encoder::Cpu { preset: "ultrafast".into() }, gpu: None };
+    let children = Mutex::new(std::collections::HashMap::new());
+    let cancel = AtomicBool::new(false);
+    let ticks = Mutex::new(0usize);
+    let started = Mutex::new(None);
+    let h = Hooks { id: 1, children: &children, cancel: &cancel, progress: &|_| { *ticks.lock().unwrap() += 1; }, log: &|_| {},
+                    started: &|p| { *started.lock().unwrap() = Some(p.to_path_buf()); } };
+    let mut p = Preset::defaults().into_iter().find(|p| p.id == "iphone-4k60").unwrap();
+    p.output.folder = mec_core::preset::Toggle { on: true, text: d.join("saida").to_string_lossy().into_owned() };
+    let nm = mec_core::Naming { dir: "Cartao/A".into(), n: 1, date: "2026-10-27".into(), time: "10-00".into() };
+    let done = render(&e, &info, &p, &nm, Some((0.5, 2.5)), &h).unwrap();
+    assert_eq!(done.output.parent().unwrap(), d.join("saida").join("Cartao").join("A"));
+    assert_eq!(started.lock().unwrap().as_deref(), Some(done.output.as_path()));
+    assert!(done.size > 0);
+    assert_eq!(done.mode, "cpu-encode");
+    assert!(!done.delete_source, "trecho nunca apaga o original");
+    let o = probe(&tool("ffprobe").unwrap(), &done.output).unwrap();
+    assert!((o.duration - 2.0).abs() < 0.1, "{}", o.duration);
+    // arquivo que não existe: erro com código
+    let mut gone = info.clone(); gone.path = d.join("nao-existe.mov");
+    assert_eq!(render(&e, &gone, &p, &nm, None, &h).unwrap_err(), "source-missing");
+}

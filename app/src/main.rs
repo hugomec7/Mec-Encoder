@@ -5,15 +5,13 @@ mod store;
 mod update;
 
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader, Read};
 use std::path::PathBuf;
 use std::process::{Child, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
-use mec_core::progress::Progress;
-use mec_core::{command, enc, probe, scan, tools, Encoder, MediaInfo, Preset};
+use mec_core::{command, enc, probe, render, scan, tools, Encoder, MediaInfo, Preset};
 use serde::Serialize;
 use serde_json::{json, Value};
 use tauri::{AppHandle, DragDropEvent, Emitter, Manager, State, WindowEvent};
@@ -48,13 +46,195 @@ pub struct AppState {
     latest: Mutex<Option<update::Latest>>,
     /// Arquivos sendo gravados agora (por vídeo). Se o app fechar no meio, são apagados.
     partial: Mutex<HashMap<u64, PathBuf>>,
+    /// Pastas vigiadas (vêm das configurações).
+    watch: Mutex<Vec<WatchDir>>,
+    /// O que as pastas vigiadas já viram (não converte de novo) e os arquivos que o app gravou.
+    seen: Mutex<Seen>,
+    /// Arquivo novo esperando o tamanho parar de mudar: (tamanho, data, vezes igual).
+    pending: Mutex<HashMap<PathBuf, (u64, u64, u8)>>,
+}
+
+#[derive(Clone, Debug, serde::Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", default)]
+struct WatchDir { path: PathBuf, preset: String, on: bool }
+impl Default for WatchDir { fn default() -> Self { Self { path: PathBuf::new(), preset: String::new(), on: true } } }
+
+#[derive(Default, serde::Deserialize, Serialize)]
+#[serde(default)]
+struct Seen {
+    /// pastas que já foram "fotografadas" (os arquivos que existiam quando a pasta foi adicionada não são convertidos)
+    folders: Vec<PathBuf>,
+    files: std::collections::HashSet<PathBuf>,
+}
+
+fn save_seen(app: &AppHandle, seen: &mut Seen) {
+    seen.files.retain(|f| f.exists());
+    let _ = std::fs::write(store::dir(app).join("watch-seen.json"), serde_json::to_string(&*seen).unwrap_or_default());
+}
+
+fn file_sig(p: &std::path::Path) -> Option<(u64, u64)> {
+    let m = std::fs::metadata(p).ok()?;
+    let t = m.modified().ok()?.duration_since(std::time::UNIX_EPOCH).ok()?.as_secs();
+    Some((m.len(), t))
+}
+
+/// Pastas vigiadas: arquivo novo (que não estava lá antes) entra na fila quando o tamanho para de mudar
+/// (terminou de copiar). Só a pasta de cima, sem subpastas, para não pegar o que o próprio app grava em "proxy\".
+fn watch_tick(app: &AppHandle) {
+    let state = app.state::<AppState>();
+    let dirs: Vec<WatchDir> = state.watch.lock().unwrap().iter().filter(|w| w.on && w.path.is_dir()).cloned().collect();
+    for w in dirs {
+        let Ok(rd) = std::fs::read_dir(&w.path) else { continue };
+        let mut ready = Vec::new();
+        for entry in rd.flatten() {
+            let p = entry.path();
+            let name = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            if !p.is_file() || !scan::is_media(&p) || name.starts_with('.') || name.starts_with('~') { continue; }
+            if state.seen.lock().unwrap().files.contains(&p) { continue; }
+            let Some(sig) = file_sig(&p) else { continue };
+            let mut pend = state.pending.lock().unwrap();
+            let e = pend.entry(p.clone()).or_insert((sig.0, sig.1, 0));
+            if (e.0, e.1) == sig && sig.0 > 0 { e.2 += 1; } else { *e = (sig.0, sig.1, 0); }
+            // igual em 2 voltas seguidas (≈4 s) e dá para abrir: terminou de copiar
+            if e.2 >= 2 && std::fs::File::open(&p).is_ok() { pend.remove(&p); ready.push(p); }
+        }
+        if !ready.is_empty() {
+            {
+                let mut seen = state.seen.lock().unwrap();
+                for p in &ready { seen.files.insert(p.clone()); }
+                save_seen(app, &mut seen);
+            }
+            let tag = format!("watch-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis()));
+            log(app, &format!("watch | {} | {} file(s)", w.path.display(), ready.len()));
+            add_paths(app.clone(), ready, Some(json!({ "tag": tag, "preset": w.preset, "auto": true, "watch": w.path })));
+        }
+    }
+    jobs_tick(app);
+}
+
+/// Pasta de tarefas (automação): um .json com a lista de arquivos e o preset entra na fila e renderiza sozinho.
+/// O andamento vai para <nome>.status.json; o pedido vai para running\ e, no fim, para done\.
+fn jobs_dir(app: &AppHandle) -> PathBuf { store::dir(app).join("jobs") }
+
+const JOBS_README: &str = "Mec Encoder - pasta de tarefas (automação)\r\n\r\n\
+Com o Mec Encoder aberto, coloque aqui um arquivo .json e ele entra na fila e renderiza sozinho:\r\n\r\n\
+{\r\n  \"files\": [\"D:\\\\Brutos\\\\IMG_4821.MOV\", \"D:\\\\Brutos\\\\Cartao B\"],\r\n  \"preset\": \"RAW\"\r\n}\r\n\r\n\
+Opcional: \"outputFolder\": \"D:\\\\Renders\", \"keepTree\": true, \"suffix\": \"_{data}\" (ou false), \"subfolder\": \"proxy\" (ou false),\r\n\
+\"trim\": [12.5, 40], \"deleteSource\": false.\r\n\r\n\
+O andamento fica em <nome>.status.json (state: queued, running, done ou failed; items com status, progress, output e error).\r\n\
+O pedido vai para running\\ enquanto renderiza e para done\\ no fim. Pedido com erro vai para failed\\.\r\n\r\n\
+Linha de comando (sem abrir o app): bin\\mec.exe convert <arquivos ou pastas> --preset RAW   (mec.exe help)\r\n";
+
+fn write_status(app: &AppHandle, name: &str, status: &Value) {
+    let path = jobs_dir(app).join(format!("{name}.status.json"));
+    let tmp = path.with_extension("tmp");
+    if std::fs::write(&tmp, serde_json::to_string_pretty(status).unwrap_or_default()).is_ok() { let _ = std::fs::rename(&tmp, &path); }
+}
+
+fn jobs_tick(app: &AppHandle) {
+    let dir = jobs_dir(app);
+    let Ok(rd) = std::fs::read_dir(&dir) else { return };
+    for entry in rd.flatten() {
+        let p = entry.path();
+        let fname = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        if !p.is_file() || !fname.to_ascii_lowercase().ends_with(".json") || fname.ends_with(".status.json") { continue; }
+        let name = fname[..fname.len() - 5].to_string();
+        // espera o arquivo ficar quieto (quem escreveu terminou)
+        let Some(sig) = file_sig(&p) else { continue };
+        {
+            let state = app.state::<AppState>();
+            let mut pend = state.pending.lock().unwrap();
+            let e = pend.entry(p.clone()).or_insert((sig.0, sig.1, 0));
+            if (e.0, e.1) == sig { e.2 += 1; } else { *e = (sig.0, sig.1, 0); }
+            if e.2 < 1 { continue; }
+            pend.remove(&p);
+        }
+        let text = std::fs::read_to_string(&p).unwrap_or_default();
+        let job: Value = match serde_json::from_str(text.trim_start_matches('\u{feff}')) {
+            Ok(v @ Value::Object(_)) => v,
+            other => {
+                let msg = match other { Err(e) => e.to_string(), _ => "the job must be a JSON object".into() };
+                let _ = std::fs::create_dir_all(dir.join("failed"));
+                let _ = std::fs::rename(&p, dir.join("failed").join(&fname));
+                write_status(app, &name, &json!({ "job": name, "state": "failed", "error": "bad-json", "message": msg, "items": [] }));
+                continue;
+            }
+        };
+        let files: Vec<PathBuf> = match job.get("files") {
+            Some(Value::Array(a)) => a.iter().filter_map(|x| x.as_str()).map(PathBuf::from).collect(),
+            Some(Value::String(s)) => vec![PathBuf::from(s)],
+            _ => vec![],
+        };
+        let missing: Vec<&PathBuf> = files.iter().filter(|f| !f.exists()).collect();
+        let _ = std::fs::create_dir_all(dir.join("running"));
+        let _ = std::fs::rename(&p, dir.join("running").join(&fname));
+        write_status(app, &name, &json!({ "job": name, "state": "queued", "items": missing.iter().map(|f| json!({ "file": f, "status": "error", "error": "source-missing" })).collect::<Vec<_>>() }));
+        log(app, &format!("job | {name} | {} file(s)", files.len()));
+        let origin = json!({ "tag": format!("job-{name}"), "job": name, "auto": true, "preset": job.get("preset").cloned().unwrap_or(Value::Null),
+                             "options": job, "missing": missing });
+        let existing: Vec<PathBuf> = files.iter().filter(|f| f.exists()).cloned().collect();
+        add_paths(app.clone(), existing, Some(origin));
+    }
+}
+
+/// A interface manda o andamento de uma tarefa; no fim o pedido vai para done\ (ou failed\).
+#[tauri::command]
+fn job_status(app: AppHandle, name: String, status: Value, finished: bool) {
+    if name.is_empty() || name.contains(['/', '\\']) { return; }
+    write_status(&app, &name, &status);
+    if finished {
+        let dir = jobs_dir(&app);
+        let ok = status.get("state").and_then(|s| s.as_str()) == Some("done");
+        let to = dir.join(if ok { "done" } else { "failed" });
+        let _ = std::fs::create_dir_all(&to);
+        let _ = std::fs::rename(dir.join("running").join(format!("{name}.json")), to.join(format!("{name}.json")));
+    }
+}
+
+/// As pastas vigiadas mudaram nas configurações. Pasta nova: o que já está lá fica como visto (só converte o que chegar).
+#[tauri::command]
+fn set_watch(app: AppHandle, state: State<'_, AppState>, list: Vec<WatchDir>) {
+    {
+        let mut seen = state.seen.lock().unwrap();
+        let mut changed = false;
+        for w in &list {
+            if seen.folders.contains(&w.path) { continue; }
+            if let Ok(rd) = std::fs::read_dir(&w.path) {
+                for e in rd.flatten() { let p = e.path(); if p.is_file() { seen.files.insert(p); } }
+            }
+            seen.folders.push(w.path.clone());
+            changed = true;
+        }
+        if changed { save_seen(&app, &mut seen); }
+    }
+    *state.watch.lock().unwrap() = list;
+}
+
+/// Abre a pasta de tarefas no Explorador.
+#[tauri::command]
+fn open_jobs_dir(app: AppHandle) -> Result<String, String> {
+    let d = jobs_dir(&app);
+    let _ = std::fs::create_dir_all(&d);
+    #[cfg(windows)]
+    { std::process::Command::new("explorer.exe").arg(&d).spawn().map_err(|e| e.to_string())?; }
+    Ok(d.to_string_lossy().into_owned())
+}
+
+/// Caminhos para a tela de Automação: pasta de tarefas e o mec.exe.
+#[tauri::command]
+fn automation_info(app: AppHandle) -> Value {
+    let cli = tool_dirs(&app).into_iter().map(|d| d.join(if cfg!(windows) { "mec.exe" } else { "mec" })).find(|p| p.is_file());
+    json!({ "jobsDir": jobs_dir(&app), "cli": cli })
 }
 
 /// Anota (ou tira) o arquivo que está sendo gravado, em rendering.json, para apagar o que ficar pela metade.
 fn track(app: &AppHandle, id: u64, out: Option<PathBuf>) {
     let state = app.state::<AppState>();
     let mut m = state.partial.lock().unwrap();
-    match out { Some(p) => { m.insert(id, p); } None => { m.remove(&id); } }
+    match out {
+        Some(p) => { state.seen.lock().unwrap().files.insert(p.clone()); m.insert(id, p); }
+        None => { m.remove(&id); }
+    }
     let list: Vec<&PathBuf> = m.values().collect();
     let _ = std::fs::write(store::dir(app).join("rendering.json"), serde_json::to_string(&list).unwrap_or_default());
 }
@@ -111,10 +291,11 @@ fn item(state: &AppState, id: u64) -> Result<Arc<MediaInfo>, String> {
 // ======================================================================
 
 /// Lê os arquivos/pastas (subpastas incluídas), avisa a interface vídeo a vídeo e depois gera as miniaturas.
-fn add_paths(app: AppHandle, paths: Vec<PathBuf>) {
+/// `origin`: de onde veio (pasta vigiada ou tarefa), repassado para a interface com o preset e se renderiza sozinho.
+fn add_paths(app: AppHandle, paths: Vec<PathBuf>, origin: Option<Value>) {
     std::thread::spawn(move || {
         let state = app.state::<AppState>();
-        let Ok(ffprobe) = state.engine.ffprobe() else { let _ = app.emit("scan-done", json!({ "added": 0, "error": "ffmpeg-missing" })); return };
+        let Ok(ffprobe) = state.engine.ffprobe() else { let _ = app.emit("scan-done", json!({ "added": 0, "error": "ffmpeg-missing", "origin": origin })); return };
         let found = scan::expand(&paths);
         let root = paths.iter().find(|p| p.is_dir()).and_then(|p| p.file_name()).map(|n| n.to_string_lossy().into_owned());
         let _ = app.emit("scan-start", json!({ "count": found.len() }));
@@ -127,13 +308,13 @@ fn add_paths(app: AppHandle, paths: Vec<PathBuf>) {
                     let id = state.next_id.fetch_add(1, Ordering::SeqCst);
                     let info = Arc::new(info);
                     state.items.lock().unwrap().insert(id, info.clone());
-                    let _ = app.emit("item-added", json!({ "id": id, "path": f.path, "file": file, "dir": f.dir, "info": &*info }));
+                    let _ = app.emit("item-added", json!({ "id": id, "path": f.path, "file": file, "dir": f.dir, "info": &*info, "origin": origin }));
                     added.push((id, info));
                 }
-                Err(e) => errors.push(json!({ "file": file, "error": e })),
+                Err(e) => errors.push(json!({ "file": file, "path": f.path, "error": e })),
             }
         }
-        let _ = app.emit("scan-done", json!({ "added": added.len(), "errors": errors, "root": root }));
+        let _ = app.emit("scan-done", json!({ "added": added.len(), "errors": errors, "root": root, "origin": origin }));
         if let Ok(ffmpeg) = state.engine.ffmpeg() {
             for (id, info) in added {
                 let t = (info.duration / 3.0).min(1.0);
@@ -163,12 +344,12 @@ async fn pick(app: AppHandle, folder: bool) -> Result<usize, String> {
     .await
     .map_err(|e| e.to_string())?;
     let n = paths.len();
-    if n > 0 { add_paths(app, paths); }
+    if n > 0 { add_paths(app, paths, None); }
     Ok(n)
 }
 
 #[tauri::command]
-fn add(app: AppHandle, paths: Vec<PathBuf>) { add_paths(app, paths); }
+fn add(app: AppHandle, paths: Vec<PathBuf>) { add_paths(app, paths, None); }
 
 /// Escolher a pasta de saída fixa.
 #[tauri::command]
@@ -290,16 +471,9 @@ struct RenderResult {
     warnings: Vec<String>,
 }
 
-fn last_lines(s: &str, n: usize) -> String {
-    let lines: Vec<&str> = s.lines().filter(|l| !l.trim().is_empty()).collect();
-    lines[lines.len().saturating_sub(n)..].join("\n")
-}
-
 type Children = Arc<Mutex<HashMap<u64, Child>>>;
 
-fn kill_all(children: &Children) {
-    for c in children.lock().unwrap().values_mut() { let _ = c.kill(); }
-}
+fn kill_all(children: &Children) { render::kill_all(children); }
 
 /// Registro simples de cada render (comando, modo, velocidade, erro), em render.log na pasta de dados.
 fn log(app: &AppHandle, text: &str) {
@@ -314,143 +488,27 @@ fn log(app: &AppHandle, text: &str) {
     }
 }
 
-fn run_ffmpeg(app: &AppHandle, ffmpeg: &PathBuf, plan: &command::Plan, id: u64, duration: f64,
-              children: &Children, cancel: &Arc<AtomicBool>, mode: &str) -> Result<f64, String> {
-    let mut child = tools::command(ffmpeg).args(&plan.args)
-        .stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped())
-        .spawn().map_err(|e| e.to_string())?;
-    let stdout = child.stdout.take().ok_or("no stdout")?;
-    let mut stderr = child.stderr.take().ok_or("no stderr")?;
-    let err_thread = std::thread::spawn(move || { let mut s = String::new(); let _ = stderr.read_to_string(&mut s); s });
-    children.lock().unwrap().insert(id, child);
-    if cancel.load(Ordering::SeqCst) { kill_all(children); }
-
-    let mut prog = Progress::default();
-    let mut last = Instant::now() - Duration::from_secs(1);
-    for line in BufReader::new(stdout).lines().map_while(Result::ok) {
-        if prog.feed(&line) && last.elapsed() > Duration::from_millis(200) {
-            last = Instant::now();
-            let _ = app.emit("render-progress", json!({
-                "id": id, "p": prog.fraction(duration), "fps": prog.fps, "speed": prog.speed, "eta": prog.eta(duration), "mode": mode
-            }));
-        }
-    }
-    let status = children.lock().unwrap().remove(&id).map(|mut c| c.wait());
-    let err = err_thread.join().unwrap_or_default();
-    if cancel.load(Ordering::SeqCst) { return Err("cancelled".into()); }
-    match status {
-        Some(Ok(s)) if s.success() => Ok(prog.speed),
-        _ => Err(if err.trim().is_empty() { "ffmpeg failed".into() } else { last_lines(&err, 4) }),
-    }
-}
-
+/// Renderiza com o motor (mec_core::render) e, se o preset pedir, manda o original para a Lixeira.
 fn do_render(app: &AppHandle, engine: &Engine, info: &MediaInfo, cfg: &Preset, nm: &command::Naming, trim: Option<(f64, f64)>, id: u64,
              children: &Children, cancel: &Arc<AtomicBool>) -> Result<RenderResult, String> {
-    // Cortar trecho: só o pedaço entre início e fim (imagens não têm trecho).
-    let trim = if info.is_image { None } else { trim.and_then(|(a, b)| command::trim_range(info, a, b)) };
-    let dur = trim.map_or(info.duration, |(a, b)| b - a);
-    let cut = |plan: &mut command::Plan| if let Some((a, b)) = trim { command::apply_trim(plan, info, a, b); };
-    // o arquivo novo é conferido contra a duração do trecho
-    let mut expect = info.clone();
-    expect.duration = dur;
-    let ffmpeg = engine.ffmpeg()?;
-    let ffprobe = engine.ffprobe()?;
-    if !info.path.exists() { return Err("source-missing".into()); }
-    // Troca as opções "Original" (codec, croma, profundidade, fps, formato) pelos valores deste arquivo.
-    let cfg = &command::resolve(info, cfg);
-    // Só um trecho: o original nunca vai para a Lixeira.
-    let cfg = &{ let mut c = cfg.clone(); if trim.is_some() { c.output.delete_source = false; } c };
-    let out = if cfg.is_audio() && cfg.audio.codec == "copy" {
-        // cópia de áudio: a extensão segue o codec de verdade
-        let ext = command::audio_ext(&info.path, cfg, info.audio.first().map_or("", |a| a.codec.as_str()));
-        command::output_path_for(&info.path, Some(info), cfg, nm).with_extension(ext)
-    } else { command::output_path_for(&info.path, Some(info), cfg, nm) };
-    if let Some(dir) = out.parent() { std::fs::create_dir_all(dir).map_err(|e| format!("{} ({})", e, dir.display()))?; }
-    track(app, id, Some(out.clone()));
-    if info.is_image && !cfg.is_image() { return Err("need-image-preset".into()); }
-    if cfg.is_image() {
-        // Imagem: um quadro, sem placa de vídeo.
-        if !info.is_image { return Err("not-image".into()); }
-        let plan = command::build_image(info, cfg, &out);
-        log(app, &format!("{} | image | ffmpeg {}", info.path.display(), plan.args.join(" ")));
-        if let Err(e) = run_ffmpeg(app, &ffmpeg, &plan, id, 0.0, children, cancel, "image") {
-            let _ = std::fs::remove_file(&out);
-            log(app, &format!("{} | failed (image): {}", info.path.display(), e.replace('\n', " / ")));
-            return Err(e);
-        }
-        return finish(&ffprobe, info, cfg, out, vec![]);
-    }
-    if cfg.is_audio() {
-        // Converter só áudio (ou extrair o áudio de um vídeo): um comando, sem placa de vídeo.
-        if info.audio.is_empty() { return Err("no-audio".into()); }
-        let mut plan = command::build_audio(info, cfg, &out);
-        cut(&mut plan);
-        log(app, &format!("{} | audio | ffmpeg {}", info.path.display(), plan.args.join(" ")));
-        let started = Instant::now();
-        if let Err(e) = run_ffmpeg(app, &ffmpeg, &plan, id, dur, children, cancel, "audio") {
-            let _ = std::fs::remove_file(&out);
-            log(app, &format!("{} | failed (audio): {}", info.path.display(), e.replace('\n', " / ")));
-            return Err(e);
-        }
-        log(app, &format!("{} | ok (audio) | {:.1}s", info.path.display(), started.elapsed().as_secs_f64()));
-        return finish(&ffprobe, &expect, cfg, out, vec![]);
-    }
-    let enc = engine.encoder.lock().unwrap().clone();
-    // RTX 50 (Blackwell) lê e grava 4:2:2 e H.264 10-bit; as RTX 20/30/40 não.
-    let blackwell = engine.gpu.lock().unwrap().as_deref().map_or(false, command::gpu_reads_422);
-    let gpu_reads = info.video.as_ref().map_or(false, |v| command::nvdec_supported(v, blackwell));
-    // Bitrate alto (ex.: 200 Mb/s): o preset do x264 pesa pouco na qualidade e muito na velocidade.
-    let cpu_enc = Encoder::Cpu { preset: if cfg.max_quality { "fast" } else { "veryfast" }.into() };
-    use command::Decode::{Cpu as DCpu, Gpu as DGpu, Hw as DHw};
-    // Tentativas em ordem; se uma falhar (codec que a placa não lê, filtro que falta), vai para a próxima.
-    // Com NVENC: 1) tudo na GPU; 2) só decodifica na GPU; 3) decodifica na CPU.
-    let attempts: Vec<(Encoder, command::Decode)> = if enc != Encoder::Nvenc {
-        vec![(enc.clone(), DCpu)]
-    } else if command::needs_ext_encoder(cfg) {
-        // 4:2:2 / H.264 10-bit ("igual ao XAVC"): pela placa só na RTX 50; senão o x264/x265 grava.
-        if blackwell {
-            let mut v = Vec::new();
-            if gpu_reads { v.push((Encoder::Nvenc, DHw)); }
-            v.push((Encoder::Nvenc, DCpu));
-            v.push((cpu_enc.clone(), DCpu));
-            v
-        } else { vec![(cpu_enc.clone(), DCpu)] }
-    } else if gpu_reads {
-        vec![(Encoder::Nvenc, DGpu), (Encoder::Nvenc, DHw), (Encoder::Nvenc, DCpu)]
-    } else {
-        vec![(Encoder::Nvenc, DCpu)]
+    let e = render::Engine {
+        ffmpeg: engine.ffmpeg()?, ffprobe: engine.ffprobe()?,
+        encoder: engine.encoder.lock().unwrap().clone(), gpu: engine.gpu.lock().unwrap().clone(),
     };
-    let started = Instant::now();
-    let mut plan = command::Plan::default();
-    let mut res: Result<f64, String> = Err("ffmpeg failed".into());
-    for (i, (e, mode)) in attempts.iter().enumerate() {
-        let name = if *e == Encoder::Nvenc { mode.name() } else { "cpu-encode" };
-        plan = command::build_mode(info, cfg, e, &out, *mode);
-        cut(&mut plan);
-        log(app, &format!("{} | try {} ({}) | ffmpeg {}", info.path.display(), i + 1, name, plan.args.join(" ")));
-        res = run_ffmpeg(app, &ffmpeg, &plan, id, dur, children, cancel, name);
-        match &res {
-            Ok(speed) => { log(app, &format!("{} | ok ({}) | {:.1}s | {:.2}x", info.path.display(), name, started.elapsed().as_secs_f64(), speed)); break; }
-            Err(e) if e == "cancelled" => { log(app, &format!("{} | cancelled", info.path.display())); break; }
-            Err(e) => { log(app, &format!("{} | failed ({}): {}", info.path.display(), name, e.replace('\n', " / "))); let _ = std::fs::remove_file(&out); }
-        }
-    }
-    if let Err(e) = res { let _ = std::fs::remove_file(&out); return Err(e); }
-
-    finish(&ffprobe, &expect, cfg, out, plan.warnings.clone())
-}
-
-/// Confere o arquivo novo e, se o preset pedir, manda o original para a Lixeira.
-fn finish(ffprobe: &PathBuf, info: &MediaInfo, cfg: &Preset, out: PathBuf, mut warnings: Vec<String>) -> Result<RenderResult, String> {
-    let out_info = probe::probe(ffprobe, &out).map_err(|e| format!("output check failed: {e}"))?;
-    command::verify(info, &out_info)?;
+    let progress = |t: &render::Tick| {
+        let _ = app.emit("render-progress", json!({ "id": id, "p": t.p, "fps": t.fps, "speed": t.speed, "eta": t.eta, "mode": t.mode }));
+    };
+    let logf = |s: &str| log(app, s);
+    let started = |p: &std::path::Path| track(app, id, Some(p.to_path_buf()));
+    let h = render::Hooks { id, children: &**children, cancel: &**cancel, progress: &progress, log: &logf, started: &started };
+    let d = render::render(&e, info, cfg, nm, trim, &h)?;
+    let mut warnings = d.warnings;
     let mut deleted = false;
-    if cfg.output.delete_source {
+    if d.delete_source {
         // Vai para a Lixeira, não some de vez.
         match trash::delete(&info.path) { Ok(()) => deleted = true, Err(_) => warnings.push("delete-failed".into()) }
     }
-    let size = std::fs::metadata(&out).map(|m| m.len()).unwrap_or(0);
-    Ok(RenderResult { output: out, size, deleted, warnings })
+    Ok(RenderResult { output: d.output, size: d.size, deleted, warnings })
 }
 
 /// Renderiza um vídeo e só volta quando termina. A fila (ordem, um vídeo só, parar) é controlada pela interface.
@@ -678,8 +736,21 @@ fn main() {
                 cancel: Arc::new(AtomicBool::new(false)),
                 latest: Mutex::new(None),
                 partial: Mutex::new(HashMap::new()),
+                watch: Mutex::new(Vec::new()),
+                seen: Mutex::new(std::fs::read_to_string(store::dir(&handle).join("watch-seen.json")).ok()
+                    .and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default()),
+                pending: Mutex::new(HashMap::new()),
             });
             clean_partial(&handle);
+            // pasta de tarefas com um LEIA-ME, e a vigia (pastas vigiadas + tarefas) a cada 2 s
+            let jd = jobs_dir(&handle);
+            let _ = std::fs::create_dir_all(&jd);
+            let _ = std::fs::write(jd.join("README.txt"), JOBS_README);
+            let h4 = handle.clone();
+            std::thread::spawn(move || loop {
+                std::thread::sleep(Duration::from_secs(2));
+                watch_tick(&h4);
+            });
             // Testa o NVENC sem travar a abertura. Sem placa NVIDIA, usa a CPU (mais lento) e avisa.
             let h2 = handle.clone();
             std::thread::spawn(move || {
@@ -705,14 +776,14 @@ fn main() {
                     DragDropEvent::Leave => { let _ = app.emit("drag", json!({ "over": false })); }
                     DragDropEvent::Drop { paths, .. } => {
                         let _ = app.emit("drag", json!({ "over": false }));
-                        add_paths(app, paths.clone());
+                        add_paths(app, paths.clone(), None);
                     }
                     _ => {}
                 }
             }
         })
         .invoke_handler(tauri::generate_handler![
-            pick, add, pick_dir, save_queue, restore_queue, power, forget, duplicate, preview, waveform, render, stop, get_state, save_presets, save_settings,
+            pick, add, pick_dir, save_queue, restore_queue, power, set_watch, job_status, open_jobs_dir, automation_info, forget, duplicate, preview, waveform, render, stop, get_state, save_presets, save_settings,
             default_presets, import_enc, export_presets, import_presets, reveal, open_data_dir, open_log, open_url, notify, ready, check_update, install_update
         ])
         .build(tauri::generate_context!())

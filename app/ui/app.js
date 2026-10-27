@@ -479,6 +479,7 @@
     const el = $(`.item[data-id="${id}"]`);
     if (el) { el.style.transition = 'opacity .25s, transform .35s var(--ease)'; el.style.opacity = 0; el.style.transform = 'translateX(-14px) scale(.96)'; }
     if (REAL) inv('forget', { id }).catch(() => {});
+    if (q.job && q.status !== 'done' && q.status !== 'err') { q.status = 'removed'; jobUpdate(q); }
     setTimeout(() => {
       const before = rects();
       S.queue = S.queue.filter((x) => x.id !== id); S.picked.delete(id);
@@ -1477,6 +1478,21 @@
         ${row(L.parallel, segH('parallel', clamp(+S.set.parallel || 1, 1, 3), [[1, '1'], [2, '2'], [3, '3']]), L.parallelSub)}
         ${row(L.renderLog, `<button class="field pick" id="bOpenLog">${L.open}</button>`, L.renderLogSub)}
       </div>
+      <div class="sec-label">${L.watchTitle}</div>
+      <div class="group watch-list">
+        ${(S.set.watch || []).map((w, i) => { const p = presetOf(w.preset) || findPreset(w.preset); return `<div class="row watch-row ${w.on === false ? 'off' : ''}">
+          <span class="lbl" title="${esc(w.path)}">${ICONS.folder}<span class="wname">${esc(lastPart(w.path))}</span><small>${esc(w.path)}</small></span>
+          <button class="field pick" data-menu="1" data-wpreset="${i}"><i class="dotc" style="--c:${p ? COLORS[p.color] || COLORS.blue : 'var(--text-3)'}"></i>${p ? esc(p.name) : '?'}${ICONS.chev}</button>
+          ${`<button class="switch ${w.on === false ? '' : 'on'}" data-wtoggle="${i}"></button>`}
+          <button class="a w-del" data-wdel="${i}" title="${esc(L.remove)}">${ICONS.x}</button></div>`; }).join('')}
+        <div class="row"><button class="link add-watch" id="bAddWatch">${ICONS.plus}${L.watchAdd}</button></div>
+      </div>
+      <div class="hint">${L.watchHint}</div>
+      <div class="sec-label">${L.automation}</div>
+      <div class="group">
+        ${row(L.jobsFolder, `<button class="field pick" id="bJobs">${L.open}</button>`, L.jobsSub)}
+        ${row(L.cliTitle, `<button class="field pick" id="bCli">${L.copyPath}</button>`, `<code>mec convert &lt;${esc(L.cliFiles)}&gt; -p RAW</code>`)}
+      </div>
       <div class="group">
         ${row(`${L.version} ${esc(S.version)}`, S.update
           ? `<button class="btn small" id="bSheetUpdate">${L.updateNow} · ${esc(S.update.version)}</button>`
@@ -1495,10 +1511,22 @@
     $('#bOpenLog').onclick = () => (REAL ? inv('open_log').catch((e) => toast(String(e))) : toast('render.log'));
     const cu = $('#bCheckUpdate'); if (cu) cu.onclick = () => checkUpdate(true);
     const su = $('#bSheetUpdate'); if (su) su.onclick = installUpdate;
+    $('#bAddWatch').onclick = addWatch;
+    $('#bJobs').onclick = () => (REAL ? inv('open_jobs_dir').catch((e) => toast(String(e))) : toast('%APPDATA%\\com.hugomec.mecencoder\\jobs'));
+    $('#bCli').onclick = async () => {
+      let path = 'C:\\Program Files\\Mec Encoder\\bin\\mec.exe';
+      if (REAL) { try { const a = await inv('automation_info'); if (!a.cli) { toast(L.cliMissing); return; } path = a.cli; } catch (e) { toast(String(e)); return; } }
+      const t = `"${path}"`;
+      try { await navigator.clipboard.writeText(t); toast(L.copiedPath, true); } catch { toast(t); }
+    };
+    $$('[data-wpreset]').forEach((b) => { b.onclick = (e) => { const w = S.set.watch[+b.dataset.wpreset];
+      openMenu(e.currentTarget, presetItems(w.preset), (v) => { w.preset = v; saveSettings(); sendWatch(); renderSheet(); }); }; });
+    $$('[data-wdel]').forEach((b) => { b.onclick = () => { S.set.watch.splice(+b.dataset.wdel, 1); saveSettings(); sendWatch(); renderSheet(); }; });
   }
   const renderSheetIfOpen = () => root.classList.contains('sheet-open') && renderSheet();
   $('#sheetBody').addEventListener('click', (e) => {
     const s = e.target.closest('.switch'); if (!s) return;
+    if (s.dataset.wtoggle != null) { const w = S.set.watch[+s.dataset.wtoggle]; w.on = w.on === false; saveSettings(); sendWatch(); renderSheet(); return; }
     s.classList.toggle('on'); S.set[s.dataset.k] = s.classList.contains('on'); saveSettings();
     if (s.dataset.k === 'sound' && S.set.sound) playDone();
   });
@@ -1598,14 +1626,15 @@
           const twin = q.path && S.queue.some((x) => x !== q && x.path === q.path && x.status !== 'done');
           if (twin && q.cfg.output.deleteSource) toast(L.keptForCopy);
           const naming = Object.assign({ dir: q.dir || '', n: S.queue.indexOf(q) + 1 }, nowTags());
+          jobUpdate(q);
           if (q.trim && q.cfg.output.deleteSource) toast(L.trimKeep);
           const r = await inv('render', { id: q.id, naming, trim: q.trim || null, cfg: twin ? Object.assign(clone(q.cfg), { output: Object.assign(clone(q.cfg.output), { deleteSource: false }) }) : q.cfg });
-          q.status = 'done'; q.p = 1; q.out = r.output; q.outMb = r.size / 1e6; q.took = elapsedOf(q); J.done++;
+          q.status = 'done'; q.p = 1; q.out = r.output; q.outMb = r.size / 1e6; q.took = elapsedOf(q); J.done++; jobUpdate(q);
           if (r.deleted) toast(L.deletedOrig);
           if (J.mode === 'single') notify(L.rendered(q.file) + ' · ' + fmtDur(q.took));
         } catch (e) {
           if (S.stopping || S.job !== J) { q.status = 'ready'; q.p = 0; break; }
-          const pe = parseErr(e); q.status = 'err'; q.errCode = pe.code; q.error = pe.details; failed++;
+          const pe = parseErr(e); q.status = 'err'; q.errCode = pe.code; q.error = pe.details; failed++; jobUpdate(q);
           notify(L.renderFailed(q.file) + ': ' + errText(q), true);
         }
         renderQueue(); renderInspector(); updateFill();
@@ -1648,6 +1677,62 @@
     const n = S.queue.filter((q) => q.status === 'ready').length; if (!n) return;
     startJob({ mode: 'queue', total: n });
   };
+
+  /* ---------- automação: pastas vigiadas e pasta de tarefas (.json) ----------
+     A fila mostra tudo; cada tarefa ganha um <nome>.status.json com o andamento (para scripts e o Claude). */
+  S.batches = {}; S.jobs = {};
+  const findPreset = (k) => { const s = String(k || '').trim().toLowerCase(); return S.presets.find((p) => p.id.toLowerCase() === s) || S.presets.find((p) => p.name.trim().toLowerCase() === s) || null; };
+  function applyJobOptions(q, o) {
+    const out = q.cfg.output;
+    if (typeof o.outputFolder === 'string' && o.outputFolder) out.folder = { on: true, text: o.outputFolder };
+    if (typeof o.keepTree === 'boolean') out.keepTree = o.keepTree;
+    if (o.suffix === false || o.suffix === null) out.suffix.on = false; else if (typeof o.suffix === 'string') out.suffix = { on: true, text: o.suffix };
+    if (o.subfolder === false || o.subfolder === null) out.subfolder.on = false; else if (typeof o.subfolder === 'string') out.subfolder = { on: true, text: o.subfolder };
+    if (typeof o.deleteSource === 'boolean') out.deleteSource = o.deleteSource;
+    if (Array.isArray(o.trim) && o.trim.length === 2 && !q.src.isImage) { const d = fullDur(q); const a = clamp(+o.trim[0] || 0, 0, d); const b = clamp(+o.trim[1] || d, 0, d); if (b - a >= 0.1) q.trim = [a, b]; }
+  }
+  // fim da leitura de uma pasta vigiada ou tarefa: renderiza sozinho
+  function originDone(p) {
+    const o = p.origin; const ids = S.batches[o.tag] || []; delete S.batches[o.tag];
+    if (o.job) {
+      const bad = o.preset && !findPreset(o.preset);
+      S.jobs[o.job] = { name: o.job, ids, t0: Date.now(), missing: (o.missing || []).map((f) => ({ file: f, status: 'error', error: 'source-missing' })),
+        unreadable: (p.errors || []).map((x) => ({ file: x.path || x.file, status: 'error', error: 'corrupt', message: x.error })), bad };
+      if (bad) { ids.forEach((id) => { const q = itemOf(id); if (q) { q.status = 'err'; q.errCode = 'preset-not-found'; q.error = `preset "${o.preset}"`; } }); }
+      jobWrite(o.job);
+      toast(L.jobAdded(o.job, ids.length), !bad);
+    } else if (o.watch && ids.length) toast(L.watchAdded(lastPart(o.watch), ids.length), true);
+    if (o.auto) ids.forEach((id) => { const q = itemOf(id); if (q && q.status === 'ready') renderOne(id, true); });
+    renderAll(true, ids);
+  }
+  function jobState(j) {
+    const qs = j.ids.map(itemOf).filter(Boolean);
+    const items = qs.map((q) => ({ id: q.id, file: q.path, status: q.status === 'ready' ? 'queued' : q.status === 'err' ? 'error' : q.status,
+      progress: Math.round((q.p || 0) * 1000) / 1000, output: q.out || null, sizeMB: q.outMb ? Math.round(q.outMb * 10) / 10 : null,
+      seconds: q.took ? Math.round(q.took * 10) / 10 : null, error: q.status === 'err' ? q.errCode || 'unknown' : null, message: q.status === 'err' ? q.error || null : null, trim: q.trim || null }))
+      .concat(j.ids.filter((id) => !itemOf(id)).map((id) => ({ id, status: 'removed' })), j.missing, j.unreadable);
+    const open = items.some((i) => i.status === 'queued' || i.status === 'running');
+    const failed = items.some((i) => i.status === 'error' || i.status === 'removed');
+    const state = open ? (items.some((i) => i.status === 'running') ? 'running' : 'queued') : failed || !items.length ? 'failed' : 'done';
+    return { job: j.name, state, preset: (qs[0] && qs[0].cfg && qs[0].cfg.name) || null, started: new Date(j.t0).toISOString(), updated: new Date().toISOString(), items };
+  }
+  function jobWrite(name) {
+    const j = S.jobs[name]; if (!j || !REAL) return;
+    const st = jobState(j); const finished = st.state === 'done' || st.state === 'failed';
+    inv('job_status', { name, status: st, finished }).catch(() => {});
+    if (finished) delete S.jobs[name];
+  }
+  const jobUpdate = (q) => { if (q && q.job && S.jobs[q.job]) setTimeout(() => jobWrite(q.job), 0); };
+  // andamento das tarefas a cada 3 s enquanto renderiza
+  setInterval(() => { Object.values(S.jobs).forEach((j) => { if (j.ids.some((id) => (itemOf(id) || {}).status === 'running')) jobWrite(j.name); }); }, 3000);
+  const sendWatch = () => { if (REAL) inv('set_watch', { list: (S.set.watch || []).map((w) => ({ path: w.path, preset: w.preset, on: w.on !== false })) }).catch(() => {}); };
+  async function addWatch() {
+    let dir = null;
+    if (REAL) { try { dir = await inv('pick_dir', { start: null }); } catch (e) { toast(String(e)); } } else dir = 'D:\\Entrada iPhone';
+    if (!dir) return;
+    S.set.watch = (S.set.watch || []).filter((w) => w.path !== dir).concat([{ path: dir, preset: (presetOf(S.set.defaultPreset) || S.presets[0]).id, on: true }]);
+    saveSettings(); sendWatch(); renderSheet();
+  }
 
   /* ---------- novidades (notas da versão, iguais às do GitHub) ---------- */
   const md = (t) => esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
@@ -1744,14 +1829,22 @@
     applyTheme(); applyLang(); renderAll();
     requestAnimationFrame(() => inv('ready').catch(() => {}));
     restoreQueue(st0 && st0.queue);
+    sendWatch();
     if (S.engine.status === 'missing') toast(L.ffmpegMissing);
 
     let batch = []; let batchTimer = 0; let firstNew = null;
     on('scan-start', (p) => { if (p.count > 2) toast(L.scanning(p.count)); });
     on('item-added', (p) => {
       const audioOnly = !p.info.video;
-      const pid = p.info.isImage ? defaultImageId() : audioOnly ? defaultAudioId() : presetOf(S.set.defaultPreset) ? S.set.defaultPreset : S.presets[0].id;
+      const o = p.origin || null;
+      const asked = o && o.preset ? findPreset(o.preset) : null;
+      const pid = asked ? asked.id : p.info.isImage ? defaultImageId() : audioOnly ? defaultAudioId() : presetOf(S.set.defaultPreset) ? S.set.defaultPreset : S.presets[0].id;
       const q = { id: p.id, path: p.path, file: p.file, dir: p.dir, src: mapSrc(p.info), preset: pid, cfg: clone(presetOf(pid)), status: 'ready', thumb: null };
+      if (o) {
+        q.job = o.job || null; q.watch = o.watch || null;
+        if (o.options) applyJobOptions(q, o.options);
+        (S.batches[o.tag] = S.batches[o.tag] || []).push(q.id);
+      }
       S.queue.push(q); batch.push(q.id); if (firstNew == null) firstNew = q.id;
       clearTimeout(batchTimer);
       batchTimer = setTimeout(() => {
@@ -1764,6 +1857,7 @@
     on('item-thumb', (p) => { const q = itemOf(p.id); if (!q) return; q.thumb = p.thumb; patchItem(q);
       if (S.sel === q.id) $$('.stage .frame img').forEach((img) => { if (!img.getAttribute('src')) img.src = p.thumb; }); });
     on('scan-done', (p) => {
+      if (p.origin) { originDone(p); return; }
       if (p.error === 'ffmpeg-missing') { toast(L.ffmpegMissing); return; }
       const errs = (p.errors || []).length;
       if (!p.added) toast(errs ? L.unreadable(errs) : L.noVideosFound);
@@ -1806,6 +1900,7 @@
     renderAll(); setT(S.t, true);
     requestAnimationFrame(drawWave);
     if (qs.get('cmp')) { S.cmp = true; renderPreview(); }
+    if (qs.get('watch')) S.set.watch = [{ path: 'D:\\Entrada iPhone', preset: 'iphone-4k60', on: true }, { path: 'E:\\Cartao FX30', preset: 'proxy', on: false }];
     if (qs.get('sheet')) openSheet(true);
     if (qs.get('news')) openNews(true);
     if (qs.get('power')) powerCountdown(qs.get('power'));
