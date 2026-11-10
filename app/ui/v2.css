@@ -566,3 +566,87 @@
 .keycap:hover{background:var(--fill-2)}
 .keycap.empty{color:var(--text-3)}
 .keycap.capturing{border-color:var(--blue);color:var(--blue);background:color-mix(in srgb,var(--blue) 12%,transparent);font-weight:500}
+
+/* ---------- reprodução ---------- */
+/* régua de timecode em cima da linha do tempo */
+.ruler{position:relative;height:18px;margin-bottom:-4px;cursor:pointer;touch-action:none}
+.ruler canvas{position:absolute;inset:0;width:100%;height:100%}
+.ruler .rhead{position:absolute;bottom:0;left:var(--t,0%);width:9px;height:6px;margin-left:-4.5px;background:var(--blue);clip-path:polygon(0 0,100% 0,50% 100%);pointer-events:none}
+.no-video .ruler{visibility:hidden}
+.cutter .ruler{height:20px}
+/* ímã: a agulha grudou no início/fim de um trecho */
+.timeline.snapped .head,.timeline.snapped .head::before{background:var(--yellow)}
+.timeline.zoomed.snapped .head{background:color-mix(in srgb,var(--yellow) 40%,transparent);box-shadow:inset 2px 0 0 var(--yellow)}
+
+/* vídeo tocando por cima do quadro (pausou: some quando o quadro exato chega) */
+.frame .pv-vid{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000;opacity:0;pointer-events:none;will-change:transform}
+.frame .pv-vid.cover{object-fit:cover}
+.stage.playing #frame .pv-vid{opacity:1}
+.frame.audio-card .pv-vid{display:none}
+.stage.playing.buffering #frame .pv-spin{opacity:1;transition-delay:.15s}
+.stage.playing #frame .pv-spin{z-index:2}
+
+/* quanto do trecho já tocou e quanto ele dura */
+.play-badge{position:absolute;left:50%;top:12px;transform:translateX(-50%);z-index:5;display:flex;align-items:center;gap:8px;height:30px;padding:0 12px 0 10px;
+  border-radius:9px;background:rgba(12,12,14,.8);backdrop-filter:blur(12px);box-shadow:0 0 0 .5px rgba(255,255,255,.14),0 8px 24px rgba(0,0,0,.35);
+  color:#fff;font:600 13px var(--mono);white-space:nowrap;pointer-events:none;transition:opacity .4s}
+.play-badge i{display:flex;align-items:center;gap:6px;font:600 12px var(--font);font-style:normal;color:var(--yellow);margin-right:2px}
+.play-badge i svg{width:13px;height:13px}
+.play-badge i small{font:500 11px var(--mono);color:rgba(255,255,255,.6)}
+.play-badge span{color:rgba(255,255,255,.55);font-weight:500}
+.play-badge.fade{opacity:0;transition-delay:1s}
+.play-badge[hidden]{display:none}
+
+/* PC que não converte ao vivo: prévia leve sendo preparada */
+.prep-box{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:5;width:min(320px,80%);padding:14px 16px;border-radius:12px;
+  background:rgba(12,12,14,.84);backdrop-filter:blur(14px);color:#fff;display:flex;flex-direction:column;gap:6px;box-shadow:0 0 0 .5px rgba(255,255,255,.14)}
+.prep-box b{font-size:13px;font-weight:600}
+.prep-box span{font-size:12px;line-height:1.45;color:rgba(255,255,255,.65)}
+.prep-box i{position:relative;height:4px;margin-top:4px;border-radius:2px;background:rgba(255,255,255,.15);overflow:hidden}
+.prep-box i::after{content:"";position:absolute;inset:0;right:auto;width:var(--p,0%);border-radius:2px;background:var(--blue);transition:width .3s}
+.prep-box[hidden]{display:none}
+.ctl.play.prep,.ctl.play.prep:hover{background:conic-gradient(var(--blue) var(--p,0%),color-mix(in srgb,var(--text) 22%,transparent) 0);color:var(--text)}
+
+/* ▶ Trechos: toca só os trechos, como o arquivo juntado */
+.pl-cuts{height:32px;margin-left:8px;padding:0 11px 0 8px;border-radius:8px;display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:500;
+  color:var(--yellow);background:color-mix(in srgb,var(--yellow) 12%,transparent);transition:background .15s,color .15s,transform .3s var(--spring)}
+.pl-cuts:hover{background:color-mix(in srgb,var(--yellow) 20%,transparent)}
+.pl-cuts:active{transform:scale(.94)}
+.pl-cuts.on{background:var(--yellow);color:#1a1400}
+.pl-cuts svg{width:16px;height:16px}
+.pl-cuts[hidden]{display:none}
+
+/* repetir, velocidade, volume e medidor */
+.pl-tools{display:flex;align-items:center;gap:1px;margin-right:8px}
+.pl-btn{height:28px;min-width:28px;padding:0 5px;border-radius:7px;display:grid;place-items:center;color:var(--text-3);font:600 11.5px var(--font);transition:background .15s,color .15s}
+.pl-btn:hover{background:var(--fill);color:var(--text)}
+.pl-btn.on{color:var(--blue)}
+.pl-btn svg{width:16px;height:16px}
+.pl-rate{min-width:34px;font-variant-numeric:tabular-nums}
+.pl-vol .mx{display:none}
+.pl-vol.low .w2{display:none}
+.pl-vol.muted .w1,.pl-vol.muted .w2{display:none}
+.pl-vol.muted .mx{display:inline}
+.pl-vol.muted{color:var(--red)}
+.meter{display:flex;gap:2px;height:18px;margin-left:3px}
+.meter b{position:relative;width:3px;height:100%;border-radius:1.5px;background:var(--fill-2);overflow:hidden}
+.meter b::after{content:"";position:absolute;left:0;right:0;bottom:0;height:var(--l,0%);
+  background:linear-gradient(to top,var(--green) 0 72%,var(--yellow) 72% 90%,var(--red) 90%) bottom/100% 18px no-repeat}
+.preview .pl-rate,.preview .meter{display:none}
+.cutter .pl-rate,.cutter .meter{display:grid}
+.cutter .meter{display:flex}
+
+/* lista de trechos: o número vira ▶ ao passar o mouse e toca só aquele trecho */
+.cut-row{position:relative;overflow:hidden}
+.cut-row .n{position:relative;border:0;padding:0;cursor:pointer;transition:transform .2s var(--spring),box-shadow .2s}
+.cut-row .n svg{display:none;width:10px;height:10px}
+.cut-row .n:hover{transform:scale(1.15)}
+.cut-row .n:hover b{display:none}
+.cut-row .n:hover .pi{display:block}
+.cut-row.playing .n b,.cut-row.playing .n .pi{display:none}
+.cut-row.playing .n .pa{display:block}
+.cut-row.playing{background:color-mix(in srgb,var(--yellow) 12%,transparent)}
+.cut-row .pbar{position:absolute;left:0;bottom:0;height:2px;width:var(--pp,0%);background:var(--yellow);opacity:0;pointer-events:none}
+.cut-row.playing .pbar{opacity:1}
+[data-theme="light"] .pl-cuts{color:#8a6a00;background:color-mix(in srgb,var(--yellow) 22%,transparent)}
+[data-theme="light"] .pl-cuts.on{color:#1a1400;background:var(--yellow)}

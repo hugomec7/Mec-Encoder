@@ -11,6 +11,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use mec_core::play::{self, LiveEnc, LiveOpts};
 use mec_core::{command, enc, probe, render, scan, tools, Encoder, MediaInfo, Preset};
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -29,6 +30,8 @@ pub struct Engine {
     /// "checking", "nvenc" ou "cpu"
     status: Mutex<String>,
     gpu: Mutex<Option<String>>,
+    /// Encoder H.264 da prévia ao vivo (o que a máquina tiver); testado depois do NVENC.
+    live: Mutex<Option<LiveEnc>>,
 }
 
 impl Engine {
@@ -52,6 +55,11 @@ pub struct AppState {
     seen: Mutex<Seen>,
     /// Arquivo novo esperando o tamanho parar de mudar: (tamanho, data, vezes igual).
     pending: Mutex<HashMap<PathBuf, (u64, u64, u8)>>,
+    /// Servidor do botão de play (sobe no primeiro play).
+    player: Mutex<Option<Arc<play::Server>>>,
+    /// Prévia leve sendo gerada agora (cancelar = marcar e matar o processo).
+    proxy_job: Mutex<Option<Arc<AtomicBool>>>,
+    proxy_children: Children,
 }
 
 #[derive(Clone, Debug, serde::Deserialize, Serialize)]
@@ -460,6 +468,156 @@ async fn waveform(state: State<'_, AppState>, id: u64, bars: usize) -> Result<Ve
 }
 
 // ======================================================================
+// Botão de play
+// ======================================================================
+
+/// Servidor de reprodução: sobe no primeiro play e avisa a interface do andamento da conversão ao vivo.
+fn player(app: &AppHandle, state: &AppState) -> Result<Arc<play::Server>, String> {
+    let mut g = state.player.lock().unwrap();
+    if let Some(s) = g.as_ref() { return Ok(s.clone()); }
+    let h = app.clone();
+    let srv = play::Server::start(state.engine.ffmpeg()?, move |key, ev| {
+        let v = match ev {
+            play::Event::Speed { speed, time } => json!({ "key": key, "speed": speed, "time": time }),
+            play::Event::Ended => json!({ "key": key, "ended": true }),
+            play::Event::Failed(e) => json!({ "key": key, "error": e }),
+        };
+        let _ = h.emit("play-live", v);
+    }).map_err(|e| e.to_string())?;
+    let srv = Arc::new(srv);
+    *g = Some(srv.clone());
+    Ok(srv)
+}
+
+/// Encoder da prévia: testado uma vez (NVENC → Intel → AMD → CPU).
+fn live_enc(engine: &Engine) -> Result<LiveEnc, String> {
+    if let Some(e) = *engine.live.lock().unwrap() { return Ok(e); }
+    let ff = engine.ffmpeg()?;
+    let st = engine.status.lock().unwrap().clone();
+    let nv = if st == "checking" { tools::nvenc_available(&ff) } else { st == "nvenc" };
+    let e = play::pick_encoder(&ff, nv);
+    *engine.live.lock().unwrap() = Some(e);
+    Ok(e)
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PlayFile {
+    url: String,
+    /// Tipo com codecs para perguntar ao player se toca direto; None = não toca.
+    hint: Option<String>,
+}
+
+/// O arquivo original, para tocar direto quando o player do app consegue.
+#[tauri::command]
+fn play_file(app: AppHandle, state: State<'_, AppState>, id: u64) -> Result<PlayFile, String> {
+    let info = item(&state, id)?;
+    let srv = player(&app, &state)?;
+    Ok(PlayFile { url: srv.file(&format!("f{id}"), &info.path), hint: play::direct_hint(&info) })
+}
+
+/// Conversão ao vivo dos trechos `parts` (do ponto da agulha até o fim, ou só os trechos).
+#[tauri::command]
+async fn play_live(app: AppHandle, state: State<'_, AppState>, id: u64, cfg: Preset, parts: Vec<(f64, f64)>, output: bool, height: u32, fps: String, hw: Option<bool>) -> Result<Value, String> {
+    let info = item(&state, id)?;
+    let srv = player(&app, &state)?;
+    let engine = state.engine.clone();
+    let enc = tauri::async_runtime::spawn_blocking(move || live_enc(&engine)).await.map_err(|e| e.to_string())??;
+    let o = LiveOpts { parts, output, height: height.clamp(240, 2160), fps: mec_core::preset::fps_rational(&fps), enc, hw: hw.unwrap_or(true) };
+    Ok(json!({ "url": srv.live("live", play::live_args(&info, &cfg, &o)), "enc": enc.name() }))
+}
+
+/// Para a conversão ao vivo (pausou, trocou de vídeo).
+#[tauri::command]
+fn play_stop(state: State<'_, AppState>) {
+    if let Some(s) = state.player.lock().unwrap().as_ref() { s.stop("live"); }
+}
+
+fn previews_dir(app: &AppHandle) -> PathBuf {
+    let d = app.path().app_cache_dir().unwrap_or_else(|_| std::env::temp_dir().join("MecEncoder")).join("previews");
+    let _ = std::fs::create_dir_all(&d);
+    d
+}
+
+/// Prévias guardadas (sem as que estão pela metade), da mais antiga para a mais nova.
+fn preview_files(dir: &std::path::Path) -> Vec<(PathBuf, u64, std::time::SystemTime)> {
+    let mut v: Vec<_> = std::fs::read_dir(dir).into_iter().flatten().flatten().filter_map(|e| {
+        let p = e.path(); let m = e.metadata().ok()?;
+        let name = p.file_name()?.to_string_lossy().to_string();
+        (m.is_file() && name.ends_with(".mp4") && !name.ends_with(".part.mp4")).then(|| (p, m.len(), m.modified().unwrap_or(std::time::UNIX_EPOCH)))
+    }).collect();
+    v.sort_by_key(|x| x.2);
+    v
+}
+
+/// Apaga as prévias mais antigas até caber no limite.
+fn prune_previews(dir: &std::path::Path, limit: u64) {
+    let files = preview_files(dir);
+    let mut total: u64 = files.iter().map(|f| f.1).sum();
+    for (p, len, _) in files {
+        if total <= limit { break; }
+        if std::fs::remove_file(&p).is_ok() { total = total.saturating_sub(len); }
+    }
+}
+
+/// Prévia leve guardada (para máquinas que não convertem ao vivo): gera uma vez e reaproveita.
+/// Avisa o andamento em "play-proxy" ({ id, p }).
+#[tauri::command]
+async fn play_proxy(app: AppHandle, state: State<'_, AppState>, id: u64, cfg: Preset, output: bool, height: u32, fps: String, limit_mb: u64) -> Result<String, String> {
+    use sha2::{Digest, Sha256};
+    let info = item(&state, id)?;
+    let srv = player(&app, &state)?;
+    let ff = state.engine.ffmpeg()?;
+    let engine = state.engine.clone();
+    let enc = tauri::async_runtime::spawn_blocking(move || live_enc(&engine)).await.map_err(|e| e.to_string())??;
+    let meta = std::fs::metadata(&info.path).map_err(|e| e.to_string())?;
+    let mtime = meta.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map_or(0, |d| d.as_secs());
+    let sig = format!("{}|{}|{}|{}|{}|{}|{}|{}|{}|{}", info.path.display(), meta.len(), mtime, cfg.rotate, cfg.aspect, cfg.aspect_mode, cfg.hdr_to_sdr, output, height, fps);
+    let key: String = Sha256::digest(sig.as_bytes()).iter().take(12).map(|b| format!("{b:02x}")).collect();
+    let dir = previews_dir(&app);
+    let out = dir.join(format!("{key}.mp4"));
+    if out.is_file() {
+        // usada agora: fica por último na fila de limpeza
+        if let Ok(f) = std::fs::File::options().write(true).open(&out) { let _ = f.set_modified(std::time::SystemTime::now()); }
+        return Ok(srv.file(&format!("p{id}"), &out));
+    }
+    // uma por vez: a anterior é cancelada
+    let cancel = Arc::new(AtomicBool::new(false));
+    if let Some(old) = state.proxy_job.lock().unwrap().replace(cancel.clone()) { old.store(true, Ordering::SeqCst); }
+    kill_all(&state.proxy_children);
+    let tmp = dir.join(format!("{key}.part.mp4"));
+    let o = LiveOpts { parts: vec![], output, height: height.clamp(240, 2160), fps: mec_core::preset::fps_rational(&fps), enc, hw: true };
+    let plan = command::Plan { args: play::proxy_args(&info, &cfg, &o, &tmp), output: tmp.clone(), ..Default::default() };
+    let children = state.proxy_children.clone();
+    let h = app.clone();
+    let res = tauri::async_runtime::spawn_blocking(move || {
+        let progress = |t: &render::Tick| { let _ = h.emit("play-proxy", json!({ "id": id, "p": t.p })); };
+        let logf = |_: &str| {};
+        let started = |_: &std::path::Path| {};
+        let hooks = render::Hooks { id: 1, children: &*children, cancel: &*cancel, progress: &progress, log: &logf, started: &started };
+        let r = render::run_ffmpeg(&ff, &plan, info.duration, "preview", &hooks);
+        if r.is_err() { let _ = std::fs::remove_file(&tmp); }
+        r?;
+        std::fs::rename(&tmp, &out).map_err(|e| e.to_string())?;
+        prune_previews(&dir, limit_mb.max(200) * 1_000_000);
+        Ok::<PathBuf, String>(out)
+    }).await.map_err(|e| e.to_string())??;
+    Ok(srv.file(&format!("p{id}"), &res))
+}
+
+/// Espaço usado pelas prévias guardadas (bytes).
+#[tauri::command]
+fn previews_size(app: AppHandle) -> u64 { preview_files(&previews_dir(&app)).iter().map(|f| f.1).sum() }
+
+/// Apaga todas as prévias guardadas.
+#[tauri::command]
+fn previews_clear(app: AppHandle, state: State<'_, AppState>) {
+    if let Some(old) = state.proxy_job.lock().unwrap().take() { old.store(true, Ordering::SeqCst); }
+    kill_all(&state.proxy_children);
+    for e in std::fs::read_dir(previews_dir(&app)).into_iter().flatten().flatten() { let _ = std::fs::remove_file(e.path()); }
+}
+
+// ======================================================================
 // Render
 // ======================================================================
 
@@ -735,6 +893,7 @@ fn main() {
                 encoder: Mutex::new(Encoder::Nvenc),
                 status: Mutex::new("checking".into()),
                 gpu: Mutex::new(None),
+                live: Mutex::new(None),
             });
             app.manage(AppState {
                 engine: engine.clone(),
@@ -748,8 +907,15 @@ fn main() {
                 seen: Mutex::new(std::fs::read_to_string(store::dir(&handle).join("watch-seen.json")).ok()
                     .and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default()),
                 pending: Mutex::new(HashMap::new()),
+                player: Mutex::new(None),
+                proxy_job: Mutex::new(None),
+                proxy_children: Arc::new(Mutex::new(HashMap::new())),
             });
             clean_partial(&handle);
+            // prévias que ficaram pela metade
+            for e in std::fs::read_dir(previews_dir(&handle)).into_iter().flatten().flatten() {
+                if e.file_name().to_string_lossy().ends_with(".part.mp4") { let _ = std::fs::remove_file(e.path()); }
+            }
             // pasta de tarefas com um LEIA-ME, e a vigia (pastas vigiadas + tarefas) a cada 2 s
             let jd = jobs_dir(&handle);
             let _ = std::fs::create_dir_all(&jd);
@@ -767,6 +933,8 @@ fn main() {
                 *engine.status.lock().unwrap() = if engine.ffmpeg.is_none() { "missing" } else if ok { "nvenc" } else { "cpu" }.into();
                 *engine.gpu.lock().unwrap() = tools::gpu_name();
                 let _ = h2.emit("engine", json!({ "status": *engine.status.lock().unwrap(), "gpu": *engine.gpu.lock().unwrap() }));
+                // encoder da prévia ao vivo (testa Intel/AMD quando não há NVIDIA)
+                let _ = live_enc(&engine);
             });
             // Garantia: mostra a janela mesmo se a página não avisar que carregou.
             let h3 = handle.clone();
@@ -792,7 +960,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             pick, add, pick_dir, save_queue, restore_queue, power, set_watch, job_status, open_jobs_dir, automation_info, forget, duplicate, preview, waveform, render, stop, get_state, save_presets, save_settings,
-            default_presets, import_enc, export_presets, import_presets, reveal, open_data_dir, open_log, open_url, notify, ready, check_update, install_update
+            default_presets, play_file, play_live, play_stop, play_proxy, previews_size, previews_clear, import_enc, export_presets, import_presets, reveal, open_data_dir, open_log, open_url, notify, ready, check_update, install_update
         ])
         .build(tauri::generate_context!())
         .expect("error while building Mec Encoder")
@@ -801,6 +969,8 @@ fn main() {
                 if let Some(state) = app.try_state::<AppState>() {
                     state.cancel.store(true, Ordering::SeqCst);
                     kill_all(&state.children);
+                    kill_all(&state.proxy_children);
+                    if let Some(s) = state.player.lock().unwrap().take() { s.stop_all(); }
                     // espera o ffmpeg soltar o arquivo e apaga o que ficou pela metade
                     for c in state.children.lock().unwrap().values_mut() { let _ = c.wait(); }
                     for f in state.partial.lock().unwrap().values() { let _ = std::fs::remove_file(f); }

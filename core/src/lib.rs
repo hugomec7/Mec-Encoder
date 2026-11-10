@@ -7,12 +7,14 @@
 //! - [`enc`]: importa presets `.enc` do Shutter Encoder.
 //! - [`tools`]: acha o ffmpeg/ffprobe e roda sem abrir janela de console.
 //! - [`render`]: renderiza um arquivo inteiro (tentativas GPU → CPU, progresso, conferência); usado pelo app e pelo mec.exe.
+//! - [`play`]: botão de play — servidor local que entrega o arquivo ou a conversão ao vivo ao player do app.
 //!
 //! Só usa a biblioteca padrão; `serde` entra pela feature `serde` (usada pelo app).
 
 pub mod command;
 pub mod enc;
 pub mod preset;
+pub mod play;
 pub mod probe;
 pub mod progress;
 pub mod render;

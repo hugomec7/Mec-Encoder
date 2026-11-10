@@ -36,7 +36,7 @@ pub fn aspect_ratio(p: &Preset) -> Option<f64> {
 
 /// Quadro em pé depois do giro e da proporção, antes da escala.
 /// Cortar: a maior área da proporção dentro da imagem. Barras: a menor área da proporção que contém a imagem.
-fn framed(v: &VideoInfo, p: &Preset) -> (u32, u32) {
+pub(crate) fn framed(v: &VideoInfo, p: &Preset) -> (u32, u32) {
     let (vw, vh) = if p.rotate % 180 == 90 { (v.height, v.width) } else { (v.width, v.height) };
     let Some(r) = aspect_ratio(p) else { return (vw, vh) };
     let (w, h) = (vw as f64, vh as f64);
@@ -116,7 +116,7 @@ pub fn resolve(info: &MediaInfo, p: &Preset) -> Preset {
     r
 }
 
-fn fmt_num(x: f64) -> String {
+pub(crate) fn fmt_num(x: f64) -> String {
     let s = format!("{x:.3}");
     s.trim_end_matches('0').trim_end_matches('.').to_string()
 }
@@ -129,7 +129,7 @@ pub fn hdr_peak(v: &VideoInfo) -> f64 {
     peak
 }
 
-fn hdr_chain(v: &VideoInfo) -> Vec<String> {
+pub(crate) fn hdr_chain(v: &VideoInfo) -> Vec<String> {
     let tin = if v.hdr == "PQ" { "smpte2084" } else { "arib-std-b67" };
     vec![
         format!("zscale=tin={tin}:pin=bt2020:min=bt2020nc:rin=tv:t=linear:npl=100"),
