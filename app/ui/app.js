@@ -1525,7 +1525,8 @@
   function renderCutList() {
     const el = $('#cutList'); if (!S.cutter || !el) return;
     const q = itemOf(S.cutter.id); if (!q) return; const cs = cutsOf(q) || []; const fr = frOf(q);
-    if (document.activeElement && document.activeElement.closest('#cutList')) { markCutRow(); return; }
+    // não redesenha enquanto um timecode está sendo digitado (botões da lista não contam)
+    if (document.activeElement && document.activeElement.closest('#cutList .tcin')) { markCutRow(); return; }
     el.innerHTML = cs.length ? cs.map(([a, b], i) => `<div class="cut-row ${i === (q.cutSel || 0) ? 'sel' : ''}" data-i="${i}">
         <button class="n" data-play="${i}" title="${esc(L.playCutTip(i + 1))}"><b>${i + 1}</b><svg class="pi" viewBox="0 0 16 16" fill="currentColor">${ICONS.play}</svg><svg class="pa" viewBox="0 0 16 16" fill="currentColor">${ICONS.pause}</svg></button>
         <input class="tcin" data-i="${i}" data-k="a" value="${cutTc(q, a)}" spellcheck="false" title="${esc(L.cutStart)}">
@@ -1550,7 +1551,7 @@
   $('#cutList').addEventListener('click', (e) => {
     const q = itemOf(S.cutter && S.cutter.id); if (!q) return;
     const del = e.target.closest('[data-del]');
-    if (del) { const i = +del.dataset.del; if (PL.on) playStop(null, true); setCuts(q, q.cuts.filter((_, k) => k !== i)); return; }
+    if (del) { del.blur(); const i = +del.dataset.del; if (PL.on) playStop(null, true); setCuts(q, q.cuts.filter((_, k) => k !== i)); return; }
     // número do trecho: toca só ele (do primeiro ao último quadro); tocando ele, pausa
     const pb = e.target.closest('[data-play]');
     if (pb) { pb.blur(); const i = +pb.dataset.play; if (PL.on && PL.plan.kind === 'cut' && PL.plan.cut === i) playStop(); else { q.cutSel = i; renderTrim(); playStart({ kind: 'cut', cut: i }); } return; }

@@ -9,6 +9,7 @@
 - **Volume slider** next to the speaker (click the speaker to mute).
 - The **▶ Cuts** button was removed: the normal play does that now.
 - The **In** and **Out** buttons show only their icons again.
+- **Fix**: removing a cut with × now updates the list right away (before, it only disappeared from the timeline).
 
 **Português**
 - **Versão de teste**: a atualização automática do app não oferece esta versão. Baixe por esta página.
@@ -18,6 +19,7 @@
 - O botão **▶ Trechos** saiu: o play normal já faz isso.
 - Os botões de **Início** e **Fim** voltaram a ser só o ícone.
 - No app em português, **trecho** virou **corte**: "Novo corte", a lista de "Cortes" etc.
+- **Correção**: tirar um corte pelo × atualiza a lista na hora (antes só sumia da linha do tempo).
 
 ## 0.2.9 (pré-lançamento)
 
