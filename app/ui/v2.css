@@ -680,3 +680,15 @@
 .vol-r:hover::-webkit-slider-thumb{transform:scale(1.15)}
 .pl-vol.muted + .vol-r::-webkit-slider-runnable-track{background:var(--fill-2)}
 @container tp (max-width:593px){.vol-r{width:44px}}
+
+/* Pular cortes: liga/desliga o play com os cortes */
+.pl-skip{height:28px;margin-right:4px;padding:0 9px 0 7px;border-radius:7px;display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:500;
+  color:var(--text-3);background:var(--fill);transition:background .15s,color .15s}
+.pl-skip:hover{color:var(--text);background:var(--fill-2)}
+.pl-skip.on{color:var(--yellow);background:color-mix(in srgb,var(--yellow) 14%,transparent)}
+.pl-skip svg{width:14px;height:14px}
+.pl-skip[hidden]{display:none}
+[data-theme="light"] .pl-skip.on{color:#8a6a00;background:color-mix(in srgb,var(--yellow) 22%,transparent)}
+.preview .pl-skip span{display:none}
+.preview .pl-skip{padding:0 7px}
+@container tp (max-width:860px){.cutter .pl-skip span{display:none}.cutter .pl-skip{padding:0 7px}}

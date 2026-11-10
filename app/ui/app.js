@@ -165,7 +165,7 @@
     $('#lIn').textContent = L.inLbl; $('#lOut').textContent = L.outLbl; $('#lNewCut').textContent = L.newCutLbl; $('#lOpenCut').textContent = L.openCutLbl;
     $('#bOpenCut').title = kf(L.openCutter); $('#lCutter').textContent = L.cutter; $('#lCuts').textContent = L.cutsTitle;
     $('#bCutCancel').textContent = L.cancel; $('#bCutDone').textContent = L.conclude; $('#bClearCuts').textContent = L.clearCuts;
-    if (S.plReady) { renderPlayUi(); applyVol(); }
+    $('#lSkip').textContent = L.skipLbl; if (S.plReady) { renderPlayUi(); applyVol(); }
     $('#lCutSplit').textContent = L.cutSplitBtn; $('#lCutJoin').textContent = L.cutJoinBtn; $('#cutKeys').innerHTML = kf(L.cutKeysTxt); $('#tlHint').textContent = kf(L.tlHint);
     renderRenderBtn(); renderUpdateBtn(); if ($('#bAfter')) renderAfter();
   }
@@ -1616,7 +1616,8 @@
     let t0 = o.from != null ? o.from : snapT(q, d * S.t);
     // com trechos o play mostra o resultado: da agulha em diante, pulando o que foi cortado
     // (agulha entre trechos: começa no próximo; depois do último: volta ao primeiro)
-    if ((o.kind === 'auto' || o.kind === 'cuts') && cs.length) {
+    // botão "Pular cortes" desligado: o play normal toca o original
+    if ((o.kind === 'auto' && S.set.skipCuts !== false || o.kind === 'cuts') && cs.length) {
       let parts = partsFrom(cs, t0); if (!parts.length || parts.length === 1 && parts[0][1] - parts[0][0] < 1.5 / fr) parts = cs.map((c) => c.slice());
       return { kind: 'cuts', parts, all: cs.map((c) => c.slice()) };
     }
@@ -1848,7 +1849,10 @@
     $('#playIco').innerHTML = PL.on ? ICONS.pause : ICONS.play;
     b.classList.toggle('prep', prep); b.style.setProperty('--p', `${Math.round((PL.prep || 0) * 100)}%`);
     b.title = `${PL.on ? L.pause : L.play} (${keyLabel(keyOf('play'))})`;
-    b.title = `${PL.on ? L.pause : cutsOf(q) ? L.playResult : L.play} (${keyLabel(keyOf('play'))})`;
+    const skip = !!cutsOf(q) && S.set.skipCuts !== false;
+    b.title = `${PL.on ? L.pause : skip ? L.playResult : L.play} (${keyLabel(keyOf('play'))})`;
+    const sb = $('#bSkip'); sb.hidden = !cutsOf(q) || !playable(q); sb.classList.toggle('on', skip);
+    sb.title = `${skip ? L.skipTipOn : L.skipTipOff} (${keyLabel(keyOf('skipCuts'))})`;
     $('#bPrevEdit').title = `${L.act.prevEdit} (${keyLabel(keyOf('prevEdit'))})`; $('#bNextEdit').title = `${L.act.nextEdit} (${keyLabel(keyOf('nextEdit'))})`;
     $('#bLoop').classList.toggle('on', !!S.set.loop); $('#bLoop').title = `${L.loopTip} (${keyLabel(keyOf('loop'))})`;
     const rb = $('#bRate'); rb.textContent = rateTxt(PL.rate); rb.classList.toggle('on', PL.rate !== 1); rb.title = L.speedTip;
@@ -1879,6 +1883,13 @@
   }
   $('#bPlay').onclick = () => { if (PL.on) playStop(); else playStart({ kind: 'auto' }); };
   $('#bLoop').onclick = () => { S.set.loop = !S.set.loop; saveSettings(); renderPlayUi(); };
+  // play com os cortes (pula o que foi cortado) ou sem (o original); tocando, continua do mesmo ponto no outro modo
+  function toggleSkip() {
+    S.set.skipCuts = S.set.skipCuts === false; saveSettings();
+    if (PL.on && PL.plan && PL.plan.kind !== 'cut') { const t = PL.mode === 'demo' ? PL.dt : curSrc(); playStart({ kind: 'auto', from: snapT(PL.q, t) }); }
+    renderPlayUi();
+  }
+  $('#bSkip').onclick = toggleSkip;
   $('#bRate').onclick = (e) => openMenu(e.currentTarget, RATES.map((r) => ({ label: rateTxt(r), value: r, sel: r === PL.rate })), (v) => setRate(+v));
   $('#bVol').onclick = () => { S.set.muted = !S.set.muted; saveSettings(); applyVol(); };
   $('#volR').addEventListener('input', (e) => { S.set.vol = +e.target.value / 100; S.set.muted = false; applyVol(); });
@@ -2268,7 +2279,7 @@
     ['zoomIn', '=', 'timeline'], ['zoomOut', '-', 'timeline'], ['zoomFit', '\\', 'timeline'],
     ['prevEdit', 'ArrowUp', 'timeline'], ['nextEdit', 'ArrowDown', 'timeline'],
     ['goIn', 'Shift+I', 'timeline'], ['goOut', 'Shift+O', 'timeline'], ['goStart', 'Home', 'timeline'], ['goEnd', 'End', 'timeline'],
-    ['play', 'Space', 'play'], ['playRaw', 'Shift+Space', 'play'], ['shuttleBack', 'J', 'play'], ['shuttleStop', 'K', 'play'], ['shuttleFwd', 'L', 'play'],
+    ['play', 'Space', 'play'], ['skipCuts', 'Shift+Space', 'play'], ['shuttleBack', 'J', 'play'], ['shuttleStop', 'K', 'play'], ['shuttleFwd', 'L', 'play'],
     ['loop', 'Ctrl+L', 'play'],
   ];
   const keyOf = (a) => { const k = S.set.keys && S.set.keys[a]; return k != null ? k : (KEYS.find((x) => x[0] === a) || [])[1] || ''; };
@@ -2281,7 +2292,7 @@
   }
   const KEY_TXT = { ArrowLeft: '←', ArrowRight: '→', ArrowUp: '↑', ArrowDown: '↓', Space: L.space || 'Space', Escape: 'Esc' };
   const keyLabel = (k) => (k ? k.split('+').map((p) => (p === 'Space' ? L.space : KEY_TXT[p]) || p).join('+') : L.noKey);
-  const KF = { in: 'markIn', out: 'markOut', cut: 'newCut', open: 'openCutter', clear: 'clearCuts', prev: 'prevFrame', next: 'nextFrame', done: 'cutDone', play: 'play', praw: 'playRaw', pedit: 'prevEdit', nedit: 'nextEdit' };
+  const KF = { in: 'markIn', out: 'markOut', cut: 'newCut', open: 'openCutter', clear: 'clearCuts', prev: 'prevFrame', next: 'nextFrame', done: 'cutDone', play: 'play', praw: 'skipCuts', pedit: 'prevEdit', nedit: 'nextEdit' };
   // troca {in} {out} {cut}... pelas teclas configuradas
   const kf = (str) => String(str).replace(/\{(\w+)\}/g, (m, k) => (KF[k] ? esc(keyLabel(keyOf(KF[k]))) : m));
   function runKey(a, e) {
@@ -2295,7 +2306,7 @@
       case 'cutDone': if (cut) { openCutter(false); return true; } return false;
       case 'play': if (playable(q)) { if (PL.on) playStop(); else playStart({ kind: 'auto' }); return true; } return false;
       // o original, sem pular o que foi cortado
-      case 'playRaw': if (playable(q)) { if (PL.on) playStop(); else playStart({ kind: 'all' }); return true; } return false;
+      case 'skipCuts': if (playable(q) && cutsOf(q)) { toggleSkip(); toast(S.set.skipCuts !== false ? L.skipOn : L.skipOff); return true; } return false;
       case 'prevEdit': if (playable(q)) { jumpEdit(-1); return true; } return false;
       case 'nextEdit': if (playable(q)) { jumpEdit(1); return true; } return false;
       // J K L como no Premiere: L toca (de novo: 2×, 4×), K pausa, J volta 1 s (ou desacelera)
