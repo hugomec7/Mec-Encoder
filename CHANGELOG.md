@@ -1,5 +1,31 @@
 # Changelog · Novidades
 
+## 0.2.8 (pré-lançamento)
+
+**English**
+- **Test version**: not offered by the app's automatic update. Download it from this page.
+- **Cutter**: cutting now has its own page, with a large preview and timeline and the list of cuts. Open it with the **Cut** button under the preview, the scissors on a queued video, right-click › Open the Cutter, or the **C** key. **Done** (Enter/Esc) goes back to the queue; **Cancel** undoes the changes.
+  - **I** = start of the cut, **O** = end of the cut (the playhead frame is included), **S** = new cut at the playhead (inside a cut, it splits it).
+  - The list shows each cut with start and end in timecode (you can type them), duration and ×. Clicking a cut takes the playhead to its start.
+  - **[Separate | Joined]** above the list, and the names of the files that will be saved.
+  - Click the edge of a cut to go to its first or last frame; drag to adjust frame by frame.
+- **Playhead snaps to frames**, and the timecode counts frames like Premiere.
+- **New zoom bar** under the timeline with the cuts in miniature: drag the middle to move, drag the ends to zoom.
+- **Shortcuts** can be changed in Settings › Shortcuts.
+- **Fixes**: dragging the zoomed preview stopped when the button was released (it kept following the mouse); the middle mouse button also moves the preview and the timeline.
+
+**Português**
+- **Versão de teste**: a atualização automática do app não oferece esta versão. Baixe por esta página.
+- **Cortador**: cortar agora tem uma página própria, com prévia e linha do tempo grandes e a lista de trechos. Abra pelo botão **Cortar** embaixo da prévia, pela tesoura no vídeo da fila, pelo botão direito › Abrir o Cortador ou pela tecla **C**. **Concluir** (Enter/Esc) volta para a fila; **Cancelar** desfaz o que mudou.
+  - **I** = início do trecho, **O** = fim do trecho (o quadro da agulha entra), **S** = trecho novo na agulha (dentro de um trecho, divide em dois).
+  - A lista mostra cada trecho com início e fim em timecode (dá para digitar), duração e ×. Clicar num trecho leva a agulha ao começo dele.
+  - **[Separados | Juntos]** em cima da lista, e os nomes dos arquivos que vão sair.
+  - Clicar na borda de um trecho leva a agulha ao primeiro ou ao último quadro; arrastar ajusta quadro a quadro.
+- **Agulha presa nos quadros**, e o timecode conta quadros como o Premiere.
+- **Barra de zoom nova** embaixo da linha do tempo, com os trechos em miniatura: arraste o meio para andar, as pontas para dar zoom.
+- **Atalhos** configuráveis em Configurações › Atalhos.
+- **Correções**: arrastar a prévia com zoom para quando o botão é solto (antes continuava seguindo o mouse); o botão do meio do mouse também arrasta a prévia e a linha do tempo.
+
 ## 0.2.7 (pré-lançamento)
 
 **English**

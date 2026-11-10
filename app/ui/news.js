@@ -1,6 +1,33 @@
 // Gerado por docs/release-notes/make_news.py — não edite à mão.
 window.MEC_NEWS = [
  {
+  "version": "0.2.8",
+  "en": [
+   "**Test version**: not offered by the app's automatic update. Download it from this page.",
+   "**Cutter**: cutting now has its own page, with a large preview and timeline and the list of cuts. Open it with the **Cut** button under the preview, the scissors on a queued video, right-click › Open the Cutter, or the **C** key. **Done** (Enter/Esc) goes back to the queue; **Cancel** undoes the changes.",
+   "**I** = start of the cut, **O** = end of the cut (the playhead frame is included), **S** = new cut at the playhead (inside a cut, it splits it).",
+   "The list shows each cut with start and end in timecode (you can type them), duration and ×. Clicking a cut takes the playhead to its start.",
+   "**[Separate | Joined]** above the list, and the names of the files that will be saved.",
+   "Click the edge of a cut to go to its first or last frame; drag to adjust frame by frame.",
+   "**Playhead snaps to frames**, and the timecode counts frames like Premiere.",
+   "**New zoom bar** under the timeline with the cuts in miniature: drag the middle to move, drag the ends to zoom.",
+   "**Shortcuts** can be changed in Settings › Shortcuts.",
+   "**Fixes**: dragging the zoomed preview stopped when the button was released (it kept following the mouse); the middle mouse button also moves the preview and the timeline."
+  ],
+  "pt": [
+   "**Versão de teste**: a atualização automática do app não oferece esta versão. Baixe por esta página.",
+   "**Cortador**: cortar agora tem uma página própria, com prévia e linha do tempo grandes e a lista de trechos. Abra pelo botão **Cortar** embaixo da prévia, pela tesoura no vídeo da fila, pelo botão direito › Abrir o Cortador ou pela tecla **C**. **Concluir** (Enter/Esc) volta para a fila; **Cancelar** desfaz o que mudou.",
+   "**I** = início do trecho, **O** = fim do trecho (o quadro da agulha entra), **S** = trecho novo na agulha (dentro de um trecho, divide em dois).",
+   "A lista mostra cada trecho com início e fim em timecode (dá para digitar), duração e ×. Clicar num trecho leva a agulha ao começo dele.",
+   "**[Separados | Juntos]** em cima da lista, e os nomes dos arquivos que vão sair.",
+   "Clicar na borda de um trecho leva a agulha ao primeiro ou ao último quadro; arrastar ajusta quadro a quadro.",
+   "**Agulha presa nos quadros**, e o timecode conta quadros como o Premiere.",
+   "**Barra de zoom nova** embaixo da linha do tempo, com os trechos em miniatura: arraste o meio para andar, as pontas para dar zoom.",
+   "**Atalhos** configuráveis em Configurações › Atalhos.",
+   "**Correções**: arrastar a prévia com zoom para quando o botão é solto (antes continuava seguindo o mouse); o botão do meio do mouse também arrasta a prévia e a linha do tempo."
+  ]
+ },
+ {
   "version": "0.2.7",
   "en": [
    "**Test version**: not offered by the app's automatic update yet. Download it from this page if you want to try it.",
@@ -109,25 +136,6 @@ window.MEC_NEWS = [
    "**Renderizar de novo**: vídeos prontos têm um botão ↻ (e botão direito › Renderizar de novo). O arquivo anterior fica; o novo ganha \" (2)\".",
    "**Duplicar** um vídeo na fila (botão direito › Duplicar), por exemplo para renderizar o mesmo arquivo com presets diferentes e comparar os tempos. Enquanto houver outra cópia na fila, o original nunca vai para a Lixeira.",
    "**Limpar** sempre aparece: Tirar os prontos · Tirar todos."
-  ]
- },
- {
-  "version": "0.2.0",
-  "en": [
-   "**Convert audio**: audio files (MP3, WAV, M4A, AAC, FLAC, OGG, AIFF…) now go into the same queue. New audio presets: **WAV** (24-bit), **MP3 320**, **AAC 256 (.m4a)** and **FLAC**, with Quality, Bits, Sample rate and Channels (all with Source). Pick an audio preset for a video to **extract its audio**. Existing users get the audio presets once; your own presets are not changed.",
-   "**HDR → Rec. 709 is now Automatic / Off**: Automatic converts only when the video is HDR, so one preset works for SDR and HDR footage.",
-   "**Auto bitrate level**: High · Balanced · Light (Light makes much smaller backups).",
-   "**Protected presets**: if the presets file can't be fully read, the app keeps a copy (presets.broken-….json) and tells you, instead of silently going back to defaults. One broken preset no longer affects the others.",
-   "**New defaults for new users** (only on first run): RAW, Backup, Proxy, Meta Glass and the audio presets. All video defaults use H.265 4:2:0 with Source bit depth, so they run on the GPU on any RTX 20/30/40/50, and Delete original starts off. On an RTX 50, a \"Like the camera\" (4:2:2) preset is added too.",
-   "The CPU warning now says exactly why (4:2:2 or 10-bit H.264) and what to change to use the GPU. The line under the preview always shows the chroma (4:2:0 or 4:2:2)."
-  ],
-  "pt": [
-   "**Converter áudio**: arquivos de áudio (MP3, WAV, M4A, AAC, FLAC, OGG, AIFF…) agora entram na mesma fila. Novos presets de áudio: **WAV** (24-bit), **MP3 320**, **AAC 256 (.m4a)** e **FLAC**, com Qualidade, Bits, Taxa e Canais (todos com Original). Escolha um preset de áudio para um vídeo para **extrair o áudio** dele. Quem já usa o app recebe os presets de áudio uma vez; os seus presets não mudam.",
-   "**HDR → Rec. 709 agora é Automático / Desligado**: o Automático converte só quando o vídeo é HDR, então um preset só serve para vídeo normal e HDR.",
-   "**Nível do bitrate Auto**: Alta · Equilibrada · Leve (o Leve deixa backups bem menores).",
-   "**Presets protegidos**: se o arquivo de presets não puder ser lido por inteiro, o app guarda uma cópia (presets.broken-….json) e avisa, em vez de voltar aos padrões sem dizer nada. Um preset com problema não afeta mais os outros.",
-   "**Padrões novos para quem baixar** (só na primeira vez): RAW, Backup, Proxy, Meta Glass e os presets de áudio. Todos os de vídeo usam H.265 4:2:0 com profundidade Original, então rodam pela placa em qualquer RTX 20/30/40/50, e o Apagar o original vem desligado. Numa RTX 50 entra também um preset \"Igual à câmera\" (4:2:2).",
-   "O aviso de CPU agora diz o motivo certo (4:2:2 ou H.264 10-bit) e o que mudar para usar a placa. A linha embaixo da prévia sempre mostra o croma (4:2:0 ou 4:2:2)."
   ]
  }
 ];
