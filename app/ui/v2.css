@@ -694,3 +694,14 @@
 @container tp (max-width:860px){.cutter .pl-skip span{display:none}.cutter .pl-skip{padding:0 7px}}
 /* no Cortador, mesmo tamanho do Novo corte */
 .cutter .pl-skip{height:32px;border-radius:8px;padding:0 10px;gap:6px;font-size:12.5px;margin-left:6px}
+
+/* play discreto: botão quadrado arredondado como os outros controles, sem o círculo branco */
+.ctl{border-radius:8px}
+.ctl.play,[data-variant="2"] .ctl.play{width:40px;height:34px;border-radius:9px;background:var(--fill);color:var(--text);margin:0 2px}
+.ctl.play:hover{background:var(--fill-2);color:var(--text);transform:none}
+.ctl.play:active{transform:scale(.94)}
+.ctl.play svg{width:15px;height:15px}
+.cutter .ctl.play{width:44px;height:36px}
+.trim-btn,.pl-skip,.open-cut{white-space:nowrap;flex:none}
+.cutter .ctl.play{width:42px;height:34px}
+@container tp (max-width:940px){.vol-r{width:52px}.pl-tools .meter{display:none!important}}
