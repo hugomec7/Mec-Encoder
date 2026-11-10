@@ -1022,7 +1022,9 @@
     setPz(S.pz.z * Math.exp(-e.deltaY * 0.0018), clamp((e.clientX - r.left) / r.width, 0, 1), clamp((e.clientY - r.top) / r.height, 0, 1));
   }, { passive: false });
   $('.stage').addEventListener('pointerdown', (e) => {
-    const f = e.target.closest('.frame'); if (!f || S.pz.z <= 1.001 || e.button !== 0) return;
+    // arrastar com o botão esquerdo ou com o do meio (rodinha) anda pela imagem
+    const f = e.target.closest('.frame'); if (!f || S.pz.z <= 1.001 || (e.button !== 0 && e.button !== 1)) return;
+    e.preventDefault();
     const r = f.getBoundingClientRect(); const x0 = e.clientX; const y0 = e.clientY; const o0 = { ...S.pz };
     f.setPointerCapture(e.pointerId); f.classList.add('grabbing');
     f.onpointermove = (ev) => {
@@ -1032,6 +1034,7 @@
     };
     f.onpointerup = () => { f.onpointermove = null; f.classList.remove('grabbing'); };
   });
+  [$('.stage'), $('#timeline')].forEach((el) => el.addEventListener('mousedown', (e) => { if (e.button === 1) e.preventDefault(); }));
   $('.stage').addEventListener('dblclick', (e) => { if (e.target.closest('.frame') && S.pz.z > 1.001) { S.pz = { z: 1, x: 0, y: 0 }; applyPz(); const q = selItem(); if (q && REAL) requestFrames(q); } });
   function requestPreview(q, out) {
     if (!REAL) return;
@@ -1248,6 +1251,15 @@
   tl.addEventListener('pointerdown', (e) => {
     const q = selItem(); if (!q) return;
     const r = tl.getBoundingClientRect();
+    // botão do meio com zoom: arrasta a vista (não mexe na agulha)
+    if (e.button === 1) {
+      e.preventDefault(); if (S.zoom <= 1.001) return;
+      const x0 = e.clientX; const v0 = S.v0; tl.setPointerCapture(e.pointerId);
+      tl.onpointermove = (ev) => { S.v0 = clamp(v0 - (ev.clientX - x0) / r.width / S.zoom, 0, 1 - 1 / S.zoom); renderTimeline(); };
+      tl.onpointerup = () => { tl.onpointermove = null; };
+      return;
+    }
+    if (e.button !== 0) return;
     const edge = e.target.closest('.edge');
     if (edge && cutsOf(q)) {
       // arrastar a borda de um trecho (sem passar do vizinho)
