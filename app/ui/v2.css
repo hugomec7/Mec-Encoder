@@ -730,3 +730,15 @@
 .upd-card .btn,.upd-card .link{flex:none}
 .upd-card div{flex:1}
 @keyframes updDown{from{opacity:0;transform:translateY(-10px)}}
+
+/* configurações: página dos atalhos */
+.sheet-back{width:30px;height:30px;margin:0 4px 0 -6px;border-radius:8px;display:grid;place-items:center;color:var(--blue)}
+.sheet-back:hover{background:var(--fill)}
+.sheet-back svg{width:18px;height:18px}
+.sheet-back[hidden]{display:none}
+.sheet-head{display:flex;align-items:center}
+.sheet-head h2{flex:1}
+.keys-top{display:flex;align-items:flex-start;gap:12px;margin:2px 4px 12px;font-size:12px;line-height:1.45;color:var(--text-3)}
+.keys-top span{flex:1}
+.keys-top .keys-reset{flex:none}
+#bKeysPage .chev-r{margin-left:6px;font-size:15px;line-height:1;color:var(--text-3)}

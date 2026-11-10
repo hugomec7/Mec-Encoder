@@ -2178,6 +2178,11 @@
     return { cpu: L.engineCpu, missing: L.engineMissing }[e.status] || L.engineChecking;
   }
   function renderSheet() {
+    // página dos atalhos (aberta pelo botão "Editar" em Configurações)
+    const keysPage = S.sheetPage === 'keys';
+    $('#lSettings').textContent = keysPage ? L.shortcuts : L.settings;
+    $('#bSheetBack').hidden = !keysPage;
+    if (keysPage) { renderKeysPage(); return; }
     const dp = presetOf(S.set.defaultPreset) || S.presets[0];
     $('#sheetBody').innerHTML = `
       <div class="group">
@@ -2192,12 +2197,18 @@
         ${row(L.clearWhenDone, sw('clearWhenDone', S.set.clearWhenDone))}
         ${row(L.sound, sw('sound', S.set.sound))}
         ${row(L.notify, sw('notify', S.set.notify))}
-        ${row(L.gpu, `<span class="val">${engineTxt()}</span>`)}
       </div>
       <div class="sec-label">${L.performance}</div>
       <div class="group">
+        ${row(L.gpu, `<span class="val">${engineTxt()}</span>`)}
         ${row(L.parallel, segH('parallel', clamp(+S.set.parallel || 1, 1, 3), [[1, '1'], [2, '2'], [3, '3']]), L.parallelSub)}
         ${row(L.renderLog, `<button class="field pick" id="bOpenLog">${L.open}</button>`, L.renderLogSub)}
+      </div>
+      <div class="sec-label">${L.playback}</div>
+      <div class="group">
+        ${row(L.playQ, segH('playQ', playQ(), [['auto', 'Auto'], ['360', '360p'], ['540', '540p'], ['720', '720p'], ['1080', '1080p']]), L.playQSub)}
+        ${row(L.previewsSaved, `<span class="val tnum" id="prevSize">…</span><button class="field pick" id="bClearPrev">${L.clearPreviews}</button>`, L.previewsSub)}
+        ${row(L.previewsLimit, segH('previewGB', String(+S.set.previewGB || 5), [['2', '2 GB'], ['5', '5 GB'], ['10', '10 GB'], ['20', '20 GB']]))}
       </div>
       <div class="sec-label">${L.watchTitle}</div>
       <div class="group watch-list">
@@ -2214,16 +2225,11 @@
         ${row(L.jobsFolder, `<button class="field pick" id="bJobs">${L.open}</button>`, L.jobsSub)}
         ${row(L.cliTitle, `<button class="field pick" id="bCli">${L.copyPath}</button>`, `<code>mec convert &lt;${esc(L.cliFiles)}&gt; -p RAW</code>`)}
       </div>
-      <div class="sec-label">${L.playback}</div>
+      <div class="sec-label">${L.shortcuts}</div>
       <div class="group">
-        ${row(L.playQ, segH('playQ', playQ(), [['auto', 'Auto'], ['360', '360p'], ['540', '540p'], ['720', '720p'], ['1080', '1080p']]), L.playQSub)}
-        ${row(L.previewsSaved, `<span class="val tnum" id="prevSize">…</span><button class="field pick" id="bClearPrev">${L.clearPreviews}</button>`, L.previewsSub)}
-        ${row(L.previewsLimit, segH('previewGB', String(+S.set.previewGB || 5), [['2', '2 GB'], ['5', '5 GB'], ['10', '10 GB'], ['20', '20 GB']]))}
+        ${row(L.shortcutsEdit, `<button class="field pick" id="bKeysPage">${L.edit}<span class="chev-r">›</span></button>`, kf(L.keysSummary))}
       </div>
-      <div class="sec-label">${L.shortcuts}<button class="link keys-reset" id="bKeysReset">${L.resetKeys}</button></div>
-      ${[['play', L.kgPlay], ['cutter', L.kgCutter], ['timeline', L.kgTimeline]].map(([g, t]) => `<div class="group keys-group"><div class="keys-title">${t}</div>${KEYS.filter((x) => x[2] === g).map(([a]) =>
-        row(L.act[a], `<button class="keycap ${S.keyCapture === a ? 'capturing' : ''} ${keyOf(a) ? '' : 'empty'}" data-key="${a}">${S.keyCapture === a ? L.pressKey : esc(keyLabel(keyOf(a)))}</button>`)).join('')}</div>`).join('')}
-      <div class="hint">${L.shortcutsHint}</div>
+      <div class="sec-label">${L.updates}</div>
       <div class="group">
         ${row(L.autoUpdate, `<button class="switch ${autoUpd() ? 'on' : ''}" id="swAutoUpd"></button>`, L.autoUpdateSub)}
         ${row(`${L.version} ${esc(S.version)}`, S.update
@@ -2253,8 +2259,7 @@
       if (REAL) inv('previews_clear').then(() => { S.queue.forEach((q) => { if (q.play) { delete q.play.proxy; } }); showPrev(0); toast(L.previewsCleared, true); }).catch((e) => toast(String(e)));
       else { showPrev(0); toast(L.previewsCleared, true); }
     };
-    $$('#sheetBody [data-key]').forEach((b) => { b.onclick = () => { S.keyCapture = S.keyCapture === b.dataset.key ? null : b.dataset.key; renderSheet(); }; });
-    $('#bKeysReset').onclick = () => { S.set.keys = {}; S.keyCapture = null; saveSettings(); renderSheet(); applyLang(); };
+    $('#bKeysPage').onclick = () => { S.sheetPage = 'keys'; renderSheet(); $('#sheetScroll').scrollTop = 0; };
     $('#bJobs').onclick = () => (REAL ? inv('open_jobs_dir').catch((e) => toast(String(e))) : toast('%APPDATA%\\com.hugomec.mecencoder\\jobs'));
     $('#bCli').onclick = async () => {
       let path = 'C:\\Program Files\\Mec Encoder\\bin\\mec.exe';
@@ -2266,6 +2271,15 @@
       openMenu(e.currentTarget, presetItems(w.preset), (v) => { w.preset = v; saveSettings(); sendWatch(); renderSheet(); }); }; });
     $$('[data-wdel]').forEach((b) => { b.onclick = () => { S.set.watch.splice(+b.dataset.wdel, 1); saveSettings(); sendWatch(); renderSheet(); }; });
   }
+  function renderKeysPage() {
+    $('#sheetBody').innerHTML = `
+      <div class="keys-top"><span>${L.shortcutsHint}</span><button class="link keys-reset" id="bKeysReset">${L.resetKeys}</button></div>
+      ${[['play', L.kgPlay], ['cutter', L.kgCutter], ['timeline', L.kgTimeline]].map(([g, t]) => `<div class="group keys-group"><div class="keys-title">${t}</div>${KEYS.filter((x) => x[2] === g).map(([a]) =>
+        row(L.act[a], `<button class="keycap ${S.keyCapture === a ? 'capturing' : ''} ${keyOf(a) ? '' : 'empty'}" data-key="${a}">${S.keyCapture === a ? L.pressKey : esc(keyLabel(keyOf(a)))}</button>`)).join('')}</div>`).join('')}
+`;
+    $$('#sheetBody [data-key]').forEach((b) => { b.onclick = () => { S.keyCapture = S.keyCapture === b.dataset.key ? null : b.dataset.key; renderSheet(); }; });
+    $('#bKeysReset').onclick = () => { S.set.keys = {}; S.keyCapture = null; saveSettings(); renderSheet(); applyLang(); };
+  }
   const renderSheetIfOpen = () => root.classList.contains('sheet-open') && renderSheet();
   $('#sheetBody').addEventListener('click', (e) => {
     const s = e.target.closest('.switch'); if (!s) return;
@@ -2273,16 +2287,16 @@
     s.classList.toggle('on'); S.set[s.dataset.k] = s.classList.contains('on'); saveSettings();
     if (s.dataset.k === 'sound' && S.set.sound) playDone();
   });
-  const openSheet = (on) => { S.keyCapture = null; if (on) renderSheet(); root.classList.toggle('sheet-open', on); };
+  const openSheet = (on) => { S.keyCapture = null; if (on) { S.sheetPage = qs.get('sheet') === 'keys' && !S.sheetSeen ? 'keys' : null; S.sheetSeen = true; renderSheet(); } root.classList.toggle('sheet-open', on); };
+  $('#bSheetBack').onclick = () => { S.sheetPage = null; S.keyCapture = null; renderSheet(); $('#sheetScroll').scrollTop = 0; };
     $('#bDone').onclick = () => openSheet(false);
   $('#sheetBg').onclick = () => openSheet(false);
   /* ---------- atalhos (configuráveis em Configurações › Atalhos) ---------- */
   const KEYS = [
     ['openCutter', 'C', 'cutter'], ['markIn', 'I', 'cutter'], ['markOut', 'O', 'cutter'], ['newCut', 'S', 'cutter'],
     ['clearCuts', 'Ctrl+Shift+X', 'cutter'], ['cutDone', 'Enter', 'cutter'],
-    ['prevFrame', 'ArrowLeft', 'timeline'], ['nextFrame', 'ArrowRight', 'timeline'], ['back5', 'Shift+ArrowLeft', 'timeline'], ['fwd5', 'Shift+ArrowRight', 'timeline'],
+    ['prevFrame', 'ArrowLeft', 'timeline'], ['nextFrame', 'ArrowRight', 'timeline'], ['prevEdit', 'ArrowUp', 'timeline'], ['nextEdit', 'ArrowDown', 'timeline'], ['back5', 'Shift+ArrowLeft', 'timeline'], ['fwd5', 'Shift+ArrowRight', 'timeline'],
     ['zoomIn', '=', 'timeline'], ['zoomOut', '-', 'timeline'], ['zoomFit', '\\', 'timeline'],
-    ['prevEdit', 'ArrowUp', 'timeline'], ['nextEdit', 'ArrowDown', 'timeline'],
     ['goIn', 'Shift+I', 'timeline'], ['goOut', 'Shift+O', 'timeline'], ['goStart', 'Home', 'timeline'], ['goEnd', 'End', 'timeline'],
     ['play', 'Space', 'play'], ['skipCuts', 'Shift+Space', 'play'], ['shuttleBack', 'J', 'play'], ['shuttleStop', 'K', 'play'], ['shuttleFwd', 'L', 'play'],
     ['loop', 'Ctrl+L', 'play'],
