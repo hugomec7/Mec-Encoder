@@ -31,6 +31,8 @@ OPÇÕES DO CONVERT
       --no-suffix            Sem sufixo
       --subfolder <nome>     Subpasta (aceita etiquetas)   --no-subfolder  Sem subpasta
       --trim <início>-<fim>  Só um trecho, em segundos ou HH:MM:SS(.ms). Ex.: --trim 12.5-40
+                             Repita para vários trechos: sai um arquivo por trecho (_01, _02...)
+      --join                 Com vários --trim: junta os trechos num arquivo só
       --delete-source        Manda o original para a Lixeira depois de conferir
       --keep-source          Nunca apaga o original (mesmo se o preset pedir)
   -j, --parallel <n>         Vídeos ao mesmo tempo (1 a 3, padrão 1)
@@ -178,7 +180,8 @@ struct Opts {
     keep_tree: Option<bool>,
     suffix: Option<Option<String>>,
     subfolder: Option<Option<String>>,
-    trim: Option<(f64, f64)>,
+    trim: Vec<(f64, f64)>,
+    join: bool,
     delete_source: Option<bool>,
     parallel: usize,
     cpu: bool,
@@ -215,11 +218,12 @@ impl Opts {
                     let (x, y) = v.split_once('-').ok_or("--trim usa início-fim, ex.: 12.5-40")?;
                     let (x, y) = (parse_time(x).ok_or("início do --trim inválido")?, parse_time(y).ok_or("fim do --trim inválido")?);
                     if y <= x { return Err("no --trim o fim precisa ser depois do início".into()); }
-                    o.trim = Some((x, y));
+                    o.trim.push((x, y));
                 }
                 "--delete-source" => o.delete_source = Some(true),
                 "--keep-source" => o.delete_source = Some(false),
                 "-j" | "--parallel" => o.parallel = val(a)?.parse::<usize>().map_err(|_| "--parallel precisa de um número")?.clamp(1, 3),
+                "--join" => o.join = true,
                 "--cpu" => o.cpu = true,
                 "--dry-run" => o.dry_run = true,
                 "--json" => o.json = true,
@@ -342,7 +346,7 @@ fn cmd_convert(o: Opts) -> i32 {
                 let i = next.fetch_add(1, Ordering::SeqCst);
                 let Some(f) = found.get(i) else { break };
                 let file = f.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-                let nm = Naming { dir: f.dir.clone(), n: (i + 1) as u32, date: date.clone(), time: time.clone() };
+                let nm = Naming { dir: f.dir.clone(), n: (i + 1) as u32, date: date.clone(), time: time.clone(), part: 0 };
                 let info = match probe::probe(&e.ffprobe, &f.path) {
                     Ok(info) => info,
                     Err(err) => {
@@ -365,12 +369,12 @@ fn cmd_convert(o: Opts) -> i32 {
                 };
                 let started = |_: &Path| {};
                 let h = Hooks { id: i as u64, children: &children, cancel: &cancel, progress: &progress, log: &log, started: &started };
-                match render::render(&e, &info, &preset, &nm, o.trim, &h) {
+                match render::render_cuts(&e, &info, &preset, &nm, &o.trim, o.join, &h) {
                     Ok(d) => {
                         let mut deleted = false;
                         if d.delete_source { deleted = trash::delete(&f.path).is_ok(); }
                         ok.fetch_add(1, Ordering::SeqCst);
-                        out.event(json!({ "event": "done", "file": f.path, "output": d.output, "size": d.size, "seconds": (d.seconds * 10.0).round() / 10.0, "mode": d.mode, "deleted": deleted, "warnings": d.warnings }),
+                        out.event(json!({ "event": "done", "file": f.path, "output": d.output, "parts": d.parts, "size": d.size, "seconds": (d.seconds * 10.0).round() / 10.0, "mode": d.mode, "deleted": deleted, "warnings": d.warnings }),
                                   &format!("  ✓ {} · {:.1} MB · {} ({}){}", d.output.display(), d.size as f64 / 1e6, fmt_dur(d.seconds), d.mode, if deleted { " · original na Lixeira" } else { "" }));
                     }
                     Err(err) => {
@@ -397,7 +401,7 @@ mod tests {
         let o = Opts::parse(&args("a.mov pasta -p RAW --out D:/R --flat --suffix _{data} --trim 1:02.5-1:10 -j 5 --json")).unwrap();
         assert_eq!(o.inputs, vec!["a.mov", "pasta"]);
         assert_eq!(o.preset.as_deref(), Some("RAW"));
-        assert_eq!(o.trim, Some((62.5, 70.0)));
+        assert_eq!(o.trim, vec![(62.5, 70.0)]);
         assert_eq!(o.parallel, 3);
         assert_eq!(o.keep_tree, Some(false));
         let mut p = Preset::default();

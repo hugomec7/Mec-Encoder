@@ -432,3 +432,18 @@
 .add-watch{display:inline-flex;align-items:center;gap:6px;font-size:13px}
 .add-watch svg{width:13px;height:13px}
 .sheet-body .lbl small code{font-family:var(--mono);font-size:10.5px;color:var(--text-3)}
+
+/* linha do tempo: sem a faixa azul até a agulha (parecia que só aquilo ia renderizar);
+   o trecho marcado (início/fim) fica amarelo: é exatamente o que vai sair */
+.timeline .played{display:none}
+
+/* vários trechos: cada um em amarelo; o escolhido (I/O mexem nele) mais forte, com o número */
+.timeline .trim .cut{position:absolute;top:0;bottom:0;background:color-mix(in srgb,var(--panel) 72%,transparent)}
+.timeline .trim .seg{position:absolute;top:0;bottom:0;background:color-mix(in srgb,var(--yellow) 14%,transparent);
+  box-shadow:inset 0 1px 0 color-mix(in srgb,var(--yellow) 50%,transparent),inset 0 -1px 0 color-mix(in srgb,var(--yellow) 50%,transparent)}
+.timeline .trim .seg.sel{background:color-mix(in srgb,var(--yellow) 24%,transparent);
+  box-shadow:inset 0 2px 0 var(--yellow),inset 0 -2px 0 var(--yellow)}
+.timeline .trim .seg small{position:absolute;left:8px;top:3px;font:600 10px/1 var(--mono);color:var(--yellow)}
+.timeline .trim .edge{margin-left:-6px}
+.pv-meta .trim-chip svg:last-child{width:9px;height:9px;opacity:.7}
+.pv-meta .trim-chip:hover{text-decoration:none;filter:brightness(1.15)}

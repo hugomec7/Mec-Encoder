@@ -109,13 +109,13 @@
   }
   mq.addEventListener('change', () => S.set.theme === 'system' && applyTheme(true));
   function setTheme(t) {
-    S.set.theme = t; if (t === 'dark' || t === 'oled') S.set.lastDark = t;
+    S.set.theme = t; if (t === 'dark' || t === 'oled' || t === 'studio') S.set.lastDark = t;
     saveSettings(); applyTheme(true);
   }
   $('#bAppMenu').dataset.menu = '1';
   const REPO_URL = 'https://github.com/hugomec7/Mec-Encoder';
   function themeMenu(at) {
-    openMenu(at, [['system', L.system], ['light', L.light], ['dark', L.dark], ['oled', L.oled]]
+    openMenu(at, [['system', L.system], ['light', L.light], ['dark', L.dark], ['oled', L.oled], ['studio', L.studio]]
       .map(([v, t]) => ({ label: t, value: v, sel: S.set.theme === v, icon: ICONS.theme })), (v) => setTheme(v));
   }
   $('#bAppMenu').onclick = (e) => {
@@ -145,7 +145,7 @@
     Object.entries(txt).forEach(([id, t]) => { const el = document.getElementById(id); if (el) el.textContent = t; });
     $('#bMin').title = L.minimize; $('#bMax').title = L.maximize; $('#bClose').title = L.close;
     $('#bSetAll').title = L.setAll; $('#bFoldPresets').title = L.presetsFold; $('#bAdd').title = L.addVideos;
-    $('#bIn').title = L.markIn; $('#bOut').title = L.markOut;
+    $('#bIn').title = L.markIn; $('#bOut').title = L.markOut; $('#bCut').title = L.newCut;
     renderRenderBtn(); renderUpdateBtn(); if ($('#bAfter')) renderAfter();
   }
 
@@ -211,7 +211,10 @@
   }
   const fullDur = (q) => q.src.durS || secs(q.src.dur);
   // duração que vai sair: o trecho marcado ou o arquivo inteiro
-  const durOf = (q) => (q.trim ? q.trim[1] - q.trim[0] : fullDur(q));
+  // trechos marcados [[início, fim], ...] em segundos (vazio = arquivo inteiro)
+  const cutsOf = (q) => (q && q.cuts && q.cuts.length ? q.cuts : null);
+  const cutsDur = (q) => (cutsOf(q) || []).reduce((s, c) => s + c[1] - c[0], 0);
+  const durOf = (q) => (cutsOf(q) ? cutsDur(q) : fullDur(q));
   // proporção escolhida: "9:16" → 0,5625; null = Original
   const ratioOf = (c) => { const m = /^(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)$/.exec(c.aspect || ''); return m ? +m[1] / +m[2] : null; };
   const ev = (x) => Math.max(2, Math.round(x / 2) * 2);
@@ -417,7 +420,7 @@
         <div class="meta">
           <div class="name" title="${esc(q.path || q.file)}">${esc(q.file)}</div>
           ${q.status === 'err' ? `<div class="spec err-line" title="${esc(q.error || '')}">${esc(errText(q))}</div>` : `<div class="spec">${q.status === 'running' ? timeLine(q) : q.src.audioOnly ? `${dir}${audioSrcTxt(q.src)}` : q.src.isImage ? `${dir}${q.src.codec} · ${q.src.w}×${q.src.h}` : `${dir}${q.src.w}×${q.src.h} · ${q.src.codec} · ${fpsTxt(q.src.fps)} fps${q.src.vfr ? ' VFR' : ''}`}</div>`}
-          <div class="row2"><span class="badge" style="--c:${c}"><i></i>${esc(p.name)}${same(q.cfg, p) ? '' : '*'}</span>${q.trim ? `<span class="trim-tag" title="${esc(L.trimLbl)}">${ICONS.cut}${fmtDur(q.trim[1] - q.trim[0])}</span>` : ''}
+          <div class="row2"><span class="badge" style="--c:${c}"><i></i>${esc(p.name)}${same(q.cfg, p) ? '' : '*'}</span>${cutsOf(q) ? `<span class="trim-tag" title="${esc(cutTitle(q))}">${ICONS.cut}${q.cuts.length > 1 ? `${q.cuts.length} · ` : ''}${fmtDur(cutsDur(q))}${q.cuts.length > 1 && q.cutJoin ? ` · ${L.cutJoinShort}` : ''}</span>` : ''}
             ${w.length ? `<span class="warn" title="${esc(w.join('\n'))}">${ICONS.warn}</span>` : ''}${st}</div>
         </div>
         <div class="acts">${acts}</div>
@@ -441,7 +444,7 @@
     if (!REAL || !S.restored) return Promise.resolve();
     const data = S.queue.filter((q) => q.path).map((q) => ({ path: q.path, file: q.file, dir: q.dir || '', preset: q.preset, cfg: q.cfg,
       status: q.status === 'done' || q.status === 'err' ? q.status : 'ready', out: q.out || null, outMb: q.outMb || 0, took: q.took || 0,
-      error: q.status === 'err' ? q.error || null : null, errCode: q.status === 'err' ? q.errCode || null : null, trim: q.trim || null }));
+      error: q.status === 'err' ? q.error || null : null, errCode: q.status === 'err' ? q.errCode || null : null, cuts: cutsOf(q), cutJoin: !!q.cutJoin }));
     const txt = JSON.stringify(data);
     clearTimeout(tQueue);
     if (txt === lastQueue) return Promise.resolve();
@@ -461,7 +464,7 @@
       const pid = presetOf(x.preset) ? x.preset : src.isImage ? defaultImageId() : src.audioOnly ? defaultAudioId() : presetOf(S.set.defaultPreset) ? S.set.defaultPreset : S.presets[0].id;
       const cfg = x.cfg && x.cfg.output ? normPreset(x.cfg) : clone(presetOf(pid));
       S.queue.push({ id: r.id, path: x.path, file: x.file, dir: x.dir || '', src, preset: pid, cfg, status: x.status === 'done' || x.status === 'err' ? x.status : 'ready',
-        out: x.out || null, outMb: x.outMb || 0, took: x.took || 0, error: x.error || null, errCode: x.errCode || null, trim: Array.isArray(x.trim) ? x.trim : null, thumb: null, p: x.status === 'done' ? 1 : 0 });
+        out: x.out || null, outMb: x.outMb || 0, took: x.took || 0, error: x.error || null, errCode: x.errCode || null, cuts: Array.isArray(x.cuts) ? x.cuts : Array.isArray(x.trim) ? [x.trim] : null, cutJoin: !!x.cutJoin, thumb: null, p: x.status === 'done' ? 1 : 0 });
       ids.push(r.id);
     });
     S.restored = true;
@@ -852,8 +855,9 @@
   function colorMenu(at, pid) {
     const p = (S.draft && S.draft.id === pid) ? S.draft : presetOf(pid);
     openMenu(at, PALETTE.map((k) => ({ label: L.colors[k], value: k, color: COLORS[k], sel: p.color === k })), (k) => {
-      if (S.draft && S.draft.id === pid) { S.draft.color = k; renderInspector(); }
-      else { presetOf(pid).color = k; savePresets(); renderAll(); }
+      // a cor vale na hora (não espera "Salvar"), como o nome
+      if (S.draft && S.draft.id === pid) S.draft.color = k;
+      presetOf(pid).color = k; savePresets(); renderAll();
     });
   }
 
@@ -1067,7 +1071,7 @@
       cfr ? chip(`${fpsTxt(fpsOut(q.cfg, q.src))} fps CFR`, COLORS.green) : chip(`${fpsTxt(q.src.fps)} fps ${q.src.vfr ? 'VFR' : ''}`.trim()));
     if (q.src.hdr) c.push(q.cfg.hdrToSdr ? chip('Rec. 709', COLORS.green) : chip(L.hdrKept, COLORS.orange));
     if (q.cfg.rotate) c.push(chip(`${q.cfg.rotate}°`, COLORS.teal, ICONS.rot));
-    if (q.trim) c.push(trimChip(q));
+    if (cutsOf(q)) c.push(trimChip(q));
     c.push(chip(`≈ ${fmtMB(estMB(q))}`));
     if (isImageP(q.cfg)) $('#pvMeta').innerHTML = [chip(imageOutTxt(q.cfg, q.src), COLORS.orange, ICONS.image), chip(`≈ ${fmtMB(estMB(q))}`)].join('<span class="dot">·</span>');
     else if (!isAudioP(q.cfg)) $('#pvMeta').innerHTML = c.join('<span class="dot">·</span>');
@@ -1140,41 +1144,92 @@
     const q = selItem(); if (!q) return;
     const r = tl.getBoundingClientRect();
     const edge = e.target.closest('.edge');
-    if (edge && q.trim) {
-      // arrastar a borda do trecho
-      const k = edge.dataset.edge; const d = fullDur(q); tl.setPointerCapture(e.pointerId);
+    if (edge && cutsOf(q)) {
+      // arrastar a borda de um trecho (sem passar do vizinho)
+      const k = edge.dataset.edge; const i = +edge.dataset.i; const d = fullDur(q); tl.setPointerCapture(e.pointerId);
+      q.cutSel = i;
       tl.onpointermove = (ev) => {
-        const t = clamp((ev.clientX - r.left) / r.width, 0, 1); const [a, b] = q.trim;
-        q.trim = k === 'a' ? [Math.min(t * d, b - 0.1), b] : [a, Math.max(t * d, a + 0.1)];
-        renderTrim(); setT((k === 'a' ? q.trim[0] : q.trim[1]) / d);
+        const t = clamp((ev.clientX - r.left) / r.width, 0, 1) * d; const c = q.cuts[i];
+        const lo = i > 0 ? q.cuts[i - 1][1] : 0; const hi = i < q.cuts.length - 1 ? q.cuts[i + 1][0] : d;
+        if (k === 'a') c[0] = clamp(t, lo, c[1] - 0.1); else c[1] = clamp(t, c[0] + 0.1, hi);
+        renderTrim(); setT(c[k === 'a' ? 0 : 1] / d);
       };
-      tl.onpointerup = () => { tl.onpointermove = null; setTrim(q, q.trim[0], q.trim[1]); };
+      tl.onpointerup = () => { tl.onpointermove = null; setCuts(q, q.cuts); };
       return;
     }
     const mv = (ev) => setT((ev.clientX - r.left) / r.width);
-    mv(e); tl.setPointerCapture(e.pointerId); tl.onpointermove = mv; tl.onpointerup = () => { tl.onpointermove = null; };
+    mv(e); tl.setPointerCapture(e.pointerId); tl.onpointermove = mv;
+    // soltar em cima de um trecho escolhe ele (I e O passam a mexer nele)
+    tl.onpointerup = () => { tl.onpointermove = null; const i = cutAt(q); if (i >= 0 && i !== q.cutSel) { q.cutSel = i; renderTrim(); } };
   });
-  /* Cortar trecho: início (I) e fim (O) no ponto da linha do tempo; arrastar as bordas ajusta */
-  function setTrim(q, a, b) {
-    const d = fullDur(q); a = clamp(a, 0, d); b = clamp(b, 0, d);
-    q.trim = b - a < 0.1 || (a < 0.01 && b > d - 0.01) ? null : [a, b];
+  /* Cortar trechos: I (início) e O (fim) mexem no trecho escolhido; Ctrl+K corta um trecho novo na agulha;
+     arrastar as bordas ajusta. Vários trechos saem separados (_01, _02...) ou juntos num arquivo. */
+  const cutAt = (q, t = fullDur(q) * S.t) => (q.cuts || []).findIndex(([a, b]) => t >= a - 0.001 && t <= b + 0.001);
+  function setCuts(q, list) {
+    const d = fullDur(q); const sel = (list || [])[q.cutSel];
+    let cs = (list || []).map(([a, b]) => [clamp(a, 0, d), clamp(b, 0, d)]).filter(([a, b]) => b - a >= 0.1).sort((x, y) => x[0] - y[0]);
+    // trechos um por cima do outro viram um só (encostados continuam separados)
+    cs = cs.reduce((m, c) => { const l = m[m.length - 1]; if (l && c[0] < l[1] - 0.001) l[1] = Math.max(l[1], c[1]); else m.push(c); return m; }, []);
+    if (cs.length === 1 && cs[0][0] < 0.01 && cs[0][1] > d - 0.01) cs = [];
+    q.cuts = cs.length ? cs : null;
+    q.cutSel = sel ? Math.max(0, cs.findIndex((c) => c[0] <= sel[0] + 0.001 && c[1] >= sel[1] - 0.001)) : Math.min(q.cutSel || 0, cs.length - 1);
     renderQueue(); renderPreview(); renderInspector();
   }
   function markTrim(k) {
     const q = selItem(); if (!q || q.src.isImage || q.status === 'running') return;
-    const d = fullDur(q); const t = d * S.t; let [a, b] = q.trim || [0, d];
-    if (k === 'a') { a = t; if (b <= a + 0.1) b = d; } else { b = t; if (b <= a + 0.1) a = 0; }
-    setTrim(q, a, b);
+    const d = fullDur(q); const t = d * S.t; const cs = (q.cuts || []).map((c) => c.slice());
+    let i = cs.length ? clamp(q.cutSel || 0, 0, cs.length - 1) : -1;
+    if (i < 0) { cs.push([0, d]); i = 0; }
+    const lo = i > 0 ? cs[i - 1][1] : 0; const hi = i < cs.length - 1 ? cs[i + 1][0] : d;
+    if (k === 'a') { cs[i][0] = clamp(t, lo, hi); if (cs[i][1] <= cs[i][0] + 0.1) cs[i][1] = hi; }
+    else { cs[i][1] = clamp(t, lo, hi); if (cs[i][1] <= cs[i][0] + 0.1) cs[i][0] = lo; }
+    q.cutSel = i; setCuts(q, cs);
+  }
+  // Ctrl+K: trecho novo a partir da agulha (dentro de um trecho, divide ele em dois)
+  function newCut() {
+    const q = selItem(); if (!q || q.src.isImage || q.status === 'running') return;
+    const d = fullDur(q); const t = d * S.t; const cs = (q.cuts || []).map((c) => c.slice());
+    const i = cutAt(q, t);
+    if (i >= 0 && t - cs[i][0] >= 0.1 && cs[i][1] - t >= 0.1) { cs.splice(i + 1, 0, [t, cs[i][1]]); cs[i][1] = t; q.cutSel = i + 1; }
+    else if (i < 0) { const next = cs.find((c) => c[0] > t); cs.push([t, next ? next[0] : d]); cs.sort((x, y) => x[0] - y[0]); q.cutSel = cs.findIndex((c) => c[0] === t); }
+    else return;
+    setCuts(q, cs);
   }
   function renderTrim() {
-    const q = selItem(); const on = !!(q && q.trim); const d = q ? fullDur(q) : 1;
-    tl.classList.toggle('trimmed', on);
-    if (on) { tl.style.setProperty('--a', q.trim[0] / d * 100 + '%'); tl.style.setProperty('--b', q.trim[1] / d * 100 + '%'); }
-    $('#bIn').classList.toggle('set', on && q.trim[0] > 0.001); $('#bOut').classList.toggle('set', on && q.trim[1] < d - 0.001);
+    const q = selItem(); const cs = cutsOf(q); const d = q ? fullDur(q) : 1; const box = $('#trimBox');
+    tl.classList.toggle('trimmed', !!cs);
+    if (!cs) { box.innerHTML = ''; $('#bIn').classList.remove('set'); $('#bOut').classList.remove('set'); return; }
+    const pc = (t) => (t / d * 100).toFixed(3) + '%'; const sel = clamp(q.cutSel || 0, 0, cs.length - 1);
+    // fora dos trechos escurece; cada trecho em amarelo com as bordas de arrastar
+    const gaps = []; let prev = 0;
+    cs.forEach(([a, b]) => { if (a > prev) gaps.push([prev, a]); prev = b; }); if (prev < d) gaps.push([prev, d]);
+    box.innerHTML = gaps.map(([a, b]) => `<i class="cut" style="left:${pc(a)};width:${pc(b - a)}"></i>`).join('')
+      + cs.map(([a, b], i) => `<div class="seg ${i === sel && cs.length > 1 ? 'sel' : ''}" style="left:${pc(a)};width:${pc(b - a)}">${cs.length > 1 ? `<small>${i + 1}</small>` : ''}</div>
+        <b class="edge l" data-edge="a" data-i="${i}" style="left:${pc(a)}"></b><b class="edge r" data-edge="b" data-i="${i}" style="left:${pc(b)}"></b>`).join('');
+    $('#bIn').classList.toggle('set', cs[sel][0] > 0.001); $('#bOut').classList.toggle('set', cs[sel][1] < d - 0.001);
   }
-  $('#bIn').onclick = () => markTrim('a'); $('#bOut').onclick = () => markTrim('b');
-  $('#pvMeta').addEventListener('click', (e) => { if (e.target.closest('[data-trimclear]')) { const q = selItem(); if (q) setTrim(q, 0, fullDur(q)); } });
-  const trimChip = (q) => (q.trim ? `<button class="chip hl trim-chip" style="--c:${COLORS.yellow}" data-trimclear title="${esc(L.trimClear)}">${ICONS.cut}${L.trimLbl} ${fmtDur(q.trim[0])}–${fmtDur(q.trim[1])} · ${fmtDur(q.trim[1] - q.trim[0])}</button>` : '');
+  $('#bIn').onclick = () => markTrim('a'); $('#bOut').onclick = () => markTrim('b'); $('#bCut').onclick = newCut;
+  const cutTitle = (q) => (cutsOf(q) || []).map(([a, b], i) => `${i + 1}: ${fmtDur(a)}–${fmtDur(b)}`).join('\n');
+  // menu dos trechos: separados ou juntos, tirar um, tirar todos
+  function cutMenu(at) {
+    const q = selItem(); const cs = cutsOf(q); if (!cs) return;
+    openMenu(at, [
+      ...(cs.length > 1 ? [{ label: L.cutSplit, value: 'split', sel: !q.cutJoin, icon: ICONS.layers }, { label: L.cutJoin, value: 'join', sel: !!q.cutJoin, icon: ICONS.cut }, { sep: true }] : []),
+      ...cs.map(([a, b], i) => ({ label: L.cutRemove(i + 1, `${fmtDur(a)}–${fmtDur(b)}`), value: 'del:' + i, icon: ICONS.x })),
+      ...(cs.length > 1 ? [{ sep: true }, { label: L.trimClear, value: 'all', icon: ICONS.trash, danger: true }] : []),
+    ], (v) => {
+      if (v === 'split' || v === 'join') { q.cutJoin = v === 'join'; renderQueue(); renderPreview(); renderInspector(); return; }
+      if (v === 'all') { setCuts(q, []); return; }
+      const i = +v.split(':')[1]; setCuts(q, cs.filter((_, k) => k !== i));
+    });
+  }
+  $('#pvMeta').addEventListener('click', (e) => { const c = e.target.closest('[data-trimclear]'); if (c) cutMenu(c); });
+  const trimChip = (q) => {
+    const cs = cutsOf(q); if (!cs) return '';
+    const txt = cs.length === 1 ? `${L.trimLbl} ${fmtDur(cs[0][0])}–${fmtDur(cs[0][1])} · ${fmtDur(cs[0][1] - cs[0][0])}`
+      : `${L.cutsN(cs.length)} · ${fmtDur(cutsDur(q))} · ${q.cutJoin ? L.cutJoinShort : L.cutSplitShort}`;
+    return `<button class="chip hl trim-chip" data-menu="1" style="--c:${COLORS.yellow}" data-trimclear title="${esc(cutTitle(q))}">${ICONS.cut}${txt}${ICONS.chev}</button>`;
+  };
   const ctl = $$('.controls .ctl:not(.trim-btn)');
   const stepBy = (s) => { const q = selItem(); if (q) setT(S.t + s / fullDur(q)); };
   ctl[0].onclick = () => { const q = selItem(); if (q) stepBy(-1 / (q.src.fpsNum || 60)); };
@@ -1382,7 +1437,9 @@
   function outName(file, cfg, q) {
     const c = cfg.output; const base = file.replace(/\.[^.]+$/, '');
     const suf = c.suffix.on ? cleanName(applyTags(c.suffix.text, cfg, q || null)) : '';
-    return base + suf + '.' + (isImageP(cfg) ? (IEXT[(cfg.image || {}).format] || 'jpg') : isAudioP(cfg) ? (AEXT[cfg.audio.codec] || String(file).split('.').pop()) : extOut(cfg, file));
+    // trechos separados: um arquivo por trecho (_01, _02...)
+    const n = q && cutsOf(q) && !q.cutJoin ? q.cuts.length : 0;
+    return base + suf + (n > 1 ? `_01…_${pad(n)}` : '') + '.' + (isImageP(cfg) ? (IEXT[(cfg.image || {}).format] || 'jpg') : isAudioP(cfg) ? (AEXT[cfg.audio.codec] || String(file).split('.').pop()) : extOut(cfg, file));
   }
   // caminho completo (para a dica): pasta escolhida + subpastas de origem + subpasta + nome
   function outPath(file, cfg, q) {
@@ -1461,7 +1518,7 @@
     $('#sheetBody').innerHTML = `
       <div class="group">
         ${row(L.language, segH('lang', S.set.lang, [['en', 'English'], ['pt', 'Português']]))}
-        ${row(L.appearance, segH('theme', S.set.theme, [['system', L.system], ['light', L.light], ['dark', L.dark], ['oled', L.oled]]))}
+        ${row(L.appearance, segH('theme', S.set.theme, [['system', L.system], ['light', L.light], ['dark', L.dark], ['oled', L.oled], ['studio', L.studio]]))}
       </div>
       <div class="sec-label">${L.general}</div>
       <div class="group">
@@ -1540,7 +1597,8 @@
     if (e.key === ' ' && selItem() && $('#bPlay')) { e.preventDefault(); $('#bPlay').click(); }
     if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === 'i') markTrim('a');
     if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === 'o') markTrim('b');
-    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'x' && selItem()) { e.preventDefault(); const q = selItem(); setTrim(q, 0, fullDur(q)); }
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'x' && selItem()) { e.preventDefault(); setCuts(selItem(), []); }
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'k' && selItem()) { e.preventDefault(); newCut(); }
     if (e.key === 'ArrowLeft' && selItem()) ctl[e.shiftKey ? 1 : 0].click();
     if (e.key === 'ArrowRight' && selItem()) ctl[e.shiftKey ? 3 : 4].click();
     if (e.key === 'Delete' && S.picked.size) pickedItems().forEach((q) => removeItem(q.id));
@@ -1627,9 +1685,9 @@
           if (twin && q.cfg.output.deleteSource) toast(L.keptForCopy);
           const naming = Object.assign({ dir: q.dir || '', n: S.queue.indexOf(q) + 1 }, nowTags());
           jobUpdate(q);
-          if (q.trim && q.cfg.output.deleteSource) toast(L.trimKeep);
-          const r = await inv('render', { id: q.id, naming, trim: q.trim || null, cfg: twin ? Object.assign(clone(q.cfg), { output: Object.assign(clone(q.cfg.output), { deleteSource: false }) }) : q.cfg });
-          q.status = 'done'; q.p = 1; q.out = r.output; q.outMb = r.size / 1e6; q.took = elapsedOf(q); J.done++; jobUpdate(q);
+          if (cutsOf(q) && q.cfg.output.deleteSource) toast(L.trimKeep);
+          const r = await inv('render', { id: q.id, naming, cuts: cutsOf(q) || [], join: !!q.cutJoin, cfg: twin ? Object.assign(clone(q.cfg), { output: Object.assign(clone(q.cfg.output), { deleteSource: false }) }) : q.cfg });
+          q.status = 'done'; q.p = 1; q.out = r.output; q.parts = r.parts && r.parts.length > 1 ? r.parts : null; q.outMb = r.size / 1e6; q.took = elapsedOf(q); J.done++; jobUpdate(q);
           if (r.deleted) toast(L.deletedOrig);
           if (J.mode === 'single') notify(L.rendered(q.file) + ' · ' + fmtDur(q.took));
         } catch (e) {
@@ -1689,7 +1747,12 @@
     if (o.suffix === false || o.suffix === null) out.suffix.on = false; else if (typeof o.suffix === 'string') out.suffix = { on: true, text: o.suffix };
     if (o.subfolder === false || o.subfolder === null) out.subfolder.on = false; else if (typeof o.subfolder === 'string') out.subfolder = { on: true, text: o.subfolder };
     if (typeof o.deleteSource === 'boolean') out.deleteSource = o.deleteSource;
-    if (Array.isArray(o.trim) && o.trim.length === 2 && !q.src.isImage) { const d = fullDur(q); const a = clamp(+o.trim[0] || 0, 0, d); const b = clamp(+o.trim[1] || d, 0, d); if (b - a >= 0.1) q.trim = [a, b]; }
+    // "trim": [início, fim] ou [[início, fim], ...]; "join": true junta os trechos num arquivo
+    if (Array.isArray(o.trim) && o.trim.length && !q.src.isImage) {
+      const list = Array.isArray(o.trim[0]) ? o.trim : [o.trim]; const d = fullDur(q);
+      const cs = list.filter((c) => Array.isArray(c) && c.length === 2).map((c) => [clamp(+c[0] || 0, 0, d), clamp(+c[1] || d, 0, d)]).filter(([a, b]) => b - a >= 0.1).sort((x, y) => x[0] - y[0]);
+      if (cs.length) q.cuts = cs; q.cutJoin = !!o.join;
+    }
   }
   // fim da leitura de uma pasta vigiada ou tarefa: renderiza sozinho
   function originDone(p) {
@@ -1709,7 +1772,7 @@
     const qs = j.ids.map(itemOf).filter(Boolean);
     const items = qs.map((q) => ({ id: q.id, file: q.path, status: q.status === 'ready' ? 'queued' : q.status === 'err' ? 'error' : q.status,
       progress: Math.round((q.p || 0) * 1000) / 1000, output: q.out || null, sizeMB: q.outMb ? Math.round(q.outMb * 10) / 10 : null,
-      seconds: q.took ? Math.round(q.took * 10) / 10 : null, error: q.status === 'err' ? q.errCode || 'unknown' : null, message: q.status === 'err' ? q.error || null : null, trim: q.trim || null }))
+      seconds: q.took ? Math.round(q.took * 10) / 10 : null, error: q.status === 'err' ? q.errCode || 'unknown' : null, message: q.status === 'err' ? q.error || null : null, cuts: cutsOf(q), join: !!q.cutJoin, outputs: q.parts || (q.out ? [q.out] : null) }))
       .concat(j.ids.filter((id) => !itemOf(id)).map((id) => ({ id, status: 'removed' })), j.missing, j.unreadable);
     const open = items.some((i) => i.status === 'queued' || i.status === 'running');
     const failed = items.some((i) => i.status === 'error' || i.status === 'removed');
@@ -1893,7 +1956,8 @@
     if (qs.get('fold')) S.set.foldPresets = true;
     if (qs.get('update')) S.update = { version: '0.2.0' };
     S.version = ((window.MEC_NEWS || [])[0] || {}).version || S.version;
-    if (qs.get('trim')) { const [a, b] = qs.get('trim').split(',').map(Number); const q = selItem(); if (q) q.trim = [a, b]; }
+    if (qs.get('trim')) { const [a, b] = qs.get('trim').split(',').map(Number); const q = selItem(); if (q) q.cuts = [[a, b]]; }
+    if (qs.get('cuts')) { const q = selItem(); if (q) { q.cuts = qs.get('cuts').split(';').map((x) => x.split(',').map(Number)); q.cutSel = +(qs.get('cutsel') || 0); q.cutJoin = !!qs.get('join'); } }
     if (qs.get('after')) S.after = qs.get('after');
     if (qs.get('err')) { const q = S.queue[+(qs.get('erri') || 3)]; Object.assign(q, { status: 'err', errCode: qs.get('err'), error: '[out#0/mp4 @ 000001] Error writing trailer: No space left on device\nError closing file D:\\Renders\\IMG_4823_proxy.mp4: No space left on device' }); }
     if (qs.get('dest')) S.presets.forEach((p) => { if (p.kind !== 'audio' && p.kind !== 'image') p.output.folder = { on: true, text: 'D:\\Renders' }; }), S.queue.forEach((q) => { q.cfg.output.folder = { on: true, text: 'D:\\Renders' }; });

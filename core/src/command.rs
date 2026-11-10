@@ -388,6 +388,8 @@ pub struct Naming {
     pub date: String,
     /// "14-32"
     pub time: String,
+    /// Trecho separado (1, 2, 3...): o nome ganha "_01", "_02"... no fim. 0 = arquivo inteiro.
+    pub part: u32,
 }
 
 /// Troca as etiquetas do nome: {codec} {preset} {data}/{date} {hora}/{time} {res} {fps} {bits} {n}.
@@ -435,10 +437,11 @@ pub fn output_path_for(src: &Path, info: Option<&MediaInfo>, p: &Preset, nm: &Na
     let ext = if p.is_image() { image_ext(p).to_string() } else if p.is_audio() { audio_ext(src, p, "") } else {
         match p.container.as_str() { "mov" => "mov", "source" => source_container(src), _ => "mp4" }.to_string()
     };
-    let mut out = dir.join(format!("{stem}{suffix}.{ext}"));
+    let part = if nm.part > 0 { format!("_{:02}", nm.part) } else { String::new() };
+    let mut out = dir.join(format!("{stem}{suffix}{part}.{ext}"));
     let mut i = 2;
     while out.exists() || out == src {
-        out = dir.join(format!("{stem}{suffix} ({i}).{ext}"));
+        out = dir.join(format!("{stem}{suffix}{part} ({i}).{ext}"));
         i += 1;
     }
     out
@@ -478,6 +481,48 @@ pub fn apply_trim(plan: &mut Plan, info: &MediaInfo, a: f64, b: f64) {
     }
     let at = plan.args.len().saturating_sub(1);
     plan.args.splice(at..at, ["-t".to_string(), fmt(b - a)]);
+}
+
+/// Áudio dos trechos que vão ser colados: PCM, sem atraso de codificador (o áudio final é feito uma vez só, na colagem).
+pub fn audio_to_pcm(plan: &mut Plan) {
+    if let Some(i) = plan.args.iter().position(|x| x == "-c:a") {
+        if let Some(v) = plan.args.get_mut(i + 1) { *v = "pcm_s24le".into(); }
+    }
+    while let Some(i) = plan.args.iter().position(|x| x == "-b:a") { plan.args.drain(i..(i + 2).min(plan.args.len())); }
+}
+
+/// Cola os trechos já convertidos (pelo mesmo preset): o vídeo é copiado; o áudio, que veio em PCM,
+/// é gravado uma vez no formato do preset (ou no do original, se o preset copia o áudio).
+/// `list` é a lista do concat do FFmpeg, ao lado dos arquivos.
+pub fn concat_args(list: &Path, out: &Path, info: &MediaInfo, p: &Preset, timecode: Option<&str>) -> Vec<String> {
+    let mut a: Vec<String> = ["-nostdin", "-hide_banner", "-v", "error", "-y", "-progress", "pipe:1", "-nostats", "-f", "concat", "-safe", "0", "-i"]
+        .iter().map(|s| s.to_string()).collect();
+    a.push(list.to_string_lossy().into_owned());
+    let mp4 = out.extension().map_or(false, |e| e.eq_ignore_ascii_case("mp4"));
+    let mut pcm_out = false;
+    if p.is_audio() {
+        a.extend(["-map".into(), "0:a".into(), "-c".into(), "copy".into()]);
+    } else {
+        if info.video.is_some() { a.extend(["-map".into(), "0:v:0".into(), "-c:v".into(), "copy".into()]); }
+        if !info.audio.is_empty() {
+            a.extend(["-map".into(), "0:a".into()]);
+            let src_pcm = info.audio.first().map(|x| x.codec.clone()).filter(|c| c.starts_with("pcm"));
+            match (p.audio.codec.as_str(), src_pcm) {
+                // cópia de PCM: o mesmo PCM do original
+                ("copy", Some(c)) => { a.extend(["-c:a".into(), c]); pcm_out = true; }
+                _ => {
+                    let (kbps, rate) = aac_quality(info, p);
+                    a.extend(["-c:a".into(), "aac".into(), "-b:a".into(), format!("{kbps}k"), "-ar".into(), rate.to_string()]);
+                }
+            }
+        }
+        if let Some(tc) = timecode { a.extend(["-timecode".into(), tc.into()]); if mp4 && !pcm_out { a.extend(["-write_tmcd".into(), "1".into()]); } }
+        if info.video.is_some() && codec_tag(p) == "H265" { a.extend(["-tag:v".into(), "hvc1".into()]); }
+    }
+    if mp4 && pcm_out { a.extend(["-f".into(), "mov".into(), "-brand".into(), "mp42".into()]); }
+    if mp4 || out.extension().map_or(false, |e| e.eq_ignore_ascii_case("mov")) { a.extend(["-movflags".into(), "+faststart".into()]); }
+    a.push(out.to_string_lossy().into_owned());
+    a
 }
 
 /// Traduz um erro (do FFmpeg ou do sistema) num código que a interface explica em português/inglês.
@@ -703,7 +748,9 @@ pub fn build_image(info: &MediaInfo, p: &Preset, output: &Path) -> Plan {
 /// Um quadro JPEG da prévia, no tempo `t` (segundos). `output = true` mostra o resultado do preset.
 pub fn preview_args(info: &MediaInfo, p: &Preset, t: f64, output: bool, max: u32) -> Vec<String> {
     let p = &resolve(info, p);
-    let mut a: Vec<String> = vec!["-nostdin".into(), "-hide_banner".into(), "-v".into(), "error".into(), "-ss".into(), fmt_num(t.max(0.0))];
+    let mut a: Vec<String> = vec!["-nostdin".into(), "-hide_banner".into(), "-v".into(), "error".into()];
+    // imagem: sem -ss (num .jpg, "-ss 0" faz o FFmpeg pular o único quadro e a prévia sai vazia)
+    if !info.is_image { a.extend(["-ss".into(), fmt_num(t.max(0.0))]); }
     if info.video.as_ref().map_or(false, |v| v.rotation != 0) { a.extend(["-display_rotation".into(), "0".into()]); }
     a.extend(["-i".into(), info.path.to_string_lossy().into_owned(), "-frames:v".into(), "1".into(), "-an".into()]);
     let vf = video_filters(info, p, &Encoder::Cpu { preset: "ultrafast".into() }, Some((output, max)));
@@ -1022,7 +1069,7 @@ mod tests {
         let i = iphone(90, "");
         let mut p = preset("iphone-4k60");
         p.output.suffix = Toggle { on: true, text: "_{res}_{fps}_{bits}_{n}_{data}_{hora}_{preset}".into() };
-        let nm = Naming { dir: "Hug Challenge x Ella/Cam B".into(), n: 3, date: "2026-10-26".into(), time: "14-32".into() };
+        let nm = Naming { dir: "Hug Challenge x Ella/Cam B".into(), n: 3, date: "2026-10-26".into(), time: "14-32".into(), part: 0 };
         let r = resolve(&i, &p);
         let o = output_path_for(Path::new("/nao/existe/IMG_1.MOV"), Some(&i), &r, &nm);
         assert_eq!(o, PathBuf::from(format!("/nao/existe/IMG_1_2160x3840_59.94_8bit_03_2026-10-26_14-32_{}.mp4", p.name)));

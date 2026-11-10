@@ -1,0 +1,114 @@
+/* Mec Encoder — tema "Estúdio" (passada "unslop", modo polimento).
+   Direção: conversor de bancada para editor de vídeo curto. Preciso, rápido, de ilha de edição.
+   Mundo: monitor de referência e timecode. Cromo neutro (grafite), um acento (o azul da marca),
+   a cor fica no vídeo. Assinatura: números técnicos em mono, como timecode.
+   Baseado em unslop, de Damir Sokolovsky (@heydamir), CC BY 4.0. */
+
+@font-face{font-family:"JetBrains Mono Mec";src:url(fonts/JetBrainsMono-Regular.woff2) format("woff2");font-weight:400;font-display:block}
+@font-face{font-family:"JetBrains Mono Mec";src:url(fonts/JetBrainsMono-Medium.woff2) format("woff2");font-weight:500 600;font-display:block}
+
+/* ---------- tokens: rampa grafite neutra, três papéis de texto, uma curva sem mola ---------- */
+[data-theme="studio"]{
+  --ease:cubic-bezier(.22,1,.36,1);
+  --spring:cubic-bezier(.22,1,.36,1);
+  --mono:"JetBrains Mono Mec","Cascadia Mono",Consolas,ui-monospace,monospace;
+  --bg:#0f0f10;
+  --panel:#141415;
+  --panel-2:#19191b;
+  --stage:#0b0b0c;
+  --fill:#232325;
+  --fill-2:#2c2c2f;
+  --hover:rgba(237,237,237,.04);
+  --stroke:rgba(237,237,237,.06);
+  --stroke-2:rgba(237,237,237,.09);
+  --sep:rgba(237,237,237,.07);
+  --text:#ededed;
+  --text-2:#a1a1a6;
+  --text-3:#85858b;
+  --wave:rgba(237,237,237,.26);
+  --menu:rgba(30,30,32,.97);
+  --shadow:none;
+  --seg-pill:#3a3a3d;
+  --green:#4cc38a; --red:#e5484d;
+  color-scheme:dark;
+}
+
+/* ---------- marca: tile chapado, sem degradê nem brilho ---------- */
+[data-theme="studio"] .tb-title{gap:8px;font-weight:600;letter-spacing:0}
+[data-theme="studio"] .tb-title .logo{background:var(--blue);box-shadow:none;border-radius:5px}
+
+/* ---------- tipo: 400/500, 600 só para títulos; sem caixa alta espaçada, sem tracking negativo em texto pequeno ---------- */
+[data-theme="studio"] .card-head h2,[data-theme="studio"][data-variant="2"] .card-head h2,[data-theme="studio"] .fold-btn.pf-main h2{font-weight:600;letter-spacing:0}
+[data-theme="studio"] .pf-head{font-weight:500}
+[data-theme="studio"] .out-head{font-weight:600}
+[data-theme="studio"] .item .name{font-weight:500}
+[data-theme="studio"] .insp-title h3{text-transform:none;letter-spacing:0;font-size:12px;font-weight:500;color:var(--text-3)}
+[data-theme="studio"] .insp-foot .est b{font-weight:600;letter-spacing:0}
+[data-theme="studio"] .sheet-head h2,[data-theme="studio"] .power-in h2{font-weight:600;letter-spacing:0}
+[data-theme="studio"] .preset,[data-theme="studio"][data-variant="2"] .preset{font-weight:500}
+[data-theme="studio"][data-variant="2"] .badge{font-weight:500}
+[data-theme="studio"] .btn{font-weight:500}
+[data-theme="studio"] .name-input{font-weight:600}
+[data-theme="studio"] .thumb .hdr{font-weight:600;letter-spacing:0}
+[data-theme="studio"] .sec-label{font-weight:500}
+
+/* ---------- números técnicos em mono (assinatura: timecode) ---------- */
+[data-theme="studio"] .item .size,[data-theme="studio"] .out-head small.out-name,[data-theme="studio"] .pv-meta,[data-theme="studio"] .insp-foot .est b,[data-theme="studio"] .res-out,[data-theme="studio"] #tTotal b{font-family:var(--mono);font-variant-numeric:tabular-nums}
+[data-theme="studio"] .pv-meta{font-size:11.5px}
+[data-theme="studio"][data-variant="2"] .pv-meta .chip{font-size:11.5px}
+
+/* ---------- cor: um acento, usado pouco ---------- */
+/* valores sob o rótulo (2160 × 3840, 10-bit, 59,94 fps, .mp4) são informação, não ação */
+[data-theme="studio"] .res-out{color:var(--text-2)!important;font-weight:400;font-size:11px!important}
+/* destaque da prévia ("59,94 fps CFR") sem cor própria */
+[data-theme="studio"][data-variant="2"] .pv-meta .chip.hl{color:var(--text)}
+/* chave ligada: o acento, não o verde do iOS */
+[data-theme="studio"] .switch.on{background:var(--blue)}
+/* bolinhas dos presets: só a cor, sem halo nem brilho */
+[data-theme="studio"] .preset .pdot{box-shadow:none}
+[data-theme="studio"] .preset .ic{box-shadow:none}
+[data-theme="studio"] .preset-input{box-shadow:0 0 0 1px var(--stroke-2)}
+/* item escolhido: um degrau de superfície + fio, sem anel azul */
+[data-theme="studio"] .item.sel.primary{box-shadow:inset 0 0 0 1px var(--stroke-2)}
+/* "Aplicar a todos" é secundário: texto, cor do acento só no hover */
+[data-theme="studio"] .insp-title .link,[data-theme="studio"] .card-head .link{color:var(--text-2);font-weight:500}
+[data-theme="studio"] .insp-title .link:hover,[data-theme="studio"] .card-head .link:hover{color:var(--text);opacity:1}
+[data-theme="studio"][data-variant="2"] .btn.small.ghost{color:var(--text-2)}
+[data-theme="studio"][data-variant="2"] .btn.small.ghost:hover{color:var(--text);opacity:1}
+/* foco de teclado visível, dentro da paleta */
+[data-theme="studio"] .field:focus-within,[data-theme="studio"] .name-input:focus,[data-theme="studio"] .pf-input{box-shadow:0 0 0 2px color-mix(in srgb,var(--blue) 45%,transparent)}
+[data-theme="studio"] :focus-visible{outline:2px solid color-mix(in srgb,var(--blue) 60%,transparent);outline-offset:1px}
+
+/* ---------- profundidade: no escuro, degraus + fio, sem sombra grande ---------- */
+[data-theme="studio"] .frame,[data-theme="studio"][data-variant="2"] .frame{box-shadow:0 0 0 1px var(--stroke-2)}
+[data-theme="studio"] .frame.audio-card{background:var(--panel-2)}
+[data-theme="studio"] .menu{box-shadow:0 12px 32px rgba(0,0,0,.28),0 0 0 1px var(--stroke-2);border-radius:12px}
+[data-theme="studio"] .sheet{box-shadow:0 24px 64px rgba(0,0,0,.36),0 0 0 1px var(--stroke-2)}
+[data-theme="studio"] #tip,[data-theme="studio"] .toast{box-shadow:0 8px 24px rgba(0,0,0,.28),0 0 0 1px var(--stroke-2)}
+
+/* ---------- raios: controles 8, cartões 12, sem tudo em pílula ---------- */
+[data-theme="studio"] .btn,[data-theme="studio"][data-variant="2"] .btn{border-radius:10px}
+[data-theme="studio"] .btn.small{border-radius:8px}
+[data-theme="studio"] .field{border-radius:8px}
+[data-theme="studio"] .chip{border-radius:6px}
+[data-theme="studio"] .tag-btn{border-radius:4px;font-weight:500;letter-spacing:0}
+
+/* ---------- espaçamento na grade de 4 ---------- */
+[data-theme="studio"] .titlebar{padding:0 8px 0 16px}
+[data-theme="studio"] .field{padding:0 8px;gap:4px}
+[data-theme="studio"] .chips{gap:4px}
+[data-theme="studio"] .card-head{padding:16px 16px 8px}
+[data-theme="studio"][data-variant="2"] .card-head{padding:16px 16px 8px}
+[data-theme="studio"] .preset{gap:6px}
+[data-theme="studio"] .badge{gap:4px}
+[data-theme="studio"] .out-head{padding:4px 8px}
+
+/* ---------- movimento: explica, não enfeita ---------- */
+[data-theme="studio"] .item.enter{animation:stItemIn .32s var(--ease) both;animation-delay:var(--d,0ms)}
+@keyframes stItemIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+[data-theme="studio"] .badge.bump{animation:none}
+[data-theme="studio"] .frame.flip{animation:none}
+[data-theme="studio"] .titlebar,[data-theme="studio"] .main>*{animation:stEnter .4s var(--ease) both}
+@keyframes stEnter{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+[data-theme="studio"] .btn:active{transform:scale(.98)}
+[data-theme="studio"] .switch,[data-theme="studio"] .switch::after{transition-duration:.16s}

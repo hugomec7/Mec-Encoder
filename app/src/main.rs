@@ -120,7 +120,8 @@ const JOBS_README: &str = "Mec Encoder - pasta de tarefas (automação)\r\n\r\n\
 Com o Mec Encoder aberto, coloque aqui um arquivo .json e ele entra na fila e renderiza sozinho:\r\n\r\n\
 {\r\n  \"files\": [\"D:\\\\Brutos\\\\IMG_4821.MOV\", \"D:\\\\Brutos\\\\Cartao B\"],\r\n  \"preset\": \"RAW\"\r\n}\r\n\r\n\
 Opcional: \"outputFolder\": \"D:\\\\Renders\", \"keepTree\": true, \"suffix\": \"_{data}\" (ou false), \"subfolder\": \"proxy\" (ou false),\r\n\
-\"trim\": [12.5, 40], \"deleteSource\": false.\r\n\r\n\
+\"trim\": [12.5, 40] (ou varios trechos: [[0, 5], [12, 20]]), \"join\": true (junta os trechos num arquivo; sem isso sai um arquivo por trecho),\r\n\
+\"deleteSource\": false.\r\n\r\n\
 O andamento fica em <nome>.status.json (state: queued, running, done ou failed; items com status, progress, output e error).\r\n\
 O pedido vai para running\\ enquanto renderiza e para done\\ no fim. Pedido com erro vai para failed\\.\r\n\r\n\
 Linha de comando (sem abrir o app): bin\\mec.exe convert <arquivos ou pastas> --preset RAW   (mec.exe help)\r\n";
@@ -469,6 +470,8 @@ struct RenderResult {
     size: u64,
     deleted: bool,
     warnings: Vec<String>,
+    /// Todos os arquivos gravados (vários quando os trechos saem separados).
+    parts: Vec<PathBuf>,
 }
 
 type Children = Arc<Mutex<HashMap<u64, Child>>>;
@@ -489,7 +492,7 @@ fn log(app: &AppHandle, text: &str) {
 }
 
 /// Renderiza com o motor (mec_core::render) e, se o preset pedir, manda o original para a Lixeira.
-fn do_render(app: &AppHandle, engine: &Engine, info: &MediaInfo, cfg: &Preset, nm: &command::Naming, trim: Option<(f64, f64)>, id: u64,
+fn do_render(app: &AppHandle, engine: &Engine, info: &MediaInfo, cfg: &Preset, nm: &command::Naming, cuts: &[(f64, f64)], join: bool, id: u64,
              children: &Children, cancel: &Arc<AtomicBool>) -> Result<RenderResult, String> {
     let e = render::Engine {
         ffmpeg: engine.ffmpeg()?, ffprobe: engine.ffprobe()?,
@@ -501,19 +504,22 @@ fn do_render(app: &AppHandle, engine: &Engine, info: &MediaInfo, cfg: &Preset, n
     let logf = |s: &str| log(app, s);
     let started = |p: &std::path::Path| track(app, id, Some(p.to_path_buf()));
     let h = render::Hooks { id, children: &**children, cancel: &**cancel, progress: &progress, log: &logf, started: &started };
-    let d = render::render(&e, info, cfg, nm, trim, &h)?;
+    // um trecho (ou nenhum): render normal; vários: separados (_01, _02...) ou juntos num arquivo
+    let d = render::render_cuts(&e, info, cfg, nm, cuts, join, &h)?;
     let mut warnings = d.warnings;
     let mut deleted = false;
     if d.delete_source {
         // Vai para a Lixeira, não some de vez.
         match trash::delete(&info.path) { Ok(()) => deleted = true, Err(_) => warnings.push("delete-failed".into()) }
     }
-    Ok(RenderResult { output: d.output, size: d.size, deleted, warnings })
+    Ok(RenderResult { output: d.output, size: d.size, deleted, warnings, parts: d.parts })
 }
 
 /// Renderiza um vídeo e só volta quando termina. A fila (ordem, um vídeo só, parar) é controlada pela interface.
 #[tauri::command]
-async fn render(app: AppHandle, state: State<'_, AppState>, id: u64, cfg: Preset, naming: Option<command::Naming>, trim: Option<Vec<f64>>) -> Result<RenderResult, String> {
+/// `cuts`: trechos [[início, fim], ...] em segundos (vazio = arquivo inteiro); `join`: juntar num arquivo só.
+async fn render(app: AppHandle, state: State<'_, AppState>, id: u64, cfg: Preset, naming: Option<command::Naming>,
+                trim: Option<Vec<f64>>, cuts: Option<Vec<Vec<f64>>>, join: Option<bool>) -> Result<RenderResult, String> {
     let info = item(&state, id)?;
     let engine = state.engine.clone();
     let children = state.children.clone();
@@ -521,9 +527,11 @@ async fn render(app: AppHandle, state: State<'_, AppState>, id: u64, cfg: Preset
     // Só zera o "parar" quando nada está rodando (com vários vídeos ao mesmo tempo).
     if children.lock().unwrap().is_empty() { cancel.store(false, Ordering::SeqCst); }
     let nm = naming.unwrap_or_default();
-    let trim = trim.filter(|t| t.len() == 2).map(|t| (t[0], t[1]));
+    let mut cuts: Vec<(f64, f64)> = cuts.unwrap_or_default().into_iter().filter(|t| t.len() == 2).map(|t| (t[0], t[1])).collect();
+    if cuts.is_empty() { if let Some(t) = trim.filter(|t| t.len() == 2) { cuts.push((t[0], t[1])); } }
+    let join = join.unwrap_or(false);
     let res = tauri::async_runtime::spawn_blocking(move || {
-        let r = do_render(&app, &engine, &info, &cfg, &nm, trim, id, &children, &cancel);
+        let r = do_render(&app, &engine, &info, &cfg, &nm, &cuts, join, id, &children, &cancel);
         track(&app, id, None);
         if let Err(e) = &r { if e != "cancelled" { log(&app, &format!("{} | error: {}", info.path.display(), command::explain(e))); } }
         r

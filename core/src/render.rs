@@ -71,6 +71,8 @@ pub struct Done {
     pub seconds: f64,
     /// O preset pede para mandar o original para a Lixeira (nunca quando é só um trecho).
     pub delete_source: bool,
+    /// Todos os arquivos gravados (mais de um quando os trechos saem separados).
+    pub parts: Vec<PathBuf>,
 }
 
 fn last_lines(s: &str, n: usize) -> String {
@@ -111,31 +113,111 @@ pub fn run_ffmpeg(ffmpeg: &Path, plan: &Plan, duration: f64, mode: &str, h: &Hoo
     }
 }
 
-/// Renderiza `info` com o preset. `trim` = (início, fim) em segundos.
-pub fn render(e: &Engine, info: &MediaInfo, cfg: &Preset, nm: &Naming, trim: Option<(f64, f64)>, h: &Hooks) -> Result<Done, String> {
-    let name = info.path.display().to_string();
-    let log = |s: String| (h.log)(&format!("{name} | {s}"));
-    // Cortar trecho: só o pedaço entre início e fim (imagens não têm trecho).
-    let trim = if info.is_image { None } else { trim.and_then(|(a, b)| command::trim_range(info, a, b)) };
-    let dur = trim.map_or(info.duration, |(a, b)| b - a);
-    let cut = |plan: &mut Plan| if let Some((a, b)) = trim { command::apply_trim(plan, info, a, b); };
-    // o arquivo novo é conferido contra a duração do trecho
-    let mut expect = info.clone();
-    expect.duration = dur;
+/// Confere o arquivo e o preset e troca as opções "Original" pelos valores deste arquivo.
+fn prepare(info: &MediaInfo, cfg: &Preset, cutting: bool) -> Result<Preset, String> {
     if !info.path.exists() { return Err("source-missing".into()); }
-    // Troca as opções "Original" (codec, croma, profundidade, fps, formato) pelos valores deste arquivo.
     let mut cfg = command::resolve(info, cfg);
     // Só um trecho: o original nunca vai para a Lixeira.
-    if trim.is_some() { cfg.output.delete_source = false; }
-    let cfg = &cfg;
+    if cutting { cfg.output.delete_source = false; }
     if info.is_image && !cfg.is_image() { return Err("need-image-preset".into()); }
     if cfg.is_image() && !info.is_image { return Err("not-image".into()); }
     if cfg.is_audio() && info.audio.is_empty() { return Err("no-audio".into()); }
-    let out = if cfg.is_audio() && cfg.audio.codec == "copy" {
+    Ok(cfg)
+}
+
+/// Onde o arquivo novo vai ficar (preset já resolvido).
+fn out_path(info: &MediaInfo, cfg: &Preset, nm: &Naming) -> PathBuf {
+    if cfg.is_audio() && cfg.audio.codec == "copy" {
         // cópia de áudio: a extensão segue o codec de verdade
         let ext = command::audio_ext(&info.path, cfg, info.audio.first().map_or("", |a| a.codec.as_str()));
         command::output_path_for(&info.path, Some(info), cfg, nm).with_extension(ext)
-    } else { command::output_path_for(&info.path, Some(info), cfg, nm) };
+    } else { command::output_path_for(&info.path, Some(info), cfg, nm) }
+}
+
+/// Renderiza `info` com o preset. `trim` = (início, fim) em segundos.
+pub fn render(e: &Engine, info: &MediaInfo, cfg: &Preset, nm: &Naming, trim: Option<(f64, f64)>, h: &Hooks) -> Result<Done, String> {
+    // Cortar trecho: só o pedaço entre início e fim (imagens não têm trecho).
+    let trim = if info.is_image { None } else { trim.and_then(|(a, b)| command::trim_range(info, a, b)) };
+    let cfg = prepare(info, cfg, trim.is_some())?;
+    let out = out_path(info, &cfg, nm);
+    render_to(e, info, &cfg, &out, trim, false, h)
+}
+
+/// Vários trechos do mesmo arquivo. `join`: um arquivo só com os trechos em ordem;
+/// senão um arquivo por trecho (_01, _02...). O `Done` traz o primeiro arquivo e, em `parts`, todos.
+pub fn render_cuts(e: &Engine, info: &MediaInfo, cfg: &Preset, nm: &Naming, cuts: &[(f64, f64)], join: bool, h: &Hooks) -> Result<Done, String> {
+    let mut cuts: Vec<(f64, f64)> = cuts.iter().filter_map(|&(a, b)| command::trim_range(info, a, b)).collect();
+    cuts.sort_by(|x, y| x.0.total_cmp(&y.0));
+    if cuts.len() <= 1 { return render(e, info, cfg, nm, cuts.first().copied(), h); }
+    let total: f64 = cuts.iter().map(|(a, b)| b - a).sum();
+    let cfg = prepare(info, cfg, true)?;
+    let started = Instant::now();
+    let mut done_secs = 0.0;
+    let mut parts = Vec::new();
+    let mut warnings = Vec::new();
+    let mut size = 0;
+    let mut mode = String::new();
+    let final_out = if join { Some(out_path(info, &cfg, nm)) } else { None };
+    for (i, &(a, b)) in cuts.iter().enumerate() {
+        // andamento de todos os trechos numa barra só
+        let offset = done_secs;
+        let scaled = |t: &Tick| (h.progress)(&Tick { p: ((offset + t.p * (b - a)) / total).min(1.0), eta: t.eta.map(|x| x + (total - offset - (b - a)) / t.speed.max(0.1)), ..t.clone() });
+        let hh = Hooks { id: h.id, children: h.children, cancel: h.cancel, progress: &scaled, log: h.log, started: h.started };
+        let out = match &final_out {
+            // juntar: cada trecho vira um arquivo escondido ao lado do final, depois são colados sem reconverter
+            Some(f) => f.with_file_name(format!(".{}.part{:02}.{}", f.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default(), i + 1,
+                                               if cfg.is_audio() { f.extension().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default() } else { "mov".into() })),
+            None => out_path(info, &cfg, &Naming { part: (i + 1) as u32, ..nm.clone() }),
+        };
+        match render_to(e, info, &cfg, &out, Some((a, b)), join && !cfg.is_audio(), &hh) {
+            Ok(d) => { size += d.size; mode = d.mode; warnings.extend(d.warnings); parts.push(d.output); }
+            Err(err) => {
+                if final_out.is_some() { for p in &parts { let _ = std::fs::remove_file(p); } }
+                return Err(err);
+            }
+        }
+        done_secs += b - a;
+    }
+    let Some(out) = final_out else {
+        return Ok(Done { output: parts[0].clone(), size, warnings, mode, seconds: started.elapsed().as_secs_f64(), delete_source: false, parts });
+    };
+    // colar os trechos (mesmo codec e formato, então é cópia direta)
+    (h.started)(&out);
+    let dir = out.parent().map(Path::to_path_buf).unwrap_or_default();
+    let list = dir.join(format!(".{}.parts.txt", out.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default()));
+    let text: String = parts.iter().map(|p| format!("file '{}'\n", p.file_name().map(|n| n.to_string_lossy().replace('\'', "'\\''")).unwrap_or_default())).collect();
+    let cleanup = || { for p in &parts { let _ = std::fs::remove_file(p); } let _ = std::fs::remove_file(&list); };
+    if let Err(err) = std::fs::write(&list, text) { cleanup(); return Err(err.to_string()); }
+    let fps = info.video.as_ref().map_or(30.0, |v| if v.fps_nominal > 0.0 { v.fps_nominal } else { v.fps });
+    let tc = (cfg.metadata && !info.timecode.is_empty()).then(|| command::shift_timecode(&info.timecode, cuts[0].0, fps));
+    let plan = Plan { args: command::concat_args(&list, &out, info, &cfg, tc.as_deref()), warnings: vec![], output: out.clone(), width: 0, height: 0 };
+    (h.log)(&format!("{} | join {} parts | ffmpeg {}", info.path.display(), parts.len(), plan.args.join(" ")));
+    let res = run_ffmpeg(&e.ffmpeg, &plan, total, "join", h);
+    cleanup();
+    if let Err(err) = res { let _ = std::fs::remove_file(&out); return Err(err); }
+    let mut expect = info.clone();
+    expect.duration = total;
+    let check = probe::probe(&e.ffprobe, &out).map_err(|err| format!("output check failed: {err}"))
+        .and_then(|o| command::verify(&expect, &o).map_err(|err| format!("output check failed: {err}")));
+    if let Err(err) = check { let _ = std::fs::remove_file(&out); return Err(err); }
+    let size = std::fs::metadata(&out).map(|m| m.len()).unwrap_or(0);
+    Ok(Done { output: out.clone(), size, warnings, mode, seconds: started.elapsed().as_secs_f64(), delete_source: false, parts: vec![out] })
+}
+
+/// Renderiza para um caminho já escolhido (preset já resolvido).
+/// `pcm`: grava o áudio em PCM (trechos que depois são colados: sem o atraso do AAC entre um e outro).
+fn render_to(e: &Engine, info: &MediaInfo, cfg: &Preset, out: &Path, trim: Option<(f64, f64)>, pcm: bool, h: &Hooks) -> Result<Done, String> {
+    let name = info.path.display().to_string();
+    let log = |s: String| (h.log)(&format!("{name} | {s}"));
+    let dur = trim.map_or(info.duration, |(a, b)| b - a);
+    let cut = |plan: &mut Plan| {
+        if let Some((a, b)) = trim { command::apply_trim(plan, info, a, b); }
+        if pcm { command::audio_to_pcm(plan); }
+    };
+    // o arquivo novo é conferido contra a duração do trecho
+    let mut expect = info.clone();
+    expect.duration = dur;
+    let out = out.to_path_buf();
     if let Some(dir) = out.parent() { std::fs::create_dir_all(dir).map_err(|err| format!("{} ({})", err, dir.display()))?; }
     (h.started)(&out);
     let started = Instant::now();
@@ -144,7 +226,7 @@ pub fn render(e: &Engine, info: &MediaInfo, cfg: &Preset, nm: &Naming, trim: Opt
         let out_info = probe::probe(&e.ffprobe, &out).map_err(|err| format!("output check failed: {err}"))?;
         command::verify(&expect, &out_info).map_err(|err| format!("output check failed: {err}"))?;
         let size = std::fs::metadata(&out).map(|m| m.len()).unwrap_or(0);
-        Ok(Done { output: out.clone(), size, warnings, mode: mode.into(), seconds: started.elapsed().as_secs_f64(), delete_source: cfg.output.delete_source })
+        Ok(Done { output: out.clone(), size, warnings, mode: mode.into(), seconds: started.elapsed().as_secs_f64(), delete_source: cfg.output.delete_source, parts: vec![out.clone()] })
     };
     let fail = |mode: &str, err: String| -> String {
         let _ = std::fs::remove_file(&out);

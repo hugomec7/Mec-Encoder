@@ -320,7 +320,7 @@ fn render_api() {
                     started: &|p| { *started.lock().unwrap() = Some(p.to_path_buf()); } };
     let mut p = Preset::defaults().into_iter().find(|p| p.id == "iphone-4k60").unwrap();
     p.output.folder = mec_core::preset::Toggle { on: true, text: d.join("saida").to_string_lossy().into_owned() };
-    let nm = mec_core::Naming { dir: "Cartao/A".into(), n: 1, date: "2026-10-27".into(), time: "10-00".into() };
+    let nm = mec_core::Naming { dir: "Cartao/A".into(), n: 1, date: "2026-10-27".into(), time: "10-00".into(), part: 0 };
     let done = render(&e, &info, &p, &nm, Some((0.5, 2.5)), &h).unwrap();
     assert_eq!(done.output.parent().unwrap(), d.join("saida").join("Cartao").join("A"));
     assert_eq!(started.lock().unwrap().as_deref(), Some(done.output.as_path()));
@@ -332,4 +332,83 @@ fn render_api() {
     // arquivo que não existe: erro com código
     let mut gone = info.clone(); gone.path = d.join("nao-existe.mov");
     assert_eq!(render(&e, &gone, &p, &nm, None, &h).unwrap_err(), "source-missing");
+}
+
+/// Prévia (e miniatura) de imagem: um JPEG com o preset de imagem e com o padrão de vídeo.
+#[test]
+fn image_preview() {
+    let (Some(ff), Some(fp)) = (tool("ffmpeg"), tool("ffprobe")) else { eprintln!("sem ffmpeg, pulando"); return };
+    let d = dir("imgprev");
+    for (name, src) in [("a.png", "testsrc2=s=800x600,format=rgba"), ("b.jpg", "testsrc2=s=1080x1920")] {
+        let f = d.join(name);
+        assert!(Command::new(&ff).args(["-v", "error", "-y", "-f", "lavfi", "-i", src, "-frames:v", "1"]).arg(&f).status().unwrap().success());
+        let info = probe(&fp, &f).unwrap();
+        for p in [Preset::default(), Preset::image_defaults()[0].clone()] {
+            for out in [false, true] {
+                let args = mec_core::command::preview_args(&info, &p, 0.0, out, 480);
+                let o = Command::new(&ff).args(&args).output().unwrap();
+                assert!(o.status.success() && o.stdout.len() > 1000, "{name} {} out={out}: {}\n{}", p.id, String::from_utf8_lossy(&o.stderr), args.join(" "));
+            }
+        }
+    }
+}
+
+/// Vários trechos: separados (_01, _02) e juntos num arquivo só.
+#[test]
+fn cuts_split_and_join() {
+    use mec_core::render::{render_cuts, Engine, Hooks};
+    use std::sync::{atomic::AtomicBool, Mutex};
+    let (Some(ff), Some(fp)) = (tool("ffmpeg"), tool("ffprobe")) else { eprintln!("sem ffmpeg, pulando"); return };
+    let d = dir("cuts");
+    let src = make_iphone_like(&ff, &d, false);
+    let info = probe(&fp, &src).unwrap();
+    let e = Engine { ffmpeg: ff, ffprobe: fp.clone(), encoder: Encoder::Cpu { preset: "ultrafast".into() }, gpu: None };
+    let children = Mutex::new(std::collections::HashMap::new());
+    let cancel = AtomicBool::new(false);
+    let last = Mutex::new(0.0f64);
+    let h = Hooks { id: 1, children: &children, cancel: &cancel, progress: &|t| { let mut l = last.lock().unwrap(); assert!(t.p <= 1.0); *l = t.p; }, log: &|_| {}, started: &|_| {} };
+    let p = Preset::defaults().into_iter().find(|p| p.id == "iphone-4k60").unwrap();
+    let nm = mec_core::Naming::default();
+    let cuts = [(2.0, 2.8), (0.2, 1.0)];
+    // separados, em ordem de tempo
+    let s = render_cuts(&e, &info, &p, &nm, &cuts, false, &h).unwrap();
+    assert_eq!(s.parts.len(), 2);
+    let names: Vec<String> = s.parts.iter().map(|p| p.file_name().unwrap().to_string_lossy().into_owned()).collect();
+    assert!(names[0].contains("_01.") && names[1].contains("_02."), "{names:?}");
+    for part in &s.parts { let o = probe(&fp, part).unwrap(); assert!((o.duration - 0.8).abs() < 0.1, "{}", o.duration); }
+    assert!(!s.delete_source);
+    // juntos: um arquivo com a soma, sem sobras escondidas
+    let j = render_cuts(&e, &info, &p, &nm, &cuts, true, &h).unwrap();
+    assert_eq!(j.parts.len(), 1);
+    let o = probe(&fp, &j.output).unwrap();
+    assert!((o.duration - 1.6).abs() < 0.15, "duração juntada: {}", o.duration);
+    assert!(!o.audio.is_empty() && o.video.is_some());
+    let left: Vec<_> = std::fs::read_dir(&d).unwrap().flatten().map(|x| x.file_name().to_string_lossy().into_owned()).filter(|n| n.starts_with('.')).collect();
+    assert!(left.is_empty(), "sobrou: {left:?}");
+}
+
+/// Juntar trechos de um arquivo com PCM e timecode (tipo FX30) num .mp4: áudio continua PCM, timecode do 1º trecho.
+#[test]
+fn cuts_join_pcm_timecode() {
+    use mec_core::render::{render_cuts, Engine, Hooks};
+    use std::sync::{atomic::AtomicBool, Mutex};
+    let (Some(ff), Some(fp)) = (tool("ffmpeg"), tool("ffprobe")) else { eprintln!("sem ffmpeg, pulando"); return };
+    let d = dir("cutspcm");
+    let src = d.join("C0001.MP4");
+    assert!(Command::new(&ff).args(["-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=s=640x360:r=60000/1001:d=3",
+        "-f", "lavfi", "-i", "sine=f=440:sample_rate=48000:d=3", "-c:v", "libx264", "-preset", "ultrafast", "-c:a", "pcm_s16be",
+        "-timecode", "07:51:07:46", "-f", "mov", "-brand", "mp42"]).arg(&src).status().unwrap().success());
+    let info = probe(&fp, &src).unwrap();
+    let e = Engine { ffmpeg: ff, ffprobe: fp.clone(), encoder: Encoder::Cpu { preset: "ultrafast".into() }, gpu: None };
+    let children = Mutex::new(std::collections::HashMap::new());
+    let cancel = AtomicBool::new(false);
+    let h = Hooks { id: 1, children: &children, cancel: &cancel, progress: &|_| {}, log: &|_| {}, started: &|_| {} };
+    let mut p = Preset::defaults().into_iter().find(|p| p.id == "iphone-4k60").unwrap();
+    p.container = "source".into(); p.audio.codec = "copy".into(); p.metadata = true;
+    let j = render_cuts(&e, &info, &p, &mec_core::Naming::default(), &[(1.0, 1.5), (2.0, 2.5)], true, &h).unwrap();
+    let o = probe(&fp, &j.output).unwrap();
+    assert!(j.output.to_string_lossy().ends_with(".mp4"));
+    assert!((o.duration - 1.0).abs() < 0.12, "{}", o.duration);
+    assert_eq!(o.audio[0].codec, "pcm_s16be");
+    assert!(o.timecode.starts_with("07:51:08:"), "{}", o.timecode);
 }
