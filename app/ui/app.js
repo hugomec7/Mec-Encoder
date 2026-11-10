@@ -2441,7 +2441,6 @@
           if (twin && q.cfg.output.deleteSource) toast(L.keptForCopy);
           const naming = Object.assign({ dir: q.dir || '', n: S.queue.indexOf(q) + 1 }, nowTags());
           jobUpdate(q);
-          if (cutsOf(q) && q.cfg.output.deleteSource) toast(L.trimKeep);
           const r = await inv('render', { id: q.id, naming, cuts: cutsOf(q) || [], join: !!q.cutJoin, cfg: twin ? Object.assign(clone(q.cfg), { output: Object.assign(clone(q.cfg.output), { deleteSource: false }) }) : q.cfg });
           q.status = 'done'; q.p = 1; q.out = r.output; q.parts = r.parts && r.parts.length > 1 ? r.parts : null; q.outMb = r.size / 1e6; q.took = elapsedOf(q); J.done++; jobUpdate(q);
           if (r.deleted) toast(L.deletedOrig);

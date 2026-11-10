@@ -326,7 +326,11 @@ fn render_api() {
     assert_eq!(started.lock().unwrap().as_deref(), Some(done.output.as_path()));
     assert!(done.size > 0);
     assert_eq!(done.mode, "cpu-encode");
-    assert!(!done.delete_source, "trecho nunca apaga o original");
+    assert!(!done.delete_source, "preset sem Apagar o original");
+    // com "Apagar o original" ligado, um corte também apaga (a interface manda para a Lixeira)
+    let mut pd = p.clone(); pd.output.delete_source = true;
+    let dd = render(&e, &info, &pd, &nm, Some((0.5, 2.5)), &h).unwrap();
+    assert!(dd.delete_source, "corte com Apagar o original ligado");
     let o = probe(&tool("ffprobe").unwrap(), &done.output).unwrap();
     assert!((o.duration - 2.0).abs() < 0.1, "{}", o.duration);
     // arquivo que não existe: erro com código
@@ -377,6 +381,10 @@ fn cuts_split_and_join() {
     assert!(names[0].contains("_01.") && names[1].contains("_02."), "{names:?}");
     for part in &s.parts { let o = probe(&fp, part).unwrap(); assert!((o.duration - 0.8).abs() < 0.1, "{}", o.duration); }
     assert!(!s.delete_source);
+    let mut pd = p.clone(); pd.output.delete_source = true;
+    let sd = render_cuts(&e, &info, &pd, &nm, &cuts, false, &h).unwrap();
+    assert!(sd.delete_source, "vários cortes com Apagar o original ligado");
+    for part in &sd.parts { let _ = std::fs::remove_file(part); }
     // juntos: um arquivo com a soma, sem sobras escondidas
     let j = render_cuts(&e, &info, &p, &nm, &cuts, true, &h).unwrap();
     assert_eq!(j.parts.len(), 1);

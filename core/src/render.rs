@@ -117,8 +117,9 @@ pub fn run_ffmpeg(ffmpeg: &Path, plan: &Plan, duration: f64, mode: &str, h: &Hoo
 fn prepare(info: &MediaInfo, cfg: &Preset, cutting: bool) -> Result<Preset, String> {
     if !info.path.exists() { return Err("source-missing".into()); }
     let mut cfg = command::resolve(info, cfg);
-    // Só um trecho: o original nunca vai para a Lixeira.
-    if cutting { cfg.output.delete_source = false; }
+    // Com cortes, "Apagar o original" vale do mesmo jeito: ele só vai para a Lixeira (dá para recuperar)
+    // depois que todos os cortes saíram e foram conferidos.
+    let _ = cutting;
     if info.is_image && !cfg.is_image() { return Err("need-image-preset".into()); }
     if cfg.is_image() && !info.is_image { return Err("not-image".into()); }
     if cfg.is_audio() && info.audio.is_empty() { return Err("no-audio".into()); }
@@ -179,7 +180,7 @@ pub fn render_cuts(e: &Engine, info: &MediaInfo, cfg: &Preset, nm: &Naming, cuts
         done_secs += b - a;
     }
     let Some(out) = final_out else {
-        return Ok(Done { output: parts[0].clone(), size, warnings, mode, seconds: started.elapsed().as_secs_f64(), delete_source: false, parts });
+        return Ok(Done { output: parts[0].clone(), size, warnings, mode, seconds: started.elapsed().as_secs_f64(), delete_source: cfg.output.delete_source, parts });
     };
     // colar os trechos (mesmo codec e formato, então é cópia direta)
     (h.started)(&out);
@@ -201,7 +202,7 @@ pub fn render_cuts(e: &Engine, info: &MediaInfo, cfg: &Preset, nm: &Naming, cuts
         .and_then(|o| command::verify(&expect, &o).map_err(|err| format!("output check failed: {err}")));
     if let Err(err) = check { let _ = std::fs::remove_file(&out); return Err(err); }
     let size = std::fs::metadata(&out).map(|m| m.len()).unwrap_or(0);
-    Ok(Done { output: out.clone(), size, warnings, mode, seconds: started.elapsed().as_secs_f64(), delete_source: false, parts: vec![out] })
+    Ok(Done { output: out.clone(), size, warnings, mode, seconds: started.elapsed().as_secs_f64(), delete_source: cfg.output.delete_source, parts: vec![out] })
 }
 
 /// Renderiza para um caminho já escolhido (preset já resolvido).
