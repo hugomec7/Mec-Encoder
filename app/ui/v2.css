@@ -705,3 +705,9 @@
 .trim-btn,.pl-skip,.open-cut{white-space:nowrap;flex:none}
 .cutter .ctl.play{width:42px;height:34px}
 @container tp (max-width:940px){.vol-r{width:52px}.pl-tools .meter{display:none!important}}
+/* Início e Fim com o mesmo espaço dos outros botões de transporte */
+.cutter #bIn,.cutter #bOut{margin:0}
+.cutter .controls .mid{gap:8px}
+.cutter #bCut{margin-left:16px}
+.cutter .controls .mid{gap:6px;margin-left:14px}
+.cutter .ctl.play{margin:0}
