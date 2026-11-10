@@ -454,3 +454,10 @@
 .zbar i{position:absolute;top:0;bottom:0;min-width:8px;border-radius:2px;background:var(--text-3)}
 .zbar:hover i,.zbar:active i{background:var(--text-2)}
 .timeline.zoomed{cursor:crosshair}
+
+/* zoom na prévia */
+.stage .frame.pz{cursor:grab}
+.stage .frame.pz.grabbing{cursor:grabbing}
+.stage .frame .pv-img{will-change:transform}
+.stage[data-zoom]::after{content:attr(data-zoom);position:absolute;right:12px;bottom:10px;padding:3px 8px;border-radius:6px;
+  font:500 11px/16px var(--mono);color:#fff;background:rgba(0,0,0,.55);pointer-events:none;z-index:4}

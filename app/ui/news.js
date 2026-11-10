@@ -1,6 +1,29 @@
 // Gerado por docs/release-notes/make_news.py — não edite à mão.
 window.MEC_NEWS = [
  {
+  "version": "0.2.7",
+  "en": [
+   "**Test version**: not offered by the app's automatic update yet. Download it from this page if you want to try it.",
+   "**Several cuts in the same video**: Ctrl+K (or the scissors button) starts a new cut at the playhead (inside a cut, it splits it in two); I and O move the start and end of the selected cut; drag the edges to adjust. Under the preview, the cuts menu chooses **one file per cut** (_01, _02...) or **join the cuts into one file**, and removes cuts. Joined cuts keep PCM audio from cameras like the FX30 and the camera timecode of the first cut.",
+   "**Timeline zoom**: mouse wheel over the timeline zooms where the mouse is; Shift+wheel (or the small bar under it) moves sideways; = and - zoom on the playhead; \\ shows everything. Up close each frame shows as a stripe, for frame-exact cuts.",
+   "**Preview zoom**: mouse wheel over the video zooms in (sharper preview); drag to move; double-click to go back. In Compare, both sides move together.",
+   "**The cut is yellow**: the marked part of the timeline is yellow, exactly what will be rendered. The blue area up to the playhead is gone.",
+   "**Studio theme** (Settings › Appearance): graphite, quieter colors, technical numbers in a monospaced font. The other themes did not change.",
+   "**Fixes**: image preview and thumbnail (JPG came out empty); a preset's color now changes right away, also while editing the preset.",
+   "Command line: `--trim` can be repeated for several cuts, and `--join` joins them. Jobs folder: `\"trim\"` accepts a list of cuts and `\"join\": true`."
+  ],
+  "pt": [
+   "**Versão de teste**: a atualização automática do app ainda não oferece esta versão. Baixe por esta página se quiser testar.",
+   "**Vários cortes no mesmo vídeo**: Ctrl+K (ou o botão da tesoura) começa um trecho novo na agulha (dentro de um trecho, divide em dois); I e O mudam o início e o fim do trecho escolhido; arraste as bordas para ajustar. Embaixo da prévia, o menu dos trechos escolhe **um arquivo por trecho** (_01, _02...) ou **juntar os trechos num arquivo**, e tira trechos. Trechos juntos mantêm o áudio PCM de câmeras como a FX30 e o timecode do primeiro trecho.",
+   "**Zoom na linha do tempo**: rodinha do mouse em cima da linha do tempo dá zoom onde o mouse está; Shift+rodinha (ou a barrinha embaixo) anda para os lados; = e - dão zoom na agulha; \\ mostra tudo. De perto cada quadro aparece como uma faixa, para cortar no quadro exato.",
+   "**Zoom na prévia**: rodinha em cima do vídeo aproxima (a prévia vem mais nítida); arraste para andar; duplo clique volta. No Comparar, os dois lados andam juntos.",
+   "**Trecho em amarelo**: a parte marcada da linha do tempo fica amarela, exatamente o que vai ser renderizado. Saiu a faixa azul até a agulha.",
+   "**Tema Estúdio** (Configurações › Aparência): grafite, cores mais calmas, números técnicos em fonte mono. Os outros temas não mudaram.",
+   "**Correções**: prévia e miniatura de imagem (JPG saía vazio); a cor do preset muda na hora, também editando o preset.",
+   "Linha de comando: `--trim` pode repetir para vários trechos, e `--join` junta. Pasta de tarefas: `\"trim\"` aceita uma lista de trechos e `\"join\": true`."
+  ]
+ },
+ {
   "version": "0.2.6",
   "en": [
    "**Watch folders** (Settings): pick a folder and a preset; new files that land there are converted by themselves. It waits for the copy to finish, looks only at the folder itself (not subfolders), and files that were already there are left alone. Files that arrive while the app is closed are converted when it opens. Each folder can be turned on/off.",
@@ -105,27 +128,6 @@ window.MEC_NEWS = [
    "**Presets protegidos**: se o arquivo de presets não puder ser lido por inteiro, o app guarda uma cópia (presets.broken-….json) e avisa, em vez de voltar aos padrões sem dizer nada. Um preset com problema não afeta mais os outros.",
    "**Padrões novos para quem baixar** (só na primeira vez): RAW, Backup, Proxy, Meta Glass e os presets de áudio. Todos os de vídeo usam H.265 4:2:0 com profundidade Original, então rodam pela placa em qualquer RTX 20/30/40/50, e o Apagar o original vem desligado. Numa RTX 50 entra também um preset \"Igual à câmera\" (4:2:2).",
    "O aviso de CPU agora diz o motivo certo (4:2:2 ou H.264 10-bit) e o que mudar para usar a placa. A linha embaixo da prévia sempre mostra o croma (4:2:0 ou 4:2:2)."
-  ]
- },
- {
-  "version": "0.1.8",
-  "en": [
-   "**\"Like the camera\" (e.g. Sony FX30 XAVC S)**: Codec, Chroma, Bit depth, FPS and Format now have **Source**. With all of them on Source, an FX30 file comes out H.264 4:2:2 10-bit, upright, in .mp4.",
-   "New **Chroma** option: Source · 4:2:0 · 4:2:2. H.264 can now be 10-bit.",
-   "On RTX 20/30/40 cards, 4:2:2 and 10-bit H.264 are encoded on the CPU (x264/x265), because their NVENC can't encode them. The app shows an orange warning. RTX 50 encodes them on the GPU.",
-   "New **Format** option (Output panel): Source · MP4 · MOV. Source keeps the file's extension (.MP4 stays .mp4, iPhone .MOV stays .mov).",
-   "**Copied PCM audio in .mp4** is now written like Sony does (\"twos\"), bit-identical to the original.",
-   "**Camera timecode** is kept (e.g. FX30 07:51:07:46), so clips sync in Premiere.",
-   "**AAC audio**: new **Quality** (Source · 128–320 kb/s) and **Sample rate** (Source · 44.1 · 48 kHz). Source uses the original audio's kb/s and rate. **Copy** is still the exact copy."
-  ],
-  "pt": [
-   "**\"Igual à câmera\" (ex.: Sony FX30 XAVC S)**: Codec, Croma, Profundidade, FPS e Formato agora têm **Original**. Com tudo em Original, um arquivo da FX30 sai H.264 4:2:2 10-bit, em pé, em .mp4.",
-   "Nova opção **Croma**: Original · 4:2:0 · 4:2:2. O H.264 agora também pode ser 10-bit.",
-   "Nas RTX 20/30/40, 4:2:2 e H.264 10-bit são gravados pela CPU (x264/x265), porque a NVENC delas não grava esses formatos. O app avisa em laranja. As RTX 50 gravam pela placa.",
-   "Nova opção **Formato** (painel Saída): Original · MP4 · MOV. Original mantém a extensão do arquivo (.MP4 continua .mp4, .MOV do iPhone continua .mov).",
-   "**Áudio PCM copiado em .mp4** agora é gravado do jeito da Sony (\"twos\"), idêntico bit a bit ao original.",
-   "O **timecode da câmera** é mantido (ex.: FX30 07:51:07:46), para sincronizar no Premiere.",
-   "**Áudio AAC**: nova **Qualidade** (Original · 128–320 kb/s) e **Taxa** (Original · 44,1 · 48 kHz). Original usa os kb/s e a taxa do áudio original. **Copiar** continua sendo a cópia exata."
   ]
  }
 ];

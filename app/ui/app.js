@@ -995,15 +995,53 @@
   const chip = (txt, c, ico) => `<span class="chip ${c ? 'hl' : ''}" ${c ? `style="--c:${c}"` : ''}>${ico || ''}${txt}</span>`;
   /* prévia: mostra o Resultado; "Comparar" põe o Original ao lado */
   const pvSt = { in: { timer: 0, key: '', seq: 0 }, out: { timer: 0, key: '', seq: 0 } };
+  /* Zoom na prévia: rodinha em cima do vídeo aproxima no ponto do mouse; arrastar anda; duplo clique volta.
+     No "Comparar" os dois lados andam juntos. Com zoom a prévia vem em resolução maior. */
+  S.pz = { z: 1, x: 0, y: 0 };
+  const pzMax = () => (S.pz.z > 2.5 ? 3840 : S.pz.z > 1.2 ? 1920 : 960);
+  function applyPz() {
+    const { z, x, y } = S.pz; const tf = z > 1.001 ? `scale(${z}) translate(${-x * 100}%, ${-y * 100}%)` : '';
+    $$('.stage .frame').forEach((f) => {
+      f.classList.toggle('pz', z > 1.001);
+      f.querySelectorAll('img.pv-img, svg.scene, .grade').forEach((el) => { el.style.transformOrigin = '0 0'; el.style.transform = tf; });
+    });
+    const st = $('.stage'); if (z > 1.001) st.dataset.zoom = `${z < 10 ? z.toFixed(1).replace('.', S.set.lang === 'pt' ? ',' : '.') : Math.round(z)}×`; else delete st.dataset.zoom;
+  }
+  function setPz(z, mx, my) {
+    const o = S.pz; z = clamp(z, 1, 8);
+    // o ponto da imagem embaixo do mouse continua embaixo do mouse
+    const px = o.x + mx / o.z; const py = o.y + my / o.z;
+    S.pz = { z, x: clamp(px - mx / z, 0, 1 - 1 / z), y: clamp(py - my / z, 0, 1 - 1 / z) };
+    applyPz();
+    const q = selItem(); if (q && REAL) requestFrames(q);
+  }
+  $('.stage').addEventListener('wheel', (e) => {
+    const f = e.target.closest('.frame'); const q = selItem(); if (!f || !q || q.src.audioOnly) return;
+    e.preventDefault();
+    const r = f.getBoundingClientRect();
+    setPz(S.pz.z * Math.exp(-e.deltaY * 0.0018), clamp((e.clientX - r.left) / r.width, 0, 1), clamp((e.clientY - r.top) / r.height, 0, 1));
+  }, { passive: false });
+  $('.stage').addEventListener('pointerdown', (e) => {
+    const f = e.target.closest('.frame'); if (!f || S.pz.z <= 1.001 || e.button !== 0) return;
+    const r = f.getBoundingClientRect(); const x0 = e.clientX; const y0 = e.clientY; const o0 = { ...S.pz };
+    f.setPointerCapture(e.pointerId); f.classList.add('grabbing');
+    f.onpointermove = (ev) => {
+      const z = S.pz.z;
+      S.pz = { z, x: clamp(o0.x - (ev.clientX - x0) / r.width / z, 0, 1 - 1 / z), y: clamp(o0.y - (ev.clientY - y0) / r.height / z, 0, 1 - 1 / z) };
+      applyPz();
+    };
+    f.onpointerup = () => { f.onpointermove = null; f.classList.remove('grabbing'); };
+  });
+  $('.stage').addEventListener('dblclick', (e) => { if (e.target.closest('.frame') && S.pz.z > 1.001) { S.pz = { z: 1, x: 0, y: 0 }; applyPz(); const q = selItem(); if (q && REAL) requestFrames(q); } });
   function requestPreview(q, out) {
     if (!REAL) return;
     const side = out ? 'out' : 'in'; const st = pvSt[side]; const fr = $(out ? '#frame' : '#frameIn');
-    const t = fullDur(q) * S.t; const key = JSON.stringify([q.id, out, Math.round(t * 30), out ? q.cfg : 0]);
+    const t = fullDur(q) * S.t; const max = pzMax(); const key = JSON.stringify([q.id, out, Math.round(t * 30), out ? q.cfg : 0, max]);
     if (key === st.key) return; st.key = key;
     clearTimeout(st.timer);
     st.timer = setTimeout(() => {
       const seq = ++st.seq; fr.classList.add('loading');
-      inv('preview', { id: q.id, cfg: q.cfg, t, output: out, max: 960 }).then((img) => {
+      inv('preview', { id: q.id, cfg: q.cfg, t, output: out, max }).then((img) => {
         if (seq !== st.seq) return;
         const el = fr.querySelector('img'); if (el) el.src = img;
         fr.classList.remove('loading');
@@ -1049,7 +1087,7 @@
     $('#previewCard').classList.toggle('no-video', !q);
     $('.stage').classList.toggle('compare', !!S.cmp);
     $('#bCompare').classList.toggle('on', !!S.cmp);
-    if ((q && q.id) !== S.zoomFor) { S.zoomFor = q && q.id; S.zoom = 1; S.v0 = 0; const zb = $('#zbar'); if (zb) zb.hidden = true; tl.classList.remove('zoomed'); }
+    if ((q && q.id) !== S.zoomFor) { S.zoomFor = q && q.id; S.zoom = 1; S.v0 = 0; S.pz = { z: 1, x: 0, y: 0 }; const zb = $('#zbar'); if (zb) zb.hidden = true; tl.classList.remove('zoomed'); }
     renderTrim();
     if (!q) { fr.innerHTML = ''; fi.innerHTML = ''; $('#pvMeta').innerHTML = ''; $('#tcEnd').textContent = '00:00:00:00'; pvSt.in.key = pvSt.out.key = ''; drawWave(); return; }
     $('#previewCard').classList.toggle('audio-item', !!q.src.audioOnly);
@@ -1081,7 +1119,7 @@
     if (anim) { const m = $('#pvMeta'); m.classList.remove('swap'); void m.offsetWidth; m.classList.add('swap'); }
     paintFrame(fr, q, true);
     if (S.cmp) paintFrame(fi, q, false);
-    fitFrames();
+    fitFrames(); applyPz();
     if (REAL) requestFrames(q);
     if (anim) { [fr, fi].forEach((f) => { f.classList.remove('flip'); void f.offsetWidth; f.classList.add('flip'); }); }
     $('#tcEnd').textContent = q.src.dur; setT(S.t, true);

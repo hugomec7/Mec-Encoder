@@ -149,10 +149,14 @@ jobs:
           NOTES="docs/release-notes/$VERSION.md"
           [ -f "$NOTES" ] || echo "Mec Encoder $VERSION" > "$NOTES"
           fail() { echo "::error title=Release::$(tr '\n' ' ' < rel.log | cut -c1-1500)"; exit 1; }
+          # Pré-lançamento: notas com <!-- prerelease --> (versão ainda não testada). Não vira "latest",
+          # então o app não oferece a atualização sozinho; quem quiser testar baixa pela página.
+          PRE="--prerelease=false"; LATEST="--latest"
+          if grep -q "<!-- prerelease -->" "$NOTES"; then PRE="--prerelease"; LATEST="--latest=false"; fi
           if gh release view "$TAG" -R "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
-            gh release edit "$TAG" -R "$GITHUB_REPOSITORY" --notes-file "$NOTES" > rel.log 2>&1 || fail
+            gh release edit "$TAG" -R "$GITHUB_REPOSITORY" --notes-file "$NOTES" $PRE $LATEST > rel.log 2>&1 || fail
           else
-            gh release create "$TAG" -R "$GITHUB_REPOSITORY" --title "Mec Encoder $VERSION" --notes-file "$NOTES" --target "$GITHUB_SHA" > rel.log 2>&1 || fail
+            gh release create "$TAG" -R "$GITHUB_REPOSITORY" --title "Mec Encoder $VERSION" --notes-file "$NOTES" --target "$GITHUB_SHA" $PRE $LATEST > rel.log 2>&1 || fail
           fi
           gh release upload "$TAG" -R "$GITHUB_REPOSITORY" out/* --clobber > rel.log 2>&1 || fail
           # o .exe solto de builds antigas não é mais usado
