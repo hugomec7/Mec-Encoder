@@ -209,6 +209,8 @@
       audioOnly: !info.video, isImage: !!info.isImage,
     };
   }
+  // forma de onda mais detalhada em arquivos longos (para o zoom)
+  const waveBars = (q) => clamp(Math.round((q.src.durS || 60) * 60), 600, 8000);
   const fullDur = (q) => q.src.durS || secs(q.src.dur);
   // duração que vai sair: o trecho marcado ou o arquivo inteiro
   // trechos marcados [[início, fim], ...] em segundos (vazio = arquivo inteiro)
@@ -1047,6 +1049,7 @@
     $('#previewCard').classList.toggle('no-video', !q);
     $('.stage').classList.toggle('compare', !!S.cmp);
     $('#bCompare').classList.toggle('on', !!S.cmp);
+    if ((q && q.id) !== S.zoomFor) { S.zoomFor = q && q.id; S.zoom = 1; S.v0 = 0; const zb = $('#zbar'); if (zb) zb.hidden = true; tl.classList.remove('zoomed'); }
     renderTrim();
     if (!q) { fr.innerHTML = ''; fi.innerHTML = ''; $('#pvMeta').innerHTML = ''; $('#tcEnd').textContent = '00:00:00:00'; pvSt.in.key = pvSt.out.key = ''; drawWave(); return; }
     $('#previewCard').classList.toggle('audio-item', !!q.src.audioOnly);
@@ -1060,7 +1063,7 @@
         fr.innerHTML = `<div class="ac-in">${ICONS.note}<b>${esc(q.file)}</b><span>${esc(audioSrcTxt(q.src))} · ${esc(q.src.dur)}</span></div>`;
         fi.innerHTML = ''; fitFrames();
         $('#tcEnd').textContent = q.src.dur; setT(S.t, true);
-        if (REAL && q.wave === undefined) { q.wave = null; inv('waveform', { id: q.id, bars: 600 }).then((w) => { q.wave = w; if (selItem() === q) drawWave(); }).catch(() => { q.wave = []; }); }
+        if (REAL && q.wave === undefined) { q.wave = null; inv('waveform', { id: q.id, bars: waveBars(q) }).then((w) => { q.wave = w; if (selItem() === q) drawWave(); }).catch(() => { q.wave = []; }); }
         drawWave(); return;
       }
     }
@@ -1084,7 +1087,7 @@
     $('#tcEnd').textContent = q.src.dur; setT(S.t, true);
     if (REAL && q.wave === undefined) {
       q.wave = null;
-      inv('waveform', { id: q.id, bars: 600 }).then((w) => { q.wave = w; if (selItem() === q) drawWave(); }).catch(() => { q.wave = []; });
+      inv('waveform', { id: q.id, bars: waveBars(q) }).then((w) => { q.wave = w; if (selItem() === q) drawWave(); }).catch(() => { q.wave = []; });
     }
     drawWave();
   }
@@ -1110,32 +1113,96 @@
   }
 
   /* forma de onda (no app vem do áudio de verdade) */
+  /* Zoom da linha do tempo: a vista mostra [S.v0, S.v0 + 1/S.zoom] do arquivo (frações).
+     Rodinha = zoom no ponto do mouse; Shift+rodinha (ou arrastar a barrinha) = andar para os lados;
+     = e - zoom na agulha; \ volta a mostrar tudo. Bem de perto aparece uma marca por quadro. */
+  const tl = $('#timeline');
+  S.zoom = 1; S.v0 = 0; S.zoomFor = null;
+  const vis = (f) => (f - S.v0) * S.zoom;
+  const unvis = (x) => S.v0 + x / S.zoom;
+  // até ~16 px por quadro
+  const maxZoom = (q) => Math.max(1, fullDur(q) * (q.src.fpsNum || 60) * 16 / Math.max(200, tl.clientWidth));
+  function setZoom(z, ax, af) {
+    const q = selItem(); if (!q || q.src.isImage) return;
+    S.zoom = clamp(z, 1, maxZoom(q));
+    S.v0 = clamp(af - ax / S.zoom, 0, 1 - 1 / S.zoom);
+    renderTimeline();
+  }
+  // zoom com a agulha no meio (teclas = e -)
+  const zoomAtHead = (k) => { const x = clamp(vis(S.t), 0, 1); setZoom(S.zoom * k, S.zoom * k <= 1 ? 0 : x, S.t); };
+  function renderTimeline() {
+    tl.style.setProperty('--t', vis(S.t) * 100 + '%');
+    tl.classList.toggle('zoomed', S.zoom > 1.001);
+    const zb = $('#zbar'); zb.hidden = S.zoom <= 1.001;
+    zb.firstElementChild.style.cssText = `left:${S.v0 * 100}%;width:${100 / S.zoom}%`;
+    zb.title = `×${S.zoom < 10 ? S.zoom.toFixed(1) : Math.round(S.zoom)}`;
+    drawWave(); renderTrim();
+  }
+  tl.addEventListener('wheel', (e) => {
+    const q = selItem(); if (!q || q.src.isImage) return;
+    e.preventDefault();
+    const r = tl.getBoundingClientRect(); const x = clamp((e.clientX - r.left) / r.width, 0, 1);
+    const pan = e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY);
+    if (pan) { if (S.zoom > 1) { S.v0 = clamp(S.v0 + (e.deltaX || e.deltaY) / r.width / S.zoom, 0, 1 - 1 / S.zoom); renderTimeline(); } return; }
+    setZoom(S.zoom * Math.exp(-e.deltaY * 0.0018), x, unvis(x));
+  }, { passive: false });
+  // barrinha embaixo: arrastar anda pela linha do tempo
+  $('#zbar').addEventListener('pointerdown', (e) => {
+    e.stopPropagation(); const zb = e.currentTarget; const r = zb.getBoundingClientRect(); zb.setPointerCapture(e.pointerId);
+    const inside = e.target.tagName === 'I'; const grab = inside ? (e.clientX - r.left) / r.width - S.v0 : 0.5 / S.zoom;
+    const mv = (ev) => { S.v0 = clamp((ev.clientX - r.left) / r.width - grab, 0, 1 - 1 / S.zoom); renderTimeline(); };
+    mv(e); zb.onpointermove = mv; zb.onpointerup = () => { zb.onpointermove = null; };
+  });
+  // agulha saiu da vista (setas, quadro a quadro): a vista acompanha
+  function follow() {
+    if (S.zoom <= 1.001) return false;
+    const w = 1 / S.zoom; const m = w * 0.04;
+    if (S.t < S.v0 + m || S.t > S.v0 + w - m) { S.v0 = clamp(S.t < S.v0 + m ? S.t - w * 0.25 : S.t - w * 0.75, 0, 1 - w); return true; }
+    return false;
+  }
   function drawWave() {
     const cv = $('#wave'); const r = cv.getBoundingClientRect(); if (!r.width) return; const dpr = devicePixelRatio || 1;
     cv.width = r.width * dpr; cv.height = r.height * dpr;
     const g = cv.getContext('2d'); g.scale(dpr, dpr);
-    g.fillStyle = getComputedStyle(root).getPropertyValue('--wave').trim();
-    const q = selItem();
+    const css = getComputedStyle(root);
+    g.fillStyle = css.getPropertyValue('--wave').trim();
+    const q = selItem(); if (!q) return;
+    const n = Math.floor((r.width - 4) / 3);
     if (REAL) {
-      const w = q && q.wave; if (!w || !w.length) return;
-      const n = Math.floor((r.width - 4) / 3);
+      const w = q.wave; if (!w || !w.length) return;
       for (let i = 0; i < n; i++) {
-        const v = w[Math.floor(i / n * w.length)] / 255; const a = Math.max(1.5, v * (r.height - 10));
+        const f = unvis((i + 0.5) / n); if (f < 0 || f > 1) continue;
+        const v = w[Math.min(w.length - 1, Math.floor(f * w.length))] / 255; const a = Math.max(1.5, v * (r.height - 10));
         g.beginPath(); g.roundRect(2 + i * 3, (r.height - a) / 2, 2, a, 1); g.fill();
       }
-      return;
+    } else {
+      // demonstração: forma de onda fixa no arquivo (não muda com o zoom)
+      const hash = (k) => { const x = Math.sin(k * 12.9898) * 43758.5453; return x - Math.floor(x); };
+      for (let i = 0; i < n; i++) {
+        const f = unvis((i + 0.5) / n); const X = f * 900;
+        const env = .35 + .65 * Math.abs(Math.sin(X / 41) * Math.cos(X / 97));
+        const a = Math.max(1.5, env * (hash(Math.floor(f * 3000)) * .7 + .3) * (r.height - 10));
+        g.beginPath(); g.roundRect(2 + i * 3, (r.height - a) / 2, 2, a, 1); g.fill();
+      }
     }
-    if (!q) return;
-    let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-    for (let x = 2; x < r.width - 2; x += 3) {
-      const env = .35 + .65 * Math.abs(Math.sin(x / 41) * Math.cos(x / 97));
-      const a = Math.max(1.5, env * (rnd() * .7 + .3) * (r.height - 10));
-      g.beginPath(); g.roundRect(x, (r.height - a) / 2, 2, a, 1); g.fill();
+    // bem de perto: uma marca por quadro (mais forte a cada segundo)
+    const fps = q.src.fpsNum || 60; const frames = fullDur(q) * fps; const px = r.width * S.zoom / frames;
+    if (px >= 5) {
+      const f0 = Math.floor(S.v0 * frames); const f1 = Math.ceil((S.v0 + 1 / S.zoom) * frames);
+      // um quadro sim, um não, levemente mais claro: dá para contar os quadros; traço mais alto em cada segundo
+      g.fillStyle = css.getPropertyValue('--text').trim();
+      for (let k = f0; k <= f1; k++) {
+        const x0 = vis(k / frames) * r.width; const x1 = vis((k + 1) / frames) * r.width;
+        if (k % 2 === 0) { g.globalAlpha = 0.07; g.fillRect(x0, 0, x1 - x0, r.height); }
+        g.globalAlpha = k % Math.round(fps) === 0 ? 0.8 : 0.3; g.fillRect(Math.round(x0), 0, 1, k % Math.round(fps) === 0 ? 10 : 5);
+      }
+      g.globalAlpha = 1;
     }
   }
-  const tl = $('#timeline');
   function setT(t, quiet) {
-    S.t = clamp(t, 0, 1); tl.style.setProperty('--t', S.t * 100 + '%');
+    S.t = clamp(t, 0, 1);
+    if (follow()) { drawWave(); renderTrim(); const zb = $('#zbar'); if (zb) zb.firstElementChild.style.left = S.v0 * 100 + '%'; }
+    tl.style.setProperty('--t', vis(S.t) * 100 + '%');
     const q = selItem(); if (!q) { $('#tcNow').textContent = '00:00:00:00'; return; }
     $('#tcNow').textContent = tc(fullDur(q) * S.t, q.src.fpsNum || 60);
     if (!quiet && REAL) requestFrames(q);
@@ -1149,7 +1216,7 @@
       const k = edge.dataset.edge; const i = +edge.dataset.i; const d = fullDur(q); tl.setPointerCapture(e.pointerId);
       q.cutSel = i;
       tl.onpointermove = (ev) => {
-        const t = clamp((ev.clientX - r.left) / r.width, 0, 1) * d; const c = q.cuts[i];
+        const t = clamp(unvis((ev.clientX - r.left) / r.width), 0, 1) * d; const c = q.cuts[i];
         const lo = i > 0 ? q.cuts[i - 1][1] : 0; const hi = i < q.cuts.length - 1 ? q.cuts[i + 1][0] : d;
         if (k === 'a') c[0] = clamp(t, lo, c[1] - 0.1); else c[1] = clamp(t, c[0] + 0.1, hi);
         renderTrim(); setT(c[k === 'a' ? 0 : 1] / d);
@@ -1157,7 +1224,7 @@
       tl.onpointerup = () => { tl.onpointermove = null; setCuts(q, q.cuts); };
       return;
     }
-    const mv = (ev) => setT((ev.clientX - r.left) / r.width);
+    const mv = (ev) => setT(unvis(clamp((ev.clientX - r.left) / r.width, 0, 1)));
     mv(e); tl.setPointerCapture(e.pointerId); tl.onpointermove = mv;
     // soltar em cima de um trecho escolhe ele (I e O passam a mexer nele)
     tl.onpointerup = () => { tl.onpointermove = null; const i = cutAt(q); if (i >= 0 && i !== q.cutSel) { q.cutSel = i; renderTrim(); } };
@@ -1199,12 +1266,12 @@
     const q = selItem(); const cs = cutsOf(q); const d = q ? fullDur(q) : 1; const box = $('#trimBox');
     tl.classList.toggle('trimmed', !!cs);
     if (!cs) { box.innerHTML = ''; $('#bIn').classList.remove('set'); $('#bOut').classList.remove('set'); return; }
-    const pc = (t) => (t / d * 100).toFixed(3) + '%'; const sel = clamp(q.cutSel || 0, 0, cs.length - 1);
+    const pc = (t) => (vis(t / d) * 100).toFixed(3) + '%'; const pw = (t) => (t / d * S.zoom * 100).toFixed(3) + '%'; const sel = clamp(q.cutSel || 0, 0, cs.length - 1);
     // fora dos trechos escurece; cada trecho em amarelo com as bordas de arrastar
     const gaps = []; let prev = 0;
     cs.forEach(([a, b]) => { if (a > prev) gaps.push([prev, a]); prev = b; }); if (prev < d) gaps.push([prev, d]);
-    box.innerHTML = gaps.map(([a, b]) => `<i class="cut" style="left:${pc(a)};width:${pc(b - a)}"></i>`).join('')
-      + cs.map(([a, b], i) => `<div class="seg ${i === sel && cs.length > 1 ? 'sel' : ''}" style="left:${pc(a)};width:${pc(b - a)}">${cs.length > 1 ? `<small>${i + 1}</small>` : ''}</div>
+    box.innerHTML = gaps.map(([a, b]) => `<i class="cut" style="left:${pc(a)};width:${pw(b - a)}"></i>`).join('')
+      + cs.map(([a, b], i) => `<div class="seg ${i === sel && cs.length > 1 ? 'sel' : ''}" style="left:${pc(a)};width:${pw(b - a)}">${cs.length > 1 ? `<small>${i + 1}</small>` : ''}</div>
         <b class="edge l" data-edge="a" data-i="${i}" style="left:${pc(a)}"></b><b class="edge r" data-edge="b" data-i="${i}" style="left:${pc(b)}"></b>`).join('');
     $('#bIn').classList.toggle('set', cs[sel][0] > 0.001); $('#bOut').classList.toggle('set', cs[sel][1] < d - 0.001);
   }
@@ -1599,6 +1666,9 @@
     if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === 'o') markTrim('b');
     if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'x' && selItem()) { e.preventDefault(); setCuts(selItem(), []); }
     if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'k' && selItem()) { e.preventDefault(); newCut(); }
+    if (!e.ctrlKey && !e.metaKey && (e.key === '=' || e.key === '+') && selItem()) zoomAtHead(2);
+    if (!e.ctrlKey && !e.metaKey && (e.key === '-' || e.key === '_') && selItem()) zoomAtHead(0.5);
+    if (!e.ctrlKey && !e.metaKey && e.key === '\\' && selItem()) setZoom(1, 0, 0);
     if (e.key === 'ArrowLeft' && selItem()) ctl[e.shiftKey ? 1 : 0].click();
     if (e.key === 'ArrowRight' && selItem()) ctl[e.shiftKey ? 3 : 4].click();
     if (e.key === 'Delete' && S.picked.size) pickedItems().forEach((q) => removeItem(q.id));

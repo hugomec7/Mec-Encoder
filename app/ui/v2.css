@@ -447,3 +447,10 @@
 .timeline .trim .edge{margin-left:-6px}
 .pv-meta .trim-chip svg:last-child{width:9px;height:9px;opacity:.7}
 .pv-meta .trim-chip:hover{text-decoration:none;filter:brightness(1.15)}
+
+/* zoom da linha do tempo: barrinha mostra o pedaço visível (arrastar anda) */
+.zbar{position:absolute;left:0;right:0;bottom:0;height:4px;background:color-mix(in srgb,var(--text) 6%,transparent);cursor:grab;z-index:3}
+.zbar[hidden]{display:none}
+.zbar i{position:absolute;top:0;bottom:0;min-width:8px;border-radius:2px;background:var(--text-3)}
+.zbar:hover i,.zbar:active i{background:var(--text-2)}
+.timeline.zoomed{cursor:crosshair}

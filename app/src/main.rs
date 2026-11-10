@@ -443,7 +443,7 @@ async fn waveform(state: State<'_, AppState>, id: u64, bars: usize) -> Result<Ve
             .args(["-map", "0:a:0", "-ac", "1", "-ar", "400", "-f", "s16le", "-"])
             .stdin(Stdio::null()).output().map_err(|e| e.to_string())?;
         let samples: Vec<i16> = out.stdout.chunks_exact(2).map(|c| i16::from_le_bytes([c[0], c[1]])).collect();
-        let bars = bars.clamp(16, 2000);
+        let bars = bars.clamp(16, 8000);
         if samples.is_empty() { return Ok(vec![]); }
         let per = (samples.len() as f64 / bars as f64).max(1.0);
         let mut peaks: Vec<f64> = (0..bars).map(|i| {
