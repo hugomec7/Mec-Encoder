@@ -1248,7 +1248,8 @@
       g.globalAlpha = 1; g.fillStyle = col2;
       // quadro exato: o timecode do número é o do quadro onde a marca cai
       const label = tcF(q, Math.round(tt * fr) / fr);
-      if (x >= -1) g.fillText(step >= 60 && label.endsWith(':00') ? label.slice(0, 8) : label, Math.round(x) + 4, 2);
+      const lb = step >= 60 && label.endsWith(':00') ? label.slice(0, 8) : label;
+      if (x >= -1 && x + 4 + g.measureText(lb).width <= r.width + 1) g.fillText(lb, Math.round(x) + 4, 2);
     }
     // trechos em amarelo embaixo da régua
     (cutsOf(q) || []).forEach(([a, b]) => {
@@ -1629,9 +1630,9 @@
     const seq = ++PL.seq;
     Object.assign(PL, { on: true, q, plan, i: 0, hw: true, slow: 0, stalls: [], started: false, prep: null, mode: '' });
     if (S.cmp) { S.cmpHold = true; S.cmp = false; renderPreview(); }
-    clearTimeout(PL.badgeT); $('#playBadge').classList.remove('fade');
+    clearTimeout(PL.badgeT); $('#playBadge').classList.remove('fade'); $('#playBadge').hidden = true;
     stage.classList.add('playing'); stage.classList.toggle('buffering', REAL);
-    renderPlayUi();
+    renderPlayUi(); renderPlayInfo(plan.parts[0][0]);
     if (!REAL) { PL.mode = 'demo'; PL.cur = plan.parts; PL.dt = plan.parts[0][0]; PL.last = performance.now(); plLoop(seq); return; }
     $('#frame').append(vid);
     audioGraph();

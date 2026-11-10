@@ -650,3 +650,21 @@
 .cut-row.playing .pbar{opacity:1}
 [data-theme="light"] .pl-cuts{color:#8a6a00;background:color-mix(in srgb,var(--yellow) 22%,transparent)}
 [data-theme="light"] .pl-cuts.on{color:#1a1400;background:var(--yellow)}
+
+/* janela estreita: os controles encolhem (primeiro os nomes dos botões, depois o resto) */
+.transport{container:tp/inline-size}
+@container tp (max-width:915px){
+  .cutter .trim-btn span,.cutter .pl-cuts span{display:none}
+  .cutter .trim-btn,.cutter .pl-cuts{padding:0 9px}
+  .cutter #bCut,.cutter #bOut{margin-left:6px}.cutter #bIn{margin-right:6px}
+}
+@container tp (max-width:725px){
+  .pl-tools .pl-rate,.pl-tools .meter{display:none!important}
+  .cutter .controls .tc.end{display:none}
+}
+@container tp (max-width:693px){
+  .preview .pl-cuts span,.preview .open-cut span{display:none}
+  .preview .pl-cuts,.preview .open-cut{padding:0 9px}
+}
+@container tp (max-width:593px){.controls .tc.end{display:none}}
+@container tp (max-width:520px){.controls .ctl.skip{display:none}.controls .tc{min-width:0}}
