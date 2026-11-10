@@ -692,3 +692,5 @@
 .preview .pl-skip span{display:none}
 .preview .pl-skip{padding:0 7px}
 @container tp (max-width:860px){.cutter .pl-skip span{display:none}.cutter .pl-skip{padding:0 7px}}
+/* no Cortador, mesmo tamanho do Novo corte */
+.cutter .pl-skip{height:32px;border-radius:8px;padding:0 10px;gap:6px;font-size:12.5px;margin-left:6px}
