@@ -686,7 +686,7 @@
   color:var(--text-3);background:var(--fill);transition:background .15s,color .15s}
 .pl-skip:hover{color:var(--text);background:var(--fill-2)}
 .pl-skip.on{color:var(--yellow);background:color-mix(in srgb,var(--yellow) 14%,transparent)}
-.pl-skip svg{width:14px;height:14px}
+.pl-skip svg{width:16px;height:16px}
 .pl-skip[hidden]{display:none}
 [data-theme="light"] .pl-skip.on{color:#8a6a00;background:color-mix(in srgb,var(--yellow) 22%,transparent)}
 .preview .pl-skip span{display:none}
