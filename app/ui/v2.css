@@ -742,3 +742,5 @@
 .keys-top span{flex:1}
 .keys-top .keys-reset{flex:none}
 #bKeysPage .chev-r{margin-left:6px;font-size:15px;line-height:1;color:var(--text-3)}
+/* item marcado com o fundo azul (mouse ou teclado): o ícone fica branco, não azul sobre azul */
+.menu button.sel:hover>svg:first-child,.menu button.sel.hover>svg:first-child,.menu button.sel:focus-visible>svg:first-child{color:#fff}
