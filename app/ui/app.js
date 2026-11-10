@@ -165,7 +165,7 @@
     $('#lIn').textContent = L.inLbl; $('#lOut').textContent = L.outLbl; $('#lNewCut').textContent = L.newCutLbl; $('#lOpenCut').textContent = L.openCutLbl;
     $('#bOpenCut').title = kf(L.openCutter); $('#lCutter').textContent = L.cutter; $('#lCuts').textContent = L.cutsTitle;
     $('#bCutCancel').textContent = L.cancel; $('#bCutDone').textContent = L.conclude; $('#bClearCuts').textContent = L.clearCuts;
-    $('#lPlayCuts').textContent = L.playCuts; if (S.plReady) { renderPlayUi(); applyVol(); }
+    if (S.plReady) { renderPlayUi(); applyVol(); }
     $('#lCutSplit').textContent = L.cutSplitBtn; $('#lCutJoin').textContent = L.cutJoinBtn; $('#cutKeys').innerHTML = kf(L.cutKeysTxt); $('#tlHint').textContent = kf(L.tlHint);
     renderRenderBtn(); renderUpdateBtn(); if ($('#bAfter')) renderAfter();
   }
@@ -1395,7 +1395,7 @@
      nele (ímã; Alt arrasta sem ímã). Tocando: para enquanto arrasta e continua de onde soltar. */
   function scrub(e, q, el) {
     const r = el.getBoundingClientRect(); const d = fullDur(q); const fr = frOf(q);
-    const resume = PL.on && PL.plan && PL.plan.kind === 'all'; if (PL.on) playStop(null, true);
+    const resume = PL.on && PL.plan && PL.plan.kind !== 'cut' ? PL.plan.kind : null; if (PL.on) playStop(null, true);
     const mv = (ev) => {
       let t = clamp(unvis((ev.clientX - r.left) / r.width), 0, 1) * d; let hit = null;
       if (!ev.altKey) (q.cuts || []).forEach(([a, b]) => [a, b - 1 / fr].forEach((s) => {
@@ -1411,7 +1411,7 @@
     dragPtr(el, e, mv, () => {
       tl.classList.remove('snapped');
       const i = cutAt(q); if (i >= 0 && i !== q.cutSel) { q.cutSel = i; renderTrim(); }
-      if (resume) playStart({ kind: 'all' });
+      if (resume) playStart({ kind: resume === 'cuts' ? 'auto' : 'all' });
     });
   }
   ruler.addEventListener('pointerdown', (e) => { const q = selItem(); if (!q || q.src.isImage || e.button !== 0) return; e.preventDefault(); scrub(e, q, ruler); });
@@ -1581,8 +1581,17 @@
   const ctl = $$('.controls .ctl:not(.trim-btn)');
   const stepBy = (s) => { const q = selItem(); if (!q) return; if (PL.on) playStop(null, true); setT(S.t + s / fullDur(q)); };
   ctl[0].onclick = () => { const q = selItem(); if (q) stepBy(-1 / frOf(q)); };
-  ctl[1].onclick = () => stepBy(-5);
-  ctl[3].onclick = () => stepBy(5);
+  // ⏮ ⏭: agulha no corte anterior/próximo (início e último quadro de cada trecho; sem trechos, começo e fim)
+  function jumpEdit(dir) {
+    const q = selItem(); if (!q || !playable(q)) return; const d = fullDur(q); const fr = frOf(q); const t = snapT(q, d * S.t);
+    const pts = (cutsOf(q) || [[0, d]]).flatMap(([a, b]) => [a, b - 1 / fr]).map((x) => snapT(q, x));
+    const go = dir > 0 ? pts.find((x) => x > t + 1e-4) : pts.filter((x) => x < t - 1e-4).pop();
+    if (go == null) return;
+    const playing = PL.on; if (playing) playStop(null, true);
+    setT(go / d); if (playing) playStart({ kind: 'auto' });
+  }
+  ctl[1].onclick = () => jumpEdit(-1);
+  ctl[3].onclick = () => jumpEdit(1);
   ctl[4].onclick = () => { const q = selItem(); if (q) stepBy(1 / frOf(q)); };
   /* ---------- Play ----------
      Escada automática, sem o usuário escolher nada:
@@ -1603,8 +1612,13 @@
   function planFor(q, o) {
     const d = fullDur(q); const fr = frOf(q); const cs = cutsOf(q) || [];
     if (o.kind === 'cut' && cs[o.cut]) return { kind: 'cut', cut: o.cut, parts: [cs[o.cut].slice()] };
-    if (o.kind === 'cuts' && cs.length) return { kind: 'cuts', parts: cs.map((c) => c.slice()) };
     let t0 = o.from != null ? o.from : snapT(q, d * S.t);
+    // com trechos o play mostra o resultado: da agulha em diante, pulando o que foi cortado
+    // (agulha entre trechos: começa no próximo; depois do último: volta ao primeiro)
+    if ((o.kind === 'auto' || o.kind === 'cuts') && cs.length) {
+      let parts = partsFrom(cs, t0); if (!parts.length || parts.length === 1 && parts[0][1] - parts[0][0] < 1.5 / fr) parts = cs.map((c) => c.slice());
+      return { kind: 'cuts', parts, all: cs.map((c) => c.slice()) };
+    }
     if (t0 >= d - 1.5 / fr) t0 = 0; // na última imagem: começa do começo
     return { kind: 'all', parts: [[t0, d]] };
   }
@@ -1626,7 +1640,7 @@
   async function playStart(o) {
     const q = selItem(); if (!playable(q)) return;
     if (PL.on) playStop(null, true);
-    const plan = planFor(q, o || { kind: 'all' });
+    const plan = planFor(q, o || { kind: 'auto' });
     const seq = ++PL.seq;
     Object.assign(PL, { on: true, q, plan, i: 0, hw: true, slow: 0, stalls: [], started: false, prep: null, mode: '' });
     if (S.cmp) { S.cmpHold = true; S.cmp = false; renderPreview(); }
@@ -1712,7 +1726,7 @@
   }
   function plFinish() {
     const p = PL.plan; const fr = frOf(PL.q);
-    if (S.set.loop) { playStart(p.kind === 'all' ? { kind: 'all', from: 0 } : p); return; }
+    if (S.set.loop) { playStart(p.kind === 'all' ? { kind: 'all', from: 0 } : p.kind === 'cuts' ? { kind: 'cuts', from: p.all[0][0] } : p); return; }
     playStop(p.parts[p.parts.length - 1][1] - 1 / fr);
   }
   // pausa. `final`: tempo onde a agulha fica (sem: onde está); `quiet`: quem chamou já vai mexer na agulha
@@ -1804,6 +1818,7 @@
     if (gainN) { gainN.gain.value = v; vid.volume = 1; } else vid.volume = clamp(v, 0, 1);
     const b = $('#bVol'); b.classList.toggle('muted', v === 0); b.classList.toggle('low', v > 0 && v < 0.5);
     b.title = L.volTip(Math.round(v * 100));
+    const r = $('#volR'); r.value = Math.round(v * 100); r.style.setProperty('--v', `${Math.round(v * 100)}%`); r.title = `${Math.round(v * 100)}%`;
   }
   const mbuf = new Float32Array(1024); const lv = [0, 0]; let decayRaf = 0;
   function meterTick() {
@@ -1832,9 +1847,8 @@
     $('#playIco').innerHTML = PL.on ? ICONS.pause : ICONS.play;
     b.classList.toggle('prep', prep); b.style.setProperty('--p', `${Math.round((PL.prep || 0) * 100)}%`);
     b.title = `${PL.on ? L.pause : L.play} (${keyLabel(keyOf('play'))})`;
-    const pc = $('#bPlayCuts'); pc.hidden = !cutsOf(q) || !playable(q);
-    pc.classList.toggle('on', PL.on && !!PL.plan && PL.plan.kind === 'cuts');
-    pc.title = kf(L.playCutsTip);
+    b.title = `${PL.on ? L.pause : cutsOf(q) ? L.playResult : L.play} (${keyLabel(keyOf('play'))})`;
+    $('#bPrevEdit').title = `${L.act.prevEdit} (${keyLabel(keyOf('prevEdit'))})`; $('#bNextEdit').title = `${L.act.nextEdit} (${keyLabel(keyOf('nextEdit'))})`;
     $('#bLoop').classList.toggle('on', !!S.set.loop); $('#bLoop').title = `${L.loopTip} (${keyLabel(keyOf('loop'))})`;
     const rb = $('#bRate'); rb.textContent = rateTxt(PL.rate); rb.classList.toggle('on', PL.rate !== 1); rb.title = L.speedTip;
     const box = $('#prepBox'); box.hidden = !prep;
@@ -1851,25 +1865,27 @@
   function renderPlayInfo(t) {
     const bd = $('#playBadge'); const p = PL.on && PL.plan; const q = PL.q;
     if (!p || p.kind === 'all') { if (!bd.classList.contains('fade')) bd.hidden = true; return; }
-    const fr = frOf(q); let el = 0; let k = p.parts.length - 1;
-    for (let i = 0; i < p.parts.length; i++) { const [a, b] = p.parts[i]; if (t < b - 1e-6) { el += Math.max(0, t - a); k = i; break; } el += b - a; }
-    const tot = p.parts.reduce((s, [a, b]) => s + b - a, 0);
+    // no resultado conta em cima de todos os trechos (onde o play está no arquivo que vai sair)
+    const P = p.all || p.parts; const fr = frOf(q); let el = 0; let k = P.length - 1;
+    for (let i = 0; i < P.length; i++) { const [a, b] = P[i]; if (t < b - 1e-6) { el += Math.max(0, t - a); k = i; break; } el += b - a; }
+    const tot = P.reduce((s, [a, b]) => s + b - a, 0);
     // contando o quadro que está na tela: no último quadro dá a duração inteira
     el = Math.min(tot, el + 1 / fr);
     bd.hidden = false; bd.classList.remove('fade');
-    bd.innerHTML = `<i>${ICONS.cut}${p.kind === 'cut' ? esc(L.playingCut(p.cut + 1)) : `${esc(L.playingCuts)} <small>${k + 1}/${p.parts.length}</small>`}</i><b>${tcF(q, el)}</b><span>/ ${tcF(q, tot)}</span>`;
+    bd.innerHTML = `<i>${ICONS.cut}${p.kind === 'cut' ? esc(L.playingCut(p.cut + 1)) : `${esc(L.playingCuts)} <small>${L.cutK(k + 1, P.length)}</small>`}</i><b>${tcF(q, el)}</b><span>/ ${tcF(q, tot)}</span>`;
     const ci = p.kind === 'cut' ? p.cut : k; const c = (q.cuts || [])[ci]; const row = $(`#cutList .cut-row[data-i="${ci}"]`);
     if (row && c) row.style.setProperty('--pp', `${(clamp((t - c[0] + 1 / fr) / (c[1] - c[0]), 0, 1) * 100).toFixed(2)}%`);
   }
-  $('#bPlay').onclick = () => { if (PL.on) playStop(); else playStart({ kind: 'all' }); };
-  $('#bPlayCuts').onclick = () => { if (PL.on && PL.plan.kind === 'cuts') playStop(); else playStart({ kind: 'cuts' }); };
+  $('#bPlay').onclick = () => { if (PL.on) playStop(); else playStart({ kind: 'auto' }); };
   $('#bLoop').onclick = () => { S.set.loop = !S.set.loop; saveSettings(); renderPlayUi(); };
   $('#bRate').onclick = (e) => openMenu(e.currentTarget, RATES.map((r) => ({ label: rateTxt(r), value: r, sel: r === PL.rate })), (v) => setRate(+v));
   $('#bVol').onclick = () => { S.set.muted = !S.set.muted; saveSettings(); applyVol(); };
+  $('#volR').addEventListener('input', (e) => { S.set.vol = +e.target.value / 100; S.set.muted = false; applyVol(); });
+  $('#volR').addEventListener('change', saveSettings);
   $('#bVol').addEventListener('wheel', (e) => {
     e.preventDefault(); S.set.muted = false;
     S.set.vol = Math.round(clamp((S.set.vol != null ? +S.set.vol : 1) - Math.sign(e.deltaY) * 0.05, 0, 1) * 100) / 100;
-    saveSettings(); applyVol(); toast(L.volTip(Math.round(S.set.vol * 100)).split(' · ')[0]);
+    saveSettings(); applyVol();
   }, { passive: false });
   S.plReady = true;
 
@@ -2249,8 +2265,9 @@
     ['clearCuts', 'Ctrl+Shift+X', 'cutter'], ['cutDone', 'Enter', 'cutter'],
     ['prevFrame', 'ArrowLeft', 'timeline'], ['nextFrame', 'ArrowRight', 'timeline'], ['back5', 'Shift+ArrowLeft', 'timeline'], ['fwd5', 'Shift+ArrowRight', 'timeline'],
     ['zoomIn', '=', 'timeline'], ['zoomOut', '-', 'timeline'], ['zoomFit', '\\', 'timeline'],
+    ['prevEdit', 'ArrowUp', 'timeline'], ['nextEdit', 'ArrowDown', 'timeline'],
     ['goIn', 'Shift+I', 'timeline'], ['goOut', 'Shift+O', 'timeline'], ['goStart', 'Home', 'timeline'], ['goEnd', 'End', 'timeline'],
-    ['play', 'Space', 'play'], ['playCuts', 'Shift+Space', 'play'], ['shuttleBack', 'J', 'play'], ['shuttleStop', 'K', 'play'], ['shuttleFwd', 'L', 'play'],
+    ['play', 'Space', 'play'], ['playRaw', 'Shift+Space', 'play'], ['shuttleBack', 'J', 'play'], ['shuttleStop', 'K', 'play'], ['shuttleFwd', 'L', 'play'],
     ['loop', 'Ctrl+L', 'play'],
   ];
   const keyOf = (a) => { const k = S.set.keys && S.set.keys[a]; return k != null ? k : (KEYS.find((x) => x[0] === a) || [])[1] || ''; };
@@ -2263,7 +2280,7 @@
   }
   const KEY_TXT = { ArrowLeft: '←', ArrowRight: '→', ArrowUp: '↑', ArrowDown: '↓', Space: L.space || 'Space', Escape: 'Esc' };
   const keyLabel = (k) => (k ? k.split('+').map((p) => (p === 'Space' ? L.space : KEY_TXT[p]) || p).join('+') : L.noKey);
-  const KF = { in: 'markIn', out: 'markOut', cut: 'newCut', open: 'openCutter', clear: 'clearCuts', prev: 'prevFrame', next: 'nextFrame', done: 'cutDone', play: 'play', pcuts: 'playCuts' };
+  const KF = { in: 'markIn', out: 'markOut', cut: 'newCut', open: 'openCutter', clear: 'clearCuts', prev: 'prevFrame', next: 'nextFrame', done: 'cutDone', play: 'play', praw: 'playRaw', pedit: 'prevEdit', nedit: 'nextEdit' };
   // troca {in} {out} {cut}... pelas teclas configuradas
   const kf = (str) => String(str).replace(/\{(\w+)\}/g, (m, k) => (KF[k] ? esc(keyLabel(keyOf(KF[k]))) : m));
   function runKey(a, e) {
@@ -2275,15 +2292,18 @@
       case 'newCut': if (cut) { newCut(); return true; } return false;
       case 'clearCuts': if (cut && q) { setCuts(q, []); return true; } return false;
       case 'cutDone': if (cut) { openCutter(false); return true; } return false;
-      case 'play': if (playable(q)) { if (PL.on) playStop(); else playStart({ kind: 'all' }); return true; } return false;
-      case 'playCuts': if (playable(q) && cutsOf(q)) { if (PL.on && PL.plan.kind === 'cuts') playStop(); else playStart({ kind: 'cuts' }); return true; } return false;
+      case 'play': if (playable(q)) { if (PL.on) playStop(); else playStart({ kind: 'auto' }); return true; } return false;
+      // o original, sem pular o que foi cortado
+      case 'playRaw': if (playable(q)) { if (PL.on) playStop(); else playStart({ kind: 'all' }); return true; } return false;
+      case 'prevEdit': if (playable(q)) { jumpEdit(-1); return true; } return false;
+      case 'nextEdit': if (playable(q)) { jumpEdit(1); return true; } return false;
       // J K L como no Premiere: L toca (de novo: 2×, 4×), K pausa, J volta 1 s (ou desacelera)
-      case 'shuttleFwd': if (playable(q)) { if (!PL.on) { setRate(1); playStart({ kind: 'all' }); } else setRate(PL.rate < 1 ? 1 : Math.min(4, PL.rate * 2)); return true; } return false;
+      case 'shuttleFwd': if (playable(q)) { if (!PL.on) { setRate(1); playStart({ kind: 'auto' }); } else setRate(PL.rate < 1 ? 1 : Math.min(4, PL.rate * 2)); return true; } return false;
       case 'shuttleStop': if (PL.on) { playStop(); return true; } return false;
       case 'shuttleBack': if (playable(q)) {
         if (PL.on && PL.rate > 1) { setRate(PL.rate / 2); return true; }
         const t = Math.max(0, (PL.on ? curSrc() : fullDur(q) * S.t) - 1);
-        if (PL.on) playStart({ kind: 'all', from: snapT(q, t) }); else setT(t / fullDur(q));
+        if (PL.on) playStart({ kind: PL.plan && PL.plan.kind === 'all' ? 'all' : 'auto', from: snapT(q, t) }); else setT(t / fullDur(q));
         return true; } return false;
       case 'loop': S.set.loop = !S.set.loop; saveSettings(); renderPlayUi(); toast(S.set.loop ? L.loopOn : L.loopOff); return true;
       case 'goIn': case 'goOut': { const cs = cutsOf(q); if (!cs) return false; if (PL.on) playStop(null, true);
@@ -2292,8 +2312,8 @@
       case 'goEnd': if (playable(q)) { if (PL.on) playStop(null, true); setT(1); return true; } return false;
       case 'prevFrame': if (q) { ctl[0].click(); return true; } return false;
       case 'nextFrame': if (q) { ctl[4].click(); return true; } return false;
-      case 'back5': if (q) { ctl[1].click(); return true; } return false;
-      case 'fwd5': if (q) { ctl[3].click(); return true; } return false;
+      case 'back5': if (q) { stepBy(-5); return true; } return false;
+      case 'fwd5': if (q) { stepBy(5); return true; } return false;
       case 'zoomIn': if (q) { zoomAtHead(2); return true; } return false;
       case 'zoomOut': if (q) { zoomAtHead(0.5); return true; } return false;
       case 'zoomFit': if (q) { setZoom(1, 0, 0); return true; } return false;

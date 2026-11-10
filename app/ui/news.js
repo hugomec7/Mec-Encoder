@@ -1,6 +1,23 @@
 // Gerado por docs/release-notes/make_news.py — não edite à mão.
 window.MEC_NEWS = [
  {
+  "version": "0.2.10",
+  "en": [
+   "**Test version**: not offered by the app's automatic update. Download it from this page.",
+   "**Play shows the result**: with cuts marked, play starts at the playhead and skips what was cut. Put the playhead near the end of a cut and press play to see how it joins the next one. The time on top of the preview shows where you are in the final file. **Shift+Space** plays the original without skipping anything.",
+   "**⏮ ⏭ go from cut to cut** (start and last frame of each cut; without cuts, the beginning and the end). Shortcuts **↑ ↓**. They replace the 5-second buttons (Shift+← → still jump 5 seconds).",
+   "**Volume slider** next to the speaker (click the speaker to mute).",
+   "The **▶ Cuts** button was removed: the normal play does that now."
+  ],
+  "pt": [
+   "**Versão de teste**: a atualização automática do app não oferece esta versão. Baixe por esta página.",
+   "**O play mostra o resultado**: com trechos marcados, o play começa na agulha e pula o que foi cortado. Ponha a agulha perto do fim de um trecho e aperte play para ver como ele emenda no próximo. O tempo em cima da prévia mostra onde você está no arquivo final. **Shift+Espaço** toca o original, sem pular nada.",
+   "**⏮ ⏭ vão de corte em corte** (início e último quadro de cada trecho; sem trechos, o começo e o fim). Atalhos **↑ ↓**. Eles substituem os botões de 5 segundos (Shift+← → continuam pulando 5 segundos).",
+   "**Controle de volume** deslizante ao lado do alto-falante (clicar no alto-falante tira o som).",
+   "O botão **▶ Trechos** saiu: o play normal já faz isso."
+  ]
+ },
+ {
   "version": "0.2.9",
   "en": [
    "**Test version**: not offered by the app's automatic update. Download it from this page.",
@@ -135,19 +152,6 @@ window.MEC_NEWS = [
    "**Proporção** (Vídeo e Imagem): Original · 9:16 · 16:9 · 1:1 · 4:5 · 4:3 · 3:4 · 21:9, com **Encaixe: Cortar** (preenche o quadro, corta as bordas pelo centro) ou **Barras** (mantém a imagem inteira, com barras pretas). A Resolução mostra o tamanho final já com a proporção, e a prévia mostra o resultado. Cortar/barras roda na CPU (a placa continua lendo e gravando).",
    "Aviso quando um H.264 passaria de 4096 px de lado.",
    "Pastas de presets: o mesmo espaço entre todas as linhas, inclusive \"Presets\"."
-  ]
- },
- {
-  "version": "0.2.2",
-  "en": [
-   "**Presets like HandBrake: everything in folders.** \"Presets\" is now the main folder (presets not in any folder), and every folder opens and closes on its own. Right-click a folder: New preset in this folder · Rename · Delete. Manage › Collapse all / Expand all. Deleting a folder never deletes presets.",
-   "**Convert images**: PNG, JPG, WebP, BMP, TIFF, GIF and HEIC/AVIF (when FFmpeg can read the file) go into the same queue. New image presets (folder \"Images\"): **JPG 90**, **PNG** and **WebP 85**, with Format, Quality, Lossless (WebP), Resolution (Source · 50% · 25% · Custom) and Rotate. Transparent areas become white in JPG. Existing users get the image presets once.",
-   "Small sizes show in KB in the estimated size."
-  ],
-  "pt": [
-   "**Presets como no HandBrake: tudo em pastas.** \"Presets\" agora é a pasta principal (presets que não estão em nenhuma pasta), e cada pasta abre e fecha sozinha. Botão direito numa pasta: Novo preset nesta pasta · Renomear · Excluir. Gerenciar › Recolher todas / Abrir todas. Excluir uma pasta nunca apaga presets.",
-   "**Converter imagens**: PNG, JPG, WebP, BMP, TIFF, GIF e HEIC/AVIF (quando o FFmpeg consegue ler o arquivo) entram na mesma fila. Novos presets de imagem (pasta \"Images\"): **JPG 90**, **PNG** e **WebP 85**, com Formato, Qualidade, Sem perda (WebP), Resolução (Original · 50% · 25% · Personalizado) e Girar. No JPG, o que é transparente vira branco. Quem já usa o app recebe os presets de imagem uma vez.",
-   "Tamanhos pequenos aparecem em KB no tamanho estimado."
   ]
  }
 ];

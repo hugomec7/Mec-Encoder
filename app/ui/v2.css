@@ -653,7 +653,8 @@
 
 /* janela estreita: os controles encolhem (primeiro os nomes dos botões, depois o resto) */
 .transport{container:tp/inline-size}
-@container tp (max-width:915px){
+@container tp (max-width:915px){.pl-tools .pl-rate{display:none!important}}
+@container tp (max-width:860px){
   .cutter .trim-btn span,.cutter .pl-cuts span{display:none}
   .cutter .trim-btn,.cutter .pl-cuts{padding:0 9px}
   .cutter #bCut,.cutter #bOut{margin-left:6px}.cutter #bIn{margin-right:6px}
@@ -668,3 +669,11 @@
 }
 @container tp (max-width:593px){.controls .tc.end{display:none}}
 @container tp (max-width:520px){.controls .ctl.skip{display:none}.controls .tc{min-width:0}}
+
+/* volume: controle deslizante ao lado do alto-falante */
+.vol-r{-webkit-appearance:none;appearance:none;width:64px;height:16px;margin:0 4px 0 0;background:none;cursor:pointer;--v:100%}
+.vol-r::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:linear-gradient(to right,var(--text-2) var(--v),var(--fill-2) var(--v))}
+.vol-r::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;margin-top:-4px;border-radius:50%;background:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.4);transition:transform .15s}
+.vol-r:hover::-webkit-slider-thumb{transform:scale(1.15)}
+.pl-vol.muted + .vol-r::-webkit-slider-runnable-track{background:var(--fill-2)}
+@container tp (max-width:593px){.vol-r{width:44px}}
