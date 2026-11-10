@@ -1,6 +1,35 @@
 // Gerado por docs/release-notes/make_news.py — não edite à mão.
 window.MEC_NEWS = [
  {
+  "version": "0.2.9",
+  "en": [
+   "**Test version**: not offered by the app's automatic update. Download it from this page.",
+   "**Play button** in the converter and in the Cutter, with sound. **Space** plays and pauses; **J K L** like Premiere (L again: 2×, 4×; K pauses; J goes back 1 second). Pausing snaps the playhead to the frame and shows the exact image of the original.",
+   "Phone videos play right away. Files the player can't open (Sony FX30 10-bit 4:2:2, HDR, ProRes…) are converted while they play, on the graphics card (NVIDIA, AMD or Intel) or on the CPU, starting in about a second.",
+   "**Auto** quality starts at 720p and lowers itself if the PC can't keep up. If not even 360p keeps up, a light preview is prepared once and plays right away the next time.",
+   "**Play one cut**: hover over the cut number (1, 2, 3…) in the Cutter list and click ▶. It plays from the first to the last frame of the cut and stops there, with the time played and the cut's duration on top of the preview.",
+   "**▶ Cuts** (**Shift+Space**) plays only the cuts, one after the other, like the joined file.",
+   "**Repeat**, **speed** (0.25× to 4×), **volume** and an **audio meter** next to the timecode.",
+   "**Timecode ruler** above the timeline: the numbers follow the zoom (minutes, seconds, frames). Click or drag on it to move the playhead.",
+   "**Magnet**: dragging the playhead near the start or the end of a cut snaps it to the first or last frame. Hold **Alt** to drag without the magnet.",
+   "New shortcuts (all can be changed in Settings › Shortcuts): **Shift+I / Shift+O** go to the start or the last frame of the cut, **Home / End** go to the beginning or the end, **Ctrl+L** turns Repeat on and off.",
+   "Settings › **Playback**: preview quality, space for saved previews and **Delete** previews."
+  ],
+  "pt": [
+   "**Versão de teste**: a atualização automática do app não oferece esta versão. Baixe por esta página.",
+   "**Botão de play** no conversor e no Cortador, com som. **Espaço** toca e pausa; **J K L** como no Premiere (L de novo: 2×, 4×; K pausa; J volta 1 segundo). Ao pausar, a agulha prende no quadro e volta a imagem exata do original.",
+   "Vídeos de celular tocam na hora. Arquivos que o player não abre (Sony FX30 10-bit 4:2:2, HDR, ProRes…) são convertidos enquanto tocam, na placa de vídeo (NVIDIA, AMD ou Intel) ou na CPU, começando em cerca de 1 segundo.",
+   "A qualidade **Auto** começa em 720p e baixa sozinha se o PC não acompanhar. Se nem 360p acompanhar, uma prévia leve é preparada uma vez e da próxima vez toca na hora.",
+   "**Tocar um trecho**: passe o mouse no número do trecho (1, 2, 3…) na lista do Cortador e clique no ▶. Ele toca do primeiro ao último quadro do trecho e para ali, com o tempo tocado e a duração do trecho em cima da prévia.",
+   "**▶ Trechos** (**Shift+Espaço**) toca só os trechos, um atrás do outro, como o arquivo juntado.",
+   "**Repetir**, **velocidade** (0,25× a 4×), **volume** e **medidor de áudio** ao lado do timecode.",
+   "**Régua de timecode** em cima da linha do tempo: os números acompanham o zoom (minutos, segundos, quadros). Clique ou arraste nela para mover a agulha.",
+   "**Ímã**: arrastando a agulha perto do início ou do fim de um trecho, ela gruda no primeiro ou no último quadro. Segure **Alt** para arrastar sem ímã.",
+   "Atalhos novos (todos dá para trocar em Configurações › Atalhos): **Shift+I / Shift+O** vão ao início ou ao último quadro do trecho, **Home / End** vão ao começo ou ao fim, **Ctrl+L** liga e desliga o Repetir.",
+   "Configurações › **Reprodução**: qualidade da prévia, espaço para as prévias guardadas e **Apagar** prévias."
+  ]
+ },
+ {
   "version": "0.2.8",
   "en": [
    "**Test version**: not offered by the app's automatic update. Download it from this page.",
@@ -119,23 +148,6 @@ window.MEC_NEWS = [
    "**Presets como no HandBrake: tudo em pastas.** \"Presets\" agora é a pasta principal (presets que não estão em nenhuma pasta), e cada pasta abre e fecha sozinha. Botão direito numa pasta: Novo preset nesta pasta · Renomear · Excluir. Gerenciar › Recolher todas / Abrir todas. Excluir uma pasta nunca apaga presets.",
    "**Converter imagens**: PNG, JPG, WebP, BMP, TIFF, GIF e HEIC/AVIF (quando o FFmpeg consegue ler o arquivo) entram na mesma fila. Novos presets de imagem (pasta \"Images\"): **JPG 90**, **PNG** e **WebP 85**, com Formato, Qualidade, Sem perda (WebP), Resolução (Original · 50% · 25% · Personalizado) e Girar. No JPG, o que é transparente vira branco. Quem já usa o app recebe os presets de imagem uma vez.",
    "Tamanhos pequenos aparecem em KB no tamanho estimado."
-  ]
- },
- {
-  "version": "0.2.1",
-  "en": [
-   "**Bitrate**: Auto now comes with its level right in the menu: Source · Auto · High · Auto · Balanced · Auto · Light · Manual, with an ⓘ explaining each one. The estimated size now follows the level.",
-   "**Dropdowns**: clicking the same box again closes the menu.",
-   "**Render again**: finished videos have a ↻ button (and right-click › Render again). The previous file is kept; the new one gets \" (2)\".",
-   "**Duplicate** a video in the queue (right-click › Duplicate), e.g. to render the same file with different presets and compare times. While another copy is still in the queue, the original is never sent to the Recycle Bin.",
-   "**Clear** is always visible: Remove finished · Remove all."
-  ],
-  "pt": [
-   "**Bitrate**: o Auto agora vem com o nível no próprio menu: Original · Auto · Alta · Auto · Equilibrada · Auto · Leve · Manual, com um ⓘ explicando cada um. O tamanho estimado agora acompanha o nível.",
-   "**Menus suspensos**: clicar de novo na mesma caixa fecha o menu.",
-   "**Renderizar de novo**: vídeos prontos têm um botão ↻ (e botão direito › Renderizar de novo). O arquivo anterior fica; o novo ganha \" (2)\".",
-   "**Duplicar** um vídeo na fila (botão direito › Duplicar), por exemplo para renderizar o mesmo arquivo com presets diferentes e comparar os tempos. Enquanto houver outra cópia na fila, o original nunca vai para a Lixeira.",
-   "**Limpar** sempre aparece: Tirar os prontos · Tirar todos."
   ]
  }
 ];

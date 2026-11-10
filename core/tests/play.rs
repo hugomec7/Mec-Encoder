@@ -115,8 +115,8 @@ fn server_file_and_live() {
     assert_eq!(count(&fp, &out, "frames"), 90.0);
     std::thread::sleep(Duration::from_millis(200));
     let ev = events.lock().unwrap().clone();
-    assert!(ev.iter().any(|e| matches!(e, Event::Speed { .. })), "{ev:?}");
-    assert_eq!(ev.last(), Some(&Event::Ended));
+    // (andamento só aparece a cada 0,5 s: numa máquina rápida este vídeo curto termina antes)
+    assert_eq!(ev.last(), Some(&Event::Ended), "{ev:?}");
     // ao vivo não aceita pedir do meio
     assert!(get(srv.port(), &path, Some("bytes=500-")).0.starts_with("HTTP/1.1 416"));
 }
