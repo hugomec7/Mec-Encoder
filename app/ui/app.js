@@ -1853,6 +1853,8 @@
     b.title = `${PL.on ? L.pause : skip ? L.playResult : L.play} (${keyLabel(keyOf('play'))})`;
     const sb = $('#bSkip'); sb.hidden = !cutsOf(q) || !playable(q); sb.classList.toggle('on', skip);
     sb.title = `${skip ? L.skipTipOn : L.skipTipOff} (${keyLabel(keyOf('skipCuts'))})`;
+    // botões de quadro: a dica diz o que fazem (antes só mostrava a seta)
+    ctl[0].title = `${L.act.prevFrame} (${keyLabel(keyOf('prevFrame'))})`; ctl[4].title = `${L.act.nextFrame} (${keyLabel(keyOf('nextFrame'))})`;
     $('#bPrevEdit').title = `${L.act.prevEdit} (${keyLabel(keyOf('prevEdit'))})`; $('#bNextEdit').title = `${L.act.nextEdit} (${keyLabel(keyOf('nextEdit'))})`;
     $('#bLoop').classList.toggle('on', !!S.set.loop); $('#bLoop').title = `${L.loopTip} (${keyLabel(keyOf('loop'))})`;
     const rb = $('#bRate'); rb.textContent = rateTxt(PL.rate); rb.classList.toggle('on', PL.rate !== 1); rb.title = L.speedTip;
