@@ -3,6 +3,22 @@
 (() => {
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+  // Arrastar com o mouse: só enquanto o botão está apertado. Termina ao soltar, se o Windows cancelar
+  // o clique (ex.: arrastar de imagem) ou se um movimento chegar sem botão apertado.
+  function dragPtr(el, e, move, end) {
+    let done = false;
+    try { el.setPointerCapture(e.pointerId); } catch {}
+    const stop = () => {
+      if (done) return; done = true;
+      ['pointermove', 'pointerup', 'pointercancel', 'lostpointercapture'].forEach((t) => el.removeEventListener(t, t === 'pointermove' ? mv : stop));
+      try { el.releasePointerCapture(e.pointerId); } catch {}
+      if (end) end();
+    };
+    const mv = (ev) => { if (ev.pointerId !== e.pointerId) return; if (ev.buttons === 0) { stop(); return; } move(ev); };
+    el.addEventListener('pointermove', mv);
+    ['pointerup', 'pointercancel', 'lostpointercapture'].forEach((t) => el.addEventListener(t, stop));
+    return stop;
+  }
   const clone = (o) => JSON.parse(JSON.stringify(o));
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -146,6 +162,10 @@
     $('#bMin').title = L.minimize; $('#bMax').title = L.maximize; $('#bClose').title = L.close;
     $('#bSetAll').title = L.setAll; $('#bFoldPresets').title = L.presetsFold; $('#bAdd').title = L.addVideos;
     $('#bIn').title = L.markIn; $('#bOut').title = L.markOut; $('#bCut').title = L.newCut;
+    $('#lIn').textContent = L.inLbl; $('#lOut').textContent = L.outLbl; $('#lNewCut').textContent = L.newCutLbl; $('#lOpenCut').textContent = L.openCutLbl;
+    $('#bOpenCut').title = L.openCutter; $('#lCutter').textContent = L.cutter; $('#lCuts').textContent = L.cutsTitle;
+    $('#bCutCancel').textContent = L.cancel; $('#bCutDone').textContent = L.conclude; $('#bClearCuts').textContent = L.clearCuts;
+    $('#lCutSplit').textContent = L.cutSplitBtn; $('#lCutJoin').textContent = L.cutJoinBtn; $('#cutKeys').innerHTML = L.cutKeysTxt; $('#tlHint').textContent = L.tlHint;
     renderRenderBtn(); renderUpdateBtn(); if ($('#bAfter')) renderAfter();
   }
 
@@ -415,6 +435,7 @@
     const acts = (q.status === 'ready' || q.status === 'err' ? `<button class="a a-render" data-act="render" title="${q.status === 'err' ? L.retry : L.renderThis}">${q.status === 'err' ? ICONS.again : ICONS.playc}</button>` : '')
       + (q.status === 'err' ? `<button class="a" data-act="copyerr" title="${L.copyDetails}">${ICONS.copy}</button>` : '')
       + (q.status === 'done' ? `<button class="a" data-act="again" title="${L.renderAgain}">${ICONS.again}</button>` : '')
+      + (cutterOk(q) && q.status !== 'done' ? `<button class="a" data-act="cut" title="${L.openCutter}">${ICONS.cut}</button>` : '')
       + `<button class="a" data-act="reveal" title="${q.status === 'done' ? L.showOutput : L.showInFolder}">${ICONS.reveal}</button>`
       + (q.status !== 'running' ? `<button class="a" data-act="remove" title="${L.remove}">${ICONS.x}</button>` : '');
     return `<div class="item ${isPicked(q.id) ? 'sel' : ''} ${q.id === S.sel && S.picked.size > 1 ? 'primary' : ''} ${q.status === 'running' ? 'running' : ''} ${q.status === 'done' ? 'is-done' : ''} ${enterIds.includes(q.id) ? 'enter' : ''}" data-id="${q.id}" style="--d:${Math.min(8, Math.max(0, enterIds.indexOf(q.id))) * 60}ms">
@@ -509,6 +530,7 @@
     const q = itemOf(id); if (!q) return;
     if (act === 'render') { if (q.status === 'err') { q.status = 'ready'; q.error = null; q.errCode = null; } renderOne(id); }
     else if (act === 'again') renderAgain(q);
+    else if (act === 'cut') { selectOnly(id); renderAll(); openCutter(true); }
     else if (act === 'copyerr') copyErr(q);
     else if (act === 'dup') duplicateItem(q);
     else if (act === 'reveal') reveal(q);
@@ -572,6 +594,7 @@
     openMenu({ x: e.clientX, y: e.clientY }, [
       ...(q.status === 'ready' || q.status === 'err' ? [{ label: q.status === 'err' ? L.retry : L.renderThis, value: 'render', icon: q.status === 'err' ? ICONS.again : ICONS.playc }] : []),
       ...(q.status === 'done' ? [{ label: L.renderAgain, value: 'again', icon: ICONS.again }] : []),
+      ...(cutterOk(q) ? [{ label: L.openCutter, value: 'cut', icon: ICONS.cut }] : []),
       ...(q.status === 'err' ? [{ label: L.copyDetails, value: 'copyerr', icon: ICONS.copy }] : []),
       { label: L.duplicate, value: 'dup', icon: ICONS.dup },
       { label: q.status === 'done' ? L.showOutput : L.showInFolder, value: 'reveal', icon: ICONS.reveal },
@@ -1026,15 +1049,18 @@
     const f = e.target.closest('.frame'); if (!f || S.pz.z <= 1.001 || (e.button !== 0 && e.button !== 1)) return;
     e.preventDefault();
     const r = f.getBoundingClientRect(); const x0 = e.clientX; const y0 = e.clientY; const o0 = { ...S.pz };
-    f.setPointerCapture(e.pointerId); f.classList.add('grabbing');
-    f.onpointermove = (ev) => {
+    f.classList.add('grabbing');
+    dragPtr(f, e, (ev) => {
       const z = S.pz.z;
       S.pz = { z, x: clamp(o0.x - (ev.clientX - x0) / r.width / z, 0, 1 - 1 / z), y: clamp(o0.y - (ev.clientY - y0) / r.height / z, 0, 1 - 1 / z) };
       applyPz();
-    };
-    f.onpointerup = () => { f.onpointermove = null; f.classList.remove('grabbing'); };
+    }, () => f.classList.remove('grabbing'));
   });
-  [$('.stage'), $('#timeline')].forEach((el) => el.addEventListener('mousedown', (e) => { if (e.button === 1) e.preventDefault(); }));
+  [$('.stage'), $('#timeline')].forEach((el) => {
+    el.addEventListener('mousedown', (e) => { if (e.button === 1) e.preventDefault(); });
+    // sem o "arrastar e soltar" do navegador nas imagens (ele prendia o arrastar da prévia)
+    el.addEventListener('dragstart', (e) => e.preventDefault());
+  });
   $('.stage').addEventListener('dblclick', (e) => { if (e.target.closest('.frame') && S.pz.z > 1.001) { S.pz = { z: 1, x: 0, y: 0 }; applyPz(); const q = selItem(); if (q && REAL) requestFrames(q); } });
   function requestPreview(q, out) {
     if (!REAL) return;
@@ -1070,7 +1096,7 @@
     fr.className = 'frame' + (out ? ' out' : '');
     fr.dataset.id = q.id; fr.dataset.label = out ? L.result : L.original;
     if (REAL) {
-      if (!keepImg) fr.innerHTML = `<img class="pv-img" ${q.thumb ? `src="${q.thumb}"` : ''} alt=""><i class="pv-spin"></i>`;
+      if (!keepImg) fr.innerHTML = `<img class="pv-img" draggable="false" ${q.thumb ? `src="${q.thumb}"` : ''} alt=""><i class="pv-spin"></i>`;
     } else {
       const washed = q.src.hdr && (!out || !q.cfg.hdrToSdr);
       fr.innerHTML = scene(q.hue, ar.h > ar.w)
@@ -1090,7 +1116,7 @@
     $('#previewCard').classList.toggle('no-video', !q);
     $('.stage').classList.toggle('compare', !!S.cmp);
     $('#bCompare').classList.toggle('on', !!S.cmp);
-    if ((q && q.id) !== S.zoomFor) { S.zoomFor = q && q.id; S.zoom = 1; S.v0 = 0; S.pz = { z: 1, x: 0, y: 0 }; const zb = $('#zbar'); if (zb) zb.hidden = true; tl.classList.remove('zoomed'); }
+    if ((q && q.id) !== S.zoomFor) { S.zoomFor = q && q.id; S.zoom = 1; S.v0 = 0; S.pz = { z: 1, x: 0, y: 0 }; tl.classList.remove('zoomed'); renderScroll(); }
     renderTrim();
     if (!q) { fr.innerHTML = ''; fi.innerHTML = ''; $('#pvMeta').innerHTML = ''; $('#tcEnd').textContent = '00:00:00:00'; pvSt.in.key = pvSt.out.key = ''; drawWave(); return; }
     $('#previewCard').classList.toggle('audio-item', !!q.src.audioOnly);
@@ -1103,7 +1129,7 @@
         fr.className = 'frame audio-card'; fr.dataset.id = q.id; fr.dataset.ar = 16 / 10; fr.dataset.label = '';
         fr.innerHTML = `<div class="ac-in">${ICONS.note}<b>${esc(q.file)}</b><span>${esc(audioSrcTxt(q.src))} · ${esc(q.src.dur)}</span></div>`;
         fi.innerHTML = ''; fitFrames();
-        $('#tcEnd').textContent = q.src.dur; setT(S.t, true);
+        $('#tcEnd').textContent = tcF(q, fullDur(q)); setT(S.t, true);
         if (REAL && q.wave === undefined) { q.wave = null; inv('waveform', { id: q.id, bars: waveBars(q) }).then((w) => { q.wave = w; if (selItem() === q) drawWave(); }).catch(() => { q.wave = []; }); }
         drawWave(); return;
       }
@@ -1125,7 +1151,7 @@
     fitFrames(); applyPz();
     if (REAL) requestFrames(q);
     if (anim) { [fr, fi].forEach((f) => { f.classList.remove('flip'); void f.offsetWidth; f.classList.add('flip'); }); }
-    $('#tcEnd').textContent = q.src.dur; setT(S.t, true);
+    $('#tcEnd').textContent = tcF(q, fullDur(q)); setT(S.t, true);
     if (REAL && q.wave === undefined) {
       q.wave = null;
       inv('waveform', { id: q.id, bars: waveBars(q) }).then((w) => { q.wave = w; if (selItem() === q) drawWave(); }).catch(() => { q.wave = []; });
@@ -1155,14 +1181,22 @@
 
   /* forma de onda (no app vem do áudio de verdade) */
   /* Zoom da linha do tempo: a vista mostra [S.v0, S.v0 + 1/S.zoom] do arquivo (frações).
-     Rodinha = zoom no ponto do mouse; Shift+rodinha (ou arrastar a barrinha) = andar para os lados;
-     = e - zoom na agulha; \ volta a mostrar tudo. Bem de perto aparece uma marca por quadro. */
-  const tl = $('#timeline');
+     Rodinha = zoom no ponto do mouse; Shift+rodinha, botão do meio ou a barra de baixo = andar para os lados;
+     arrastar as pontas da barra = zoom (como no Premiere); = e - zoom na agulha; \ volta a mostrar tudo. */
+  const tl = $('#timeline'); const zs = $('#zscroll');
   S.zoom = 1; S.v0 = 0; S.zoomFor = null;
   const vis = (f) => (f - S.v0) * S.zoom;
   const unvis = (x) => S.v0 + x / S.zoom;
+  // quadros por segundo da agulha: os do arquivo que vai sair (CFR), senão os do original; áudio: 1/100 s
+  const frOf = (q) => (q.src.audioOnly ? 100 : (q.cfg && q.cfg.fps && q.cfg.fps.conform && parseFloat(String(fpsOut(q.cfg, q.src)).replace(',', '.'))) || q.src.fpsNum || 60);
+  const framesOf = (q) => Math.max(1, fullDur(q) * frOf(q));
+  // timecode contado em quadros (como o Premiere, sem drop-frame): o quadro N mostra sempre o mesmo número
+  const tcF = (q, t) => { const fr = frOf(q); const nom = Math.round(fr); const k = Math.round(t * fr); const ss = Math.floor(k / nom);
+    return [Math.floor(ss / 3600), Math.floor(ss / 60) % 60, ss % 60, k % nom].map(pad).join(':'); };
+  // tempo (s) → início do quadro onde ele cai
+  const snapT = (q, t) => { const fr = frOf(q); return clamp(Math.round(t * fr), 0, Math.max(0, Math.ceil(fullDur(q) * fr) - 1)) / fr; };
   // até ~16 px por quadro
-  const maxZoom = (q) => Math.max(1, fullDur(q) * (q.src.fpsNum || 60) * 16 / Math.max(200, tl.clientWidth));
+  const maxZoom = (q) => Math.max(1, framesOf(q) * 16 / Math.max(200, tl.clientWidth));
   function setZoom(z, ax, af) {
     const q = selItem(); if (!q || q.src.isImage) return;
     S.zoom = clamp(z, 1, maxZoom(q));
@@ -1172,12 +1206,15 @@
   // zoom com a agulha no meio (teclas = e -)
   const zoomAtHead = (k) => { const x = clamp(vis(S.t), 0, 1); setZoom(S.zoom * k, S.zoom * k <= 1 ? 0 : x, S.t); };
   function renderTimeline() {
-    tl.style.setProperty('--t', vis(S.t) * 100 + '%');
+    placeHead();
     tl.classList.toggle('zoomed', S.zoom > 1.001);
-    const zb = $('#zbar'); zb.hidden = S.zoom <= 1.001;
-    zb.firstElementChild.style.cssText = `left:${S.v0 * 100}%;width:${100 / S.zoom}%`;
-    zb.title = `×${S.zoom < 10 ? S.zoom.toFixed(1) : Math.round(S.zoom)}`;
-    drawWave(); renderTrim();
+    drawWave(); renderTrim(); renderScroll();
+  }
+  // agulha: com zoom ela ocupa a largura do quadro, para ver em qual quadro está
+  function placeHead() {
+    const q = selItem(); const w = q ? S.zoom / framesOf(q) : 0;
+    tl.style.setProperty('--t', vis(S.t) * 100 + '%');
+    tl.style.setProperty('--fw', w * tl.clientWidth >= 4 ? w * 100 + '%' : '0px');
   }
   tl.addEventListener('wheel', (e) => {
     const q = selItem(); if (!q || q.src.isImage) return;
@@ -1187,12 +1224,32 @@
     if (pan) { if (S.zoom > 1) { S.v0 = clamp(S.v0 + (e.deltaX || e.deltaY) / r.width / S.zoom, 0, 1 - 1 / S.zoom); renderTimeline(); } return; }
     setZoom(S.zoom * Math.exp(-e.deltaY * 0.0018), x, unvis(x));
   }, { passive: false });
-  // barrinha embaixo: arrastar anda pela linha do tempo
-  $('#zbar').addEventListener('pointerdown', (e) => {
-    e.stopPropagation(); const zb = e.currentTarget; const r = zb.getBoundingClientRect(); zb.setPointerCapture(e.pointerId);
-    const inside = e.target.tagName === 'I'; const grab = inside ? (e.clientX - r.left) / r.width - S.v0 : 0.5 / S.zoom;
-    const mv = (ev) => { S.v0 = clamp((ev.clientX - r.left) / r.width - grab, 0, 1 - 1 / S.zoom); renderTimeline(); };
-    mv(e); zb.onpointermove = mv; zb.onpointerup = () => { zb.onpointermove = null; };
+  // barra de rolagem embaixo da linha do tempo, com os trechos em miniatura:
+  // arrastar o meio anda; arrastar uma ponta muda o zoom
+  function renderScroll() {
+    const q = selItem(); const d = q ? fullDur(q) : 1;
+    zs.classList.toggle('zoomed', S.zoom > 1.001);
+    const th = zs.querySelector('.zthumb'); th.style.left = S.v0 * 100 + '%'; th.style.width = 100 / S.zoom + '%';
+    zs.querySelector('.mini').innerHTML = (cutsOf(q) || []).map(([a, b]) => `<i style="left:${a / d * 100}%;width:${(b - a) / d * 100}%"></i>`).join('');
+    zs.title = S.zoom > 1.001 ? `${L.zoomLbl} ×${S.zoom < 10 ? S.zoom.toFixed(1) : Math.round(S.zoom)}` : '';
+  }
+  zs.addEventListener('pointerdown', (e) => {
+    const q = selItem(); if (!q || e.button !== 0) return; e.preventDefault();
+    const r = zs.getBoundingClientRect(); const fx = (ev) => clamp((ev.clientX - r.left) / r.width, 0, 1);
+    const h = e.target.closest('.h');
+    if (h) {
+      // ponta esquerda/direita: muda o tamanho da vista (= zoom), a outra ponta fica parada
+      const left = h.classList.contains('l'); const a0 = S.v0; const b0 = S.v0 + 1 / S.zoom; const minW = 1 / maxZoom(q);
+      dragPtr(zs, e, (ev) => {
+        const x = fx(ev); let a = a0; let b = b0;
+        if (left) a = clamp(x, 0, b0 - minW); else b = clamp(x, a0 + minW, 1);
+        S.zoom = clamp(1 / (b - a), 1, maxZoom(q)); S.v0 = clamp(a, 0, 1 - 1 / S.zoom); renderTimeline();
+      });
+      return;
+    }
+    const inThumb = e.target.closest('.zthumb'); const grab = inThumb ? fx(e) - S.v0 : 0.5 / S.zoom;
+    const mv = (ev) => { S.v0 = clamp(fx(ev) - grab, 0, 1 - 1 / S.zoom); renderTimeline(); };
+    mv(e); dragPtr(zs, e, mv);
   });
   // agulha saiu da vista (setas, quadro a quadro): a vista acompanha
   function follow() {
@@ -1210,8 +1267,8 @@
     const q = selItem(); if (!q) return;
     const n = Math.floor((r.width - 4) / 3);
     if (REAL) {
-      const w = q.wave; if (!w || !w.length) return;
-      for (let i = 0; i < n; i++) {
+      const w = q.wave;
+      if (w && w.length) for (let i = 0; i < n; i++) {
         const f = unvis((i + 0.5) / n); if (f < 0 || f > 1) continue;
         const v = w[Math.min(w.length - 1, Math.floor(f * w.length))] / 255; const a = Math.max(1.5, v * (r.height - 10));
         g.beginPath(); g.roundRect(2 + i * 3, (r.height - a) / 2, 2, a, 1); g.fill();
@@ -1226,11 +1283,10 @@
         g.beginPath(); g.roundRect(2 + i * 3, (r.height - a) / 2, 2, a, 1); g.fill();
       }
     }
-    // bem de perto: uma marca por quadro (mais forte a cada segundo)
-    const fps = q.src.fpsNum || 60; const frames = fullDur(q) * fps; const px = r.width * S.zoom / frames;
+    // bem de perto: um quadro sim, um não, levemente mais claro (dá para contar); traço mais alto em cada segundo
+    const fps = frOf(q); const frames = framesOf(q); const px = r.width * S.zoom / frames;
     if (px >= 5) {
       const f0 = Math.floor(S.v0 * frames); const f1 = Math.ceil((S.v0 + 1 / S.zoom) * frames);
-      // um quadro sim, um não, levemente mais claro: dá para contar os quadros; traço mais alto em cada segundo
       g.fillStyle = css.getPropertyValue('--text').trim();
       for (let k = f0; k <= f1; k++) {
         const x0 = vis(k / frames) * r.width; const x1 = vis((k + 1) / frames) * r.width;
@@ -1240,74 +1296,82 @@
       g.globalAlpha = 1;
     }
   }
+  // agulha sempre no começo de um quadro
   function setT(t, quiet) {
+    const q = selItem();
     S.t = clamp(t, 0, 1);
-    if (follow()) { drawWave(); renderTrim(); const zb = $('#zbar'); if (zb) zb.firstElementChild.style.left = S.v0 * 100 + '%'; }
-    tl.style.setProperty('--t', vis(S.t) * 100 + '%');
-    const q = selItem(); if (!q) { $('#tcNow').textContent = '00:00:00:00'; return; }
-    $('#tcNow').textContent = tc(fullDur(q) * S.t, q.src.fpsNum || 60);
+    if (q && !q.src.isImage) S.t = snapT(q, S.t * fullDur(q)) / fullDur(q);
+    if (follow()) { drawWave(); renderTrim(); renderScroll(); }
+    placeHead();
+    if (!q) { $('#tcNow').textContent = '00:00:00:00'; return; }
+    $('#tcNow').textContent = tcF(q, fullDur(q) * S.t);
+    markCutRow();
     if (!quiet && REAL) requestFrames(q);
   }
   tl.addEventListener('pointerdown', (e) => {
     const q = selItem(); if (!q) return;
-    const r = tl.getBoundingClientRect();
-    // botão do meio com zoom: arrasta a vista (não mexe na agulha)
+    const r = tl.getBoundingClientRect(); const d = fullDur(q); const fr = frOf(q);
+    const at = (ev) => clamp(unvis((ev.clientX - r.left) / r.width), 0, 1) * d;
+    // botão do meio: arrasta a vista (não mexe na agulha)
     if (e.button === 1) {
       e.preventDefault(); if (S.zoom <= 1.001) return;
-      const x0 = e.clientX; const v0 = S.v0; tl.setPointerCapture(e.pointerId);
-      tl.onpointermove = (ev) => { S.v0 = clamp(v0 - (ev.clientX - x0) / r.width / S.zoom, 0, 1 - 1 / S.zoom); renderTimeline(); };
-      tl.onpointerup = () => { tl.onpointermove = null; };
+      const x0 = e.clientX; const v0 = S.v0;
+      dragPtr(tl, e, (ev) => { S.v0 = clamp(v0 - (ev.clientX - x0) / r.width / S.zoom, 0, 1 - 1 / S.zoom); renderTimeline(); });
       return;
     }
     if (e.button !== 0) return;
     const edge = e.target.closest('.edge');
-    if (edge && cutsOf(q)) {
-      // arrastar a borda de um trecho (sem passar do vizinho)
-      const k = edge.dataset.edge; const i = +edge.dataset.i; const d = fullDur(q); tl.setPointerCapture(e.pointerId);
+    if (edge && cutsOf(q) && S.cutter) {
+      // borda de um trecho: clicar leva a agulha até ela (início = 1º quadro, fim = último quadro);
+      // arrastar ajusta quadro a quadro, sem passar do vizinho
+      const k = edge.dataset.edge; const i = +edge.dataset.i; const x0 = e.clientX; let moved = false;
       q.cutSel = i;
-      tl.onpointermove = (ev) => {
-        const t = clamp(unvis((ev.clientX - r.left) / r.width), 0, 1) * d; const c = q.cuts[i];
+      const goEdge = () => { const c = q.cuts[i]; setT((k === 'a' ? c[0] : c[1] - 1 / fr) / d); };
+      dragPtr(tl, e, (ev) => {
+        if (!moved && Math.abs(ev.clientX - x0) < 3) return; moved = true;
+        const t = snapT(q, at(ev)); const c = q.cuts[i];
         const lo = i > 0 ? q.cuts[i - 1][1] : 0; const hi = i < q.cuts.length - 1 ? q.cuts[i + 1][0] : d;
-        if (k === 'a') c[0] = clamp(t, lo, c[1] - 0.1); else c[1] = clamp(t, c[0] + 0.1, hi);
-        renderTrim(); setT(c[k === 'a' ? 0 : 1] / d);
-      };
-      tl.onpointerup = () => { tl.onpointermove = null; setCuts(q, q.cuts); };
+        if (k === 'a') c[0] = clamp(t, lo, c[1] - 1 / fr); else c[1] = clamp(t + 1 / fr, c[0] + 1 / fr, hi);
+        renderTrim(); goEdge();
+      }, () => { if (moved) setCuts(q, q.cuts); else { renderTrim(); goEdge(); } });
       return;
     }
-    const mv = (ev) => setT(unvis(clamp((ev.clientX - r.left) / r.width, 0, 1)));
-    mv(e); tl.setPointerCapture(e.pointerId); tl.onpointermove = mv;
+    const mv = (ev) => setT(at(ev) / d);
+    mv(e);
     // soltar em cima de um trecho escolhe ele (I e O passam a mexer nele)
-    tl.onpointerup = () => { tl.onpointermove = null; const i = cutAt(q); if (i >= 0 && i !== q.cutSel) { q.cutSel = i; renderTrim(); } };
+    dragPtr(tl, e, mv, () => { const i = cutAt(q); if (i >= 0 && i !== q.cutSel) { q.cutSel = i; renderTrim(); } });
   });
-  /* Cortar trechos: I (início) e O (fim) mexem no trecho escolhido; Ctrl+K corta um trecho novo na agulha;
-     arrastar as bordas ajusta. Vários trechos saem separados (_01, _02...) ou juntos num arquivo. */
-  const cutAt = (q, t = fullDur(q) * S.t) => (q.cuts || []).findIndex(([a, b]) => t >= a - 0.001 && t <= b + 0.001);
+  /* Trechos: [início, fim) em segundos, sempre em quadros inteiros. I = início no quadro da agulha;
+     O = fim incluindo o quadro da agulha; Ctrl+K = trecho novo na agulha (dentro de um trecho, divide em dois).
+     Vários trechos saem separados (_01, _02...) ou juntos num arquivo. */
+  const cutAt = (q, t = fullDur(q) * S.t) => (q.cuts || []).findIndex(([a, b]) => t >= a - 0.0005 && t < b - 0.0005);
   function setCuts(q, list) {
-    const d = fullDur(q); const sel = (list || [])[q.cutSel];
-    let cs = (list || []).map(([a, b]) => [clamp(a, 0, d), clamp(b, 0, d)]).filter(([a, b]) => b - a >= 0.1).sort((x, y) => x[0] - y[0]);
+    const d = fullDur(q); const fr = frOf(q); const sel = (list || [])[q.cutSel];
+    const g = (t) => Math.round(t * fr) / fr;
+    let cs = (list || []).map(([a, b]) => [clamp(g(a), 0, d), clamp(g(b), 0, d)]).filter(([a, b]) => b - a >= 0.5 / fr).sort((x, y) => x[0] - y[0]);
     // trechos um por cima do outro viram um só (encostados continuam separados)
-    cs = cs.reduce((m, c) => { const l = m[m.length - 1]; if (l && c[0] < l[1] - 0.001) l[1] = Math.max(l[1], c[1]); else m.push(c); return m; }, []);
-    if (cs.length === 1 && cs[0][0] < 0.01 && cs[0][1] > d - 0.01) cs = [];
+    cs = cs.reduce((m, c) => { const l = m[m.length - 1]; if (l && c[0] < l[1] - 0.0005) l[1] = Math.max(l[1], c[1]); else m.push(c); return m; }, []);
+    if (cs.length === 1 && cs[0][0] < 0.5 / fr && cs[0][1] > d - 0.5 / fr) cs = [];
     q.cuts = cs.length ? cs : null;
-    q.cutSel = sel ? Math.max(0, cs.findIndex((c) => c[0] <= sel[0] + 0.001 && c[1] >= sel[1] - 0.001)) : Math.min(q.cutSel || 0, cs.length - 1);
-    renderQueue(); renderPreview(); renderInspector();
+    q.cutSel = sel ? Math.max(0, cs.findIndex((c) => c[0] <= sel[0] + 0.0005 && c[1] >= sel[1] - 0.0005)) : Math.min(q.cutSel || 0, Math.max(0, cs.length - 1));
+    renderQueue(); renderPreview(); renderInspector(); renderScroll(); renderCutter();
   }
   function markTrim(k) {
     const q = selItem(); if (!q || q.src.isImage || q.status === 'running') return;
-    const d = fullDur(q); const t = d * S.t; const cs = (q.cuts || []).map((c) => c.slice());
+    const d = fullDur(q); const fr = frOf(q); const t = snapT(q, d * S.t); const cs = (q.cuts || []).map((c) => c.slice());
     let i = cs.length ? clamp(q.cutSel || 0, 0, cs.length - 1) : -1;
     if (i < 0) { cs.push([0, d]); i = 0; }
     const lo = i > 0 ? cs[i - 1][1] : 0; const hi = i < cs.length - 1 ? cs[i + 1][0] : d;
-    if (k === 'a') { cs[i][0] = clamp(t, lo, hi); if (cs[i][1] <= cs[i][0] + 0.1) cs[i][1] = hi; }
-    else { cs[i][1] = clamp(t, lo, hi); if (cs[i][1] <= cs[i][0] + 0.1) cs[i][0] = lo; }
+    if (k === 'a') { cs[i][0] = clamp(t, lo, hi - 1 / fr); if (cs[i][1] <= cs[i][0]) cs[i][1] = hi; }
+    // O: o quadro da agulha entra no trecho
+    else { cs[i][1] = clamp(t + 1 / fr, lo + 1 / fr, hi); if (cs[i][1] <= cs[i][0]) cs[i][0] = lo; }
     q.cutSel = i; setCuts(q, cs);
   }
-  // Ctrl+K: trecho novo a partir da agulha (dentro de um trecho, divide ele em dois)
   function newCut() {
     const q = selItem(); if (!q || q.src.isImage || q.status === 'running') return;
-    const d = fullDur(q); const t = d * S.t; const cs = (q.cuts || []).map((c) => c.slice());
+    const d = fullDur(q); const fr = frOf(q); const t = snapT(q, d * S.t); const cs = (q.cuts || []).map((c) => c.slice());
     const i = cutAt(q, t);
-    if (i >= 0 && t - cs[i][0] >= 0.1 && cs[i][1] - t >= 0.1) { cs.splice(i + 1, 0, [t, cs[i][1]]); cs[i][1] = t; q.cutSel = i + 1; }
+    if (i >= 0 && t - cs[i][0] >= 1 / fr - 0.0005) { cs.splice(i + 1, 0, [t, cs[i][1]]); cs[i][1] = t; q.cutSel = i + 1; }
     else if (i < 0) { const next = cs.find((c) => c[0] > t); cs.push([t, next ? next[0] : d]); cs.sort((x, y) => x[0] - y[0]); q.cutSel = cs.findIndex((c) => c[0] === t); }
     else return;
     setCuts(q, cs);
@@ -1315,44 +1379,131 @@
   function renderTrim() {
     const q = selItem(); const cs = cutsOf(q); const d = q ? fullDur(q) : 1; const box = $('#trimBox');
     tl.classList.toggle('trimmed', !!cs);
-    if (!cs) { box.innerHTML = ''; $('#bIn').classList.remove('set'); $('#bOut').classList.remove('set'); return; }
+    $('#tlHint').hidden = !(S.cutter && q && !cs);
+    if (!cs) { box.innerHTML = ''; $('#bIn').classList.remove('set'); $('#bOut').classList.remove('set'); renderCutList(); return; }
     const pc = (t) => (vis(t / d) * 100).toFixed(3) + '%'; const pw = (t) => (t / d * S.zoom * 100).toFixed(3) + '%'; const sel = clamp(q.cutSel || 0, 0, cs.length - 1);
     // fora dos trechos escurece; cada trecho em amarelo com as bordas de arrastar
     const gaps = []; let prev = 0;
     cs.forEach(([a, b]) => { if (a > prev) gaps.push([prev, a]); prev = b; }); if (prev < d) gaps.push([prev, d]);
     box.innerHTML = gaps.map(([a, b]) => `<i class="cut" style="left:${pc(a)};width:${pw(b - a)}"></i>`).join('')
       + cs.map(([a, b], i) => `<div class="seg ${i === sel && cs.length > 1 ? 'sel' : ''}" style="left:${pc(a)};width:${pw(b - a)}">${cs.length > 1 ? `<small>${i + 1}</small>` : ''}</div>
-        <b class="edge l" data-edge="a" data-i="${i}" style="left:${pc(a)}"></b><b class="edge r" data-edge="b" data-i="${i}" style="left:${pc(b)}"></b>`).join('');
-    $('#bIn').classList.toggle('set', cs[sel][0] > 0.001); $('#bOut').classList.toggle('set', cs[sel][1] < d - 0.001);
+        <b class="edge l" data-edge="a" data-i="${i}" style="left:${pc(a)}" title="${esc(L.edgeIn)}"></b><b class="edge r" data-edge="b" data-i="${i}" style="left:${pc(b)}" title="${esc(L.edgeOut)}"></b>`).join('');
+    $('#bIn').classList.toggle('set', cs[sel][0] > 0.0005); $('#bOut').classList.toggle('set', cs[sel][1] < d - 0.0005);
+    renderCutList();
   }
   $('#bIn').onclick = () => markTrim('a'); $('#bOut').onclick = () => markTrim('b'); $('#bCut').onclick = newCut;
-  const cutTitle = (q) => (cutsOf(q) || []).map(([a, b], i) => `${i + 1}: ${fmtDur(a)}–${fmtDur(b)}`).join('\n');
-  // menu dos trechos: separados ou juntos, tirar um, tirar todos
-  function cutMenu(at) {
-    const q = selItem(); const cs = cutsOf(q); if (!cs) return;
-    openMenu(at, [
-      ...(cs.length > 1 ? [{ label: L.cutSplit, value: 'split', sel: !q.cutJoin, icon: ICONS.layers }, { label: L.cutJoin, value: 'join', sel: !!q.cutJoin, icon: ICONS.cut }, { sep: true }] : []),
-      ...cs.map(([a, b], i) => ({ label: L.cutRemove(i + 1, `${fmtDur(a)}–${fmtDur(b)}`), value: 'del:' + i, icon: ICONS.x })),
-      ...(cs.length > 1 ? [{ sep: true }, { label: L.trimClear, value: 'all', icon: ICONS.trash, danger: true }] : []),
-    ], (v) => {
-      if (v === 'split' || v === 'join') { q.cutJoin = v === 'join'; renderQueue(); renderPreview(); renderInspector(); return; }
-      if (v === 'all') { setCuts(q, []); return; }
-      const i = +v.split(':')[1]; setCuts(q, cs.filter((_, k) => k !== i));
-    });
-  }
-  $('#pvMeta').addEventListener('click', (e) => { const c = e.target.closest('[data-trimclear]'); if (c) cutMenu(c); });
+  // fim mostrado = último quadro que entra
+  const cutTc = (q, t) => tcF(q, t);
+  const cutTitle = (q) => (cutsOf(q) || []).map(([a, b], i) => `${i + 1}: ${cutTc(q, a)} → ${cutTc(q, b - 1 / frOf(q))}`).join('\n');
+  // menu dos trechos na tela principal: abrir o Cortador ou tirar todos
+  $('#pvMeta').addEventListener('click', (e) => { if (e.target.closest('[data-trimclear]')) openCutter(true); });
   const trimChip = (q) => {
     const cs = cutsOf(q); if (!cs) return '';
     const txt = cs.length === 1 ? `${L.trimLbl} ${fmtDur(cs[0][0])}–${fmtDur(cs[0][1])} · ${fmtDur(cs[0][1] - cs[0][0])}`
       : `${L.cutsN(cs.length)} · ${fmtDur(cutsDur(q))} · ${q.cutJoin ? L.cutJoinShort : L.cutSplitShort}`;
-    return `<button class="chip hl trim-chip" data-menu="1" style="--c:${COLORS.yellow}" data-trimclear title="${esc(cutTitle(q))}">${ICONS.cut}${txt}${ICONS.chev}</button>`;
+    return `<button class="chip hl trim-chip" style="--c:${COLORS.yellow}" data-trimclear title="${esc(L.openCutter)}">${ICONS.cut}${txt}</button>`;
   };
+
+  /* ---------- Cortador: página própria, com prévia e linha do tempo grandes e a lista de trechos ----------
+     A prévia e a linha do tempo da tela principal são levadas para cá (as mesmas peças) e voltam ao fechar. */
+  S.cutter = null;
+  const cutterOk = (q) => q && !q.src.isImage && q.status !== 'running';
+  function openCutter(on) {
+    const q = selItem();
+    if (on) {
+      if (!cutterOk(q)) { if (q && q.src.isImage) toast(L.cutImage); return; }
+      S.cutter = { id: q.id, before: { cuts: q.cuts ? q.cuts.map((c) => c.slice()) : null, cutJoin: !!q.cutJoin, cutSel: q.cutSel || 0 } };
+      S.cmp = false; closeMenu(); if (q.cuts) setCuts(q, q.cuts);
+      $('#cutStageSlot').append($('.stage')); $('#cutTransportSlot').append($('.transport'));
+      root.classList.add('cutter-open'); $('#cutter').hidden = false;
+    } else {
+      if (!S.cutter) return;
+      $('#pvMeta').before($('.stage')); $('#pvMeta').after($('.transport'));
+      root.classList.remove('cutter-open'); $('#cutter').hidden = true; S.cutter = null;
+    }
+    requestAnimationFrame(() => { fitFrames(); renderAll(); renderTimeline(); renderCutter(); });
+  }
+  function cancelCutter() {
+    const q = itemOf(S.cutter && S.cutter.id);
+    if (q) Object.assign(q, { cuts: S.cutter.before.cuts, cutJoin: S.cutter.before.cutJoin, cutSel: S.cutter.before.cutSel });
+    openCutter(false);
+  }
+  $('#bCutDone').onclick = () => openCutter(false);
+  $('#bCutCancel').onclick = cancelCutter;
+  $('#bOpenCut').onclick = () => openCutter(true);
+  function renderCutter() {
+    if (!S.cutter) return;
+    const q = itemOf(S.cutter.id); if (!q) { openCutter(false); return; }
+    $('#cutFile').textContent = q.file;
+    $('#cutInfo').textContent = q.src.audioOnly ? `${audioSrcTxt(q.src)} · ${fmtDur(fullDur(q))}` : `${q.src.w}×${q.src.h} · ${fpsTxt(+frOf(q).toFixed(2))} fps · ${fmtDur(fullDur(q))}`;
+    const cs = cutsOf(q) || [];
+    $('#cutMode').hidden = cs.length < 2;
+    $('#bClearCuts').hidden = !cs.length;
+    $$('#cutMode button').forEach((b) => b.classList.toggle('active', (b.dataset.v === 'join') === !!q.cutJoin));
+    $('#cutTotal').textContent = cs.length ? `${L.cutsN(cs.length).replace(/^1 .*/, L.oneCut)} · ${fmtDur(cutsDur(q))}` : L.wholeFile;
+    // nomes dos arquivos que vão sair
+    const names = outNames(q);
+    $('#cutOut').innerHTML = `<small>${esc(names.length > 1 ? L.cutFilesN(names.length) : L.cutFile1)}</small>` + names.slice(0, 6).map((n) => `<div>${esc(n)}</div>`).join('') + (names.length > 6 ? `<div>…</div>` : '');
+    renderCutList();
+  }
+  // lista de trechos com início e fim em timecode (dá para digitar)
+  function renderCutList() {
+    const el = $('#cutList'); if (!S.cutter || !el) return;
+    const q = itemOf(S.cutter.id); if (!q) return; const cs = cutsOf(q) || []; const fr = frOf(q);
+    if (document.activeElement && document.activeElement.closest('#cutList')) { markCutRow(); return; }
+    el.innerHTML = cs.length ? cs.map(([a, b], i) => `<div class="cut-row ${i === (q.cutSel || 0) ? 'sel' : ''}" data-i="${i}">
+        <span class="n">${i + 1}</span>
+        <input class="tcin" data-i="${i}" data-k="a" value="${cutTc(q, a)}" spellcheck="false" title="${esc(L.cutStart)}">
+        <span class="to">→</span>
+        <input class="tcin" data-i="${i}" data-k="b" value="${cutTc(q, b - 1 / fr)}" spellcheck="false" title="${esc(L.cutEnd)}">
+        <span class="dur">${fmtDur(b - a)}</span>
+        <button class="x" data-del="${i}" title="${esc(L.cutDel)}">${ICONS.x}</button></div>`).join('')
+      : `<div class="cut-empty">${L.cutEmpty}</div>`;
+    markCutRow();
+  }
+  // a linha do trecho em que a agulha está fica marcada
+  function markCutRow() {
+    if (!S.cutter) return; const q = itemOf(S.cutter.id); if (!q) return; const i = cutAt(q);
+    $$('#cutList .cut-row').forEach((r) => r.classList.toggle('here', +r.dataset.i === i));
+  }
+  const parseTc = (q, s) => {
+    const p = String(s).trim().split(/[:;.,]/).map(Number); if (!p.length || p.some((x) => !Number.isFinite(x))) return null;
+    while (p.length < 4) p.unshift(0);
+    const [h, m, sec, f] = p.slice(-4); return ((h * 3600 + m * 60 + sec) * Math.round(frOf(q)) + f) / frOf(q);
+  };
+  $('#cutList').addEventListener('click', (e) => {
+    const q = itemOf(S.cutter && S.cutter.id); if (!q) return;
+    const del = e.target.closest('[data-del]');
+    if (del) { const i = +del.dataset.del; setCuts(q, q.cuts.filter((_, k) => k !== i)); return; }
+    const row = e.target.closest('.cut-row'); if (!row || e.target.closest('input')) return;
+    q.cutSel = +row.dataset.i; setT(q.cuts[q.cutSel][0] / fullDur(q)); renderTrim();
+  });
+  $('#cutList').addEventListener('focusin', (e) => {
+    const inp = e.target.closest('.tcin'); const q = itemOf(S.cutter && S.cutter.id); if (!inp || !q) return;
+    q.cutSel = +inp.dataset.i; const c = q.cuts[q.cutSel];
+    setT((inp.dataset.k === 'a' ? c[0] : c[1] - 1 / frOf(q)) / fullDur(q)); inp.select();
+    $$('#cutList .cut-row').forEach((r) => r.classList.toggle('sel', +r.dataset.i === q.cutSel));
+  });
+  $('#cutList').addEventListener('change', (e) => {
+    const inp = e.target.closest('.tcin'); const q = itemOf(S.cutter && S.cutter.id); if (!inp || !q) return;
+    const t = parseTc(q, inp.value); const i = +inp.dataset.i; const fr = frOf(q);
+    if (t == null) { inp.blur(); renderCutList(); return; }
+    const cs = q.cuts.map((c) => c.slice()); const s = snapT(q, t);
+    if (inp.dataset.k === 'a') cs[i][0] = Math.min(s, cs[i][1] - 1 / fr); else cs[i][1] = Math.max(s + 1 / fr, cs[i][0] + 1 / fr);
+    inp.blur(); setCuts(q, cs); setT((inp.dataset.k === 'a' ? cs[i][0] : cs[i][1] - 1 / fr) / fullDur(q));
+  });
+  $('#cutList').addEventListener('keydown', (e) => { if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') { e.stopPropagation(); e.target.blur(); renderCutList(); } });
+  $('#cutMode').addEventListener('click', (e) => {
+    const b = e.target.closest('button'); const q = itemOf(S.cutter && S.cutter.id); if (!b || !q) return;
+    q.cutJoin = b.dataset.v === 'join'; renderQueue(); renderPreview(); renderInspector(); renderCutter();
+  });
+  $('#bClearCuts').onclick = () => { const q = itemOf(S.cutter && S.cutter.id); if (q) setCuts(q, []); };
   const ctl = $$('.controls .ctl:not(.trim-btn)');
   const stepBy = (s) => { const q = selItem(); if (q) setT(S.t + s / fullDur(q)); };
-  ctl[0].onclick = () => { const q = selItem(); if (q) stepBy(-1 / (q.src.fpsNum || 60)); };
+  ctl[0].onclick = () => { const q = selItem(); if (q) stepBy(-1 / frOf(q)); };
   ctl[1].onclick = () => stepBy(-5);
   ctl[3].onclick = () => stepBy(5);
-  ctl[4].onclick = () => { const q = selItem(); if (q) stepBy(1 / (q.src.fpsNum || 60)); };
+  ctl[4].onclick = () => { const q = selItem(); if (q) stepBy(1 / frOf(q)); };
   let playRaf;
   if (REAL) $('#bPlay').remove(); // sem reprodução: a prévia mostra quadros
   else $('#bPlay').onclick = () => {
@@ -1558,6 +1709,13 @@
     const n = q && cutsOf(q) && !q.cutJoin ? q.cuts.length : 0;
     return base + suf + (n > 1 ? `_01…_${pad(n)}` : '') + '.' + (isImageP(cfg) ? (IEXT[(cfg.image || {}).format] || 'jpg') : isAudioP(cfg) ? (AEXT[cfg.audio.codec] || String(file).split('.').pop()) : extOut(cfg, file));
   }
+  // todos os arquivos que vão sair deste vídeo (um por trecho, se separados)
+  function outNames(q) {
+    const one = outName(q.file, q.cfg, null); const n = cutsOf(q) && !q.cutJoin ? q.cuts.length : 0;
+    if (n < 2) return [one];
+    const dot = one.lastIndexOf('.');
+    return Array.from({ length: n }, (_, i) => `${one.slice(0, dot)}_${pad(i + 1)}${one.slice(dot)}`);
+  }
   // caminho completo (para a dica): pasta escolhida + subpastas de origem + subpasta + nome
   function outPath(file, cfg, q) {
     const c = cfg.output; const fo = c.folder || {};
@@ -1708,20 +1866,23 @@
     $('#bDone').onclick = () => openSheet(false);
   $('#sheetBg').onclick = () => openSheet(false);
   addEventListener('keydown', (e) => {
+    if (S.cutter && !e.target.closest('input') && (e.key === 'Escape' || e.key === 'Enter') && !$('#menu').classList.contains('show')) { e.preventDefault(); openCutter(false); return; }
     if (e.key === 'Escape') { if (S.powerEnd) { S.powerEnd(); return; } openNews(false); openSheet(false); closeMenu(); if (S.picked.size > 1 && !e.target.closest('input')) { selectOnly(S.sel); renderAll(); } }
     if (e.target.closest('input')) return;
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'o') { e.preventDefault(); if (REAL) inv('pick', { folder: e.shiftKey }); }
     if (e.key === ' ' && selItem() && $('#bPlay')) { e.preventDefault(); $('#bPlay').click(); }
-    if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === 'i') markTrim('a');
-    if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === 'o') markTrim('b');
-    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'x' && selItem()) { e.preventDefault(); setCuts(selItem(), []); }
-    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'k' && selItem()) { e.preventDefault(); newCut(); }
+    // cortes: só no Cortador (C abre)
+    if (!S.cutter && !e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === 'c' && selItem()) { openCutter(true); return; }
+    if (S.cutter && !e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === 'i') markTrim('a');
+    if (S.cutter && !e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === 'o') markTrim('b');
+    if (S.cutter && (e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'x') { e.preventDefault(); setCuts(selItem(), []); }
+    if (S.cutter && (e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'k') { e.preventDefault(); newCut(); }
     if (!e.ctrlKey && !e.metaKey && (e.key === '=' || e.key === '+') && selItem()) zoomAtHead(2);
     if (!e.ctrlKey && !e.metaKey && (e.key === '-' || e.key === '_') && selItem()) zoomAtHead(0.5);
     if (!e.ctrlKey && !e.metaKey && e.key === '\\' && selItem()) setZoom(1, 0, 0);
     if (e.key === 'ArrowLeft' && selItem()) ctl[e.shiftKey ? 1 : 0].click();
     if (e.key === 'ArrowRight' && selItem()) ctl[e.shiftKey ? 3 : 4].click();
-    if (e.key === 'Delete' && S.picked.size) pickedItems().forEach((q) => removeItem(q.id));
+    if (e.key === 'Delete' && S.picked.size && !S.cutter) pickedItems().forEach((q) => removeItem(q.id));
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a' && S.queue.length) {
       e.preventDefault(); S.picked = new Set(S.queue.map((q) => q.id)); if (S.sel == null) S.sel = S.queue[0].id; renderAll(true);
     }
@@ -2087,6 +2248,7 @@
     if (qs.get('watch')) S.set.watch = [{ path: 'D:\\Entrada iPhone', preset: 'iphone-4k60', on: true }, { path: 'E:\\Cartao FX30', preset: 'proxy', on: false }];
     if (qs.get('sheet')) openSheet(true);
     if (qs.get('news')) openNews(true);
+    if (qs.get('cutter')) setTimeout(() => { openCutter(true); if (qs.get('cz')) { setZoom(+qs.get('cz'), 0.5, S.t); } }, 200);
     if (qs.get('power')) powerCountdown(qs.get('power'));
     renderAfter();
     if (qs.get('folder')) setTimeout(addFolder, 300);

@@ -461,3 +461,98 @@
 .stage .frame .pv-img{will-change:transform}
 .stage[data-zoom]::after{content:attr(data-zoom);position:absolute;right:12px;bottom:10px;padding:3px 8px;border-radius:6px;
   font:500 11px/16px var(--mono);color:#fff;background:rgba(0,0,0,.55);pointer-events:none;z-index:4}
+
+/* ---------- Cortador ---------- */
+/* tela principal: as ferramentas de corte ficam no Cortador; aqui só o botão "Cortar" */
+.preview .trim-btn{display:none}
+.preview .timeline .edge{pointer-events:none}
+.trim-btn span,.open-cut span{display:none}
+.open-cut{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;margin-left:10px;border-radius:8px;
+  background:var(--fill);color:var(--text-2);font-size:12px;font-weight:500;transition:background .15s,color .15s}
+.open-cut:hover{background:var(--fill-2);color:var(--text)}
+.open-cut svg{width:14px;height:14px}
+.open-cut span{display:inline}
+.image-item .open-cut{display:none}
+
+/* agulha com zoom: ocupa o quadro inteiro */
+.timeline .head{z-index:3}
+.timeline.zoomed .head{width:max(2px,var(--fw,0px));margin-left:0;background:color-mix(in srgb,var(--blue) 40%,transparent);box-shadow:inset 2px 0 0 var(--blue)}
+.timeline.zoomed .head::before{left:-4px}
+.tl-hint{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);padding:4px 12px;border-radius:6px;background:var(--panel);box-shadow:0 0 0 1px var(--stroke-2);font-size:12px;color:var(--text-2);white-space:nowrap;pointer-events:none;z-index:4}
+.tl-hint[hidden]{display:none}
+
+/* barra de rolagem/zoom embaixo da linha do tempo, com os trechos em miniatura */
+.zscroll{position:relative;height:12px;margin-top:-2px;border-radius:6px;background:var(--fill);cursor:pointer;touch-action:none}
+.zscroll .mini{position:absolute;inset:3px 0}
+.zscroll .mini i{position:absolute;top:0;bottom:0;background:color-mix(in srgb,var(--yellow) 60%,transparent);border-radius:1px}
+.zscroll .zthumb{position:absolute;top:0;bottom:0;min-width:24px;border-radius:6px;background:color-mix(in srgb,var(--text) 14%,transparent);
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--text) 22%,transparent);cursor:grab;transition:background .15s}
+.zscroll:not(.zoomed) .zthumb{background:none;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--text) 10%,transparent)}
+.zscroll .zthumb:hover{background:color-mix(in srgb,var(--text) 20%,transparent)}
+.zscroll .h{position:absolute;top:0;bottom:0;width:10px;cursor:ew-resize}
+.zscroll .h::after{content:"";position:absolute;top:3px;bottom:3px;width:2px;border-radius:1px;background:var(--text-2)}
+.zscroll .h.l{left:0}.zscroll .h.l::after{left:4px}
+.zscroll .h.r{right:0}.zscroll .h.r::after{right:4px}
+
+/* página */
+.cutter{position:fixed;left:0;right:0;top:46px;bottom:0;z-index:30;display:flex;flex-direction:column;background:var(--bg);
+  padding:0 12px 12px;gap:12px;animation:cutIn .22s var(--ease)}
+.cutter[hidden]{display:none}
+@keyframes cutIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.cutter-open .main{visibility:hidden}
+.cut-head{display:flex;align-items:center;gap:12px;height:48px;padding:0 4px 0 8px;flex:none}
+.cut-title{display:flex;align-items:baseline;gap:10px;min-width:0;flex:1}
+.cut-title svg{width:16px;height:16px;color:var(--yellow);align-self:center;flex:none}
+.cut-title h2{margin:0;font-size:15px;font-weight:600}
+.cut-title b{font-size:13px;font-weight:500;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cut-title small{font-size:12px;color:var(--text-3);white-space:nowrap;font-variant-numeric:tabular-nums}
+.cut-actions{display:flex;gap:8px}
+.cut-actions .btn.small{height:32px;padding:0 16px;font-size:13px}
+.cut-actions .btn.ghost{background:var(--fill);color:var(--text)}
+.cut-body{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 344px;gap:12px}
+.cut-main{min-width:0;min-height:0;display:flex;flex-direction:column;background:var(--panel);border-radius:14px;border:1px solid var(--stroke);overflow:hidden}
+.cut-stage{flex:1;min-height:0;display:flex}
+.cut-stage .stage{flex:1}
+.cut-transport .transport{padding:8px 16px 14px}
+.cutter .timeline{height:64px;border-radius:10px}
+.cutter .trim-btn{width:auto;height:32px;border-radius:8px;padding:0 10px;gap:6px;display:inline-flex;align-items:center;font-size:12.5px;font-weight:500;color:var(--text-2);background:var(--fill)}
+.cutter .trim-btn:hover{background:var(--fill-2);color:var(--text)}
+.cutter .trim-btn.set{color:var(--yellow)}
+.cutter .trim-btn span{display:inline}
+.cutter #bCut{margin-left:10px}
+.cutter #bIn{margin-right:10px}
+.cutter #bOut{margin-left:10px}
+.cutter .open-cut{display:none}
+.cutter .controls .tc{font-size:15px}
+.cutter .timeline .seg small{font-size:11px;top:5px}
+
+.cut-side{min-height:0;display:flex;flex-direction:column;background:var(--panel);border-radius:14px;border:1px solid var(--stroke);padding:16px;gap:12px}
+.cut-side-head{display:flex;align-items:baseline;gap:8px}
+.cut-side-head h3{margin:0;font-size:14px;font-weight:600}
+.cut-side-head small{color:var(--text-3);font-size:12px;font-variant-numeric:tabular-nums;flex:1}
+.cut-side-head .link{font-size:12px;color:var(--text-3)}
+.cut-side-head .link:hover{color:var(--red)}
+.cut-mode{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:3px;border-radius:10px;background:var(--fill)}
+.cut-mode[hidden]{display:none}
+.cut-mode button{height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:13px;font-weight:500;color:var(--text-2)}
+.cut-mode button svg{width:16px;height:16px}
+.cut-mode button.active{background:var(--seg-pill);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.2)}
+.cut-list{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:4px;margin:0 -6px;padding:0 6px}
+.cut-row{display:grid;grid-template-columns:20px 1fr 10px 1fr auto 20px;align-items:center;gap:4px;height:40px;padding:0 6px;border-radius:8px;cursor:pointer;border:1px solid transparent}
+.cut-row:hover{background:var(--hover)}
+.cut-row.sel{background:color-mix(in srgb,var(--yellow) 10%,transparent);border-color:color-mix(in srgb,var(--yellow) 35%,transparent)}
+.cut-row .n{width:20px;height:20px;border-radius:5px;display:grid;place-items:center;font:600 11px/1 var(--mono);color:#1a1400;background:var(--yellow)}
+.cut-row.here .n{box-shadow:0 0 0 2px color-mix(in srgb,var(--blue) 70%,transparent)}
+.cut-row .tcin{min-width:0;width:100%;height:26px;border:0;border-radius:6px;padding:0 4px;text-align:center;background:var(--fill);font:11.5px var(--mono);font-variant-numeric:tabular-nums;color:var(--text);outline:0}
+.cut-row .tcin:focus{box-shadow:0 0 0 2px color-mix(in srgb,var(--yellow) 60%,transparent)}
+.cut-row .to{color:var(--text-3);font-size:11px;text-align:center}
+.cut-row .dur{font:12px var(--mono);color:var(--text-2);text-align:right;min-width:36px}
+.cut-row .x{width:22px;height:22px;border-radius:6px;display:grid;place-items:center;color:var(--text-3)}
+.cut-row .x:hover{background:var(--fill);color:var(--red)}
+.cut-row .x svg{width:9px;height:9px}
+.cut-empty{padding:16px 8px;font-size:12.5px;line-height:1.7;color:var(--text-2)}
+.cut-out{border-top:1px solid var(--sep);padding-top:12px;display:flex;flex-direction:column;gap:2px;font:12px/1.6 var(--mono);color:var(--text-2);min-width:0}
+.cut-out small{font:500 11.5px var(--font);color:var(--text-3);margin-bottom:2px}
+.cut-out div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cut-keys{font-size:11px;line-height:1.9;color:var(--text-3)}
+.cutter kbd,.cut-empty kbd{display:inline-block;min-width:18px;padding:0 5px;border-radius:4px;background:var(--fill);border:1px solid var(--stroke-2);font:600 10.5px/16px var(--font);color:var(--text-2);text-align:center}
