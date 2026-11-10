@@ -2225,6 +2225,7 @@
         row(L.act[a], `<button class="keycap ${S.keyCapture === a ? 'capturing' : ''} ${keyOf(a) ? '' : 'empty'}" data-key="${a}">${S.keyCapture === a ? L.pressKey : esc(keyLabel(keyOf(a)))}</button>`)).join('')}</div>`).join('')}
       <div class="hint">${L.shortcutsHint}</div>
       <div class="group">
+        ${row(L.autoUpdate, `<button class="switch ${autoUpd() ? 'on' : ''}" id="swAutoUpd"></button>`, L.autoUpdateSub)}
         ${row(`${L.version} ${esc(S.version)}`, S.update
           ? `<button class="btn small" id="bSheetUpdate">${L.updateNow} · ${esc(S.update.version)}</button>`
           : `<button class="field pick" id="bCheckUpdate">${L.checkUpdates}</button>`)}
@@ -2243,6 +2244,7 @@
     const da = $('#bSheetDefA'); if (da) da.onclick = (e) => openMenu(e.currentTarget, presetItems(defaultAudioId()).filter((i) => isAudioP(presetOf(i.value))), (v) => { S.set.defaultAudioPreset = v; saveSettings(); renderSheet(); });
     $('#bOpenLog').onclick = () => (REAL ? inv('open_log').catch((e) => toast(String(e))) : toast('render.log'));
     const cu = $('#bCheckUpdate'); if (cu) cu.onclick = () => checkUpdate(true);
+    $('#swAutoUpd').onclick = () => { S.set.autoUpdate = !autoUpd(); saveSettings(); renderSheet(); renderUpdCard(); if (autoUpd()) checkUpdate(false); };
     const su = $('#bSheetUpdate'); if (su) su.onclick = installUpdate;
     $('#bAddWatch').onclick = addWatch;
     const showPrev = (n) => { const el = $('#prevSize'); if (el) el.textContent = n > 0 ? fmtMB(n / 1e6) : L.none; };
@@ -2369,16 +2371,38 @@
     b.hidden = !S.update;
     if (S.update) b.querySelector('span').textContent = S.updating != null ? L.updating(S.updating) : L.updateAvail(S.update.version);
   }
+  /* procura sozinha (ligado por padrão): ao abrir, a cada 3 horas e ao voltar para o app depois de 30 min;
+     achou uma versão nova, mostra o aviso no canto com "Atualizar agora" */
+  const autoUpd = () => S.set.autoUpdate !== false;
+  let lastCheck = 0; let updTimer = 0;
   async function checkUpdate(manual) {
     if (!REAL) { if (manual) toast(L.upToDate); return; }
-    try { S.update = await inv('check_update'); } catch { S.update = null; }
-    renderUpdateBtn(); renderSheetIfOpen();
+    lastCheck = Date.now();
+    let ok = true;
+    try { S.update = await inv('check_update'); } catch { S.update = null; ok = false; }
+    renderUpdateBtn(); renderSheetIfOpen(); renderUpdCard();
     if (manual && !S.update) toast(L.upToDate);
+    // sem internet agora: tenta de novo daqui a 10 min
+    if (!manual && !ok) { clearTimeout(updTimer); updTimer = setTimeout(() => autoUpd() && checkUpdate(false), 10 * 60e3); }
+  }
+  setInterval(() => { if (REAL && autoUpd()) checkUpdate(false); }, 3 * 3600e3);
+  window.addEventListener('focus', () => { if (REAL && autoUpd() && Date.now() - lastCheck > 30 * 60e3) checkUpdate(false); });
+  // aviso no canto: some com "Depois" até sair outra versão
+  function renderUpdCard() {
+    const c = $('#updCard'); const u = S.update;
+    const show = !!u && autoUpd() && (S.updating != null || S.set.updSkip !== u.version);
+    c.hidden = !show; if (!show) return;
+    c.innerHTML = S.updating != null
+      ? `<b>${esc(L.updating(S.updating))}</b><i style="--p:${S.updating}%"></i>`
+      : `<span class="ico">${ICONS.down}</span><div><b>${esc(L.updCardTitle(u.version))}</b><small>${esc(L.updCardSub)}</small></div>
+         <button class="btn small" id="bUpdNow">${L.updateNow}</button><button class="link" id="bUpdLater">${L.later}</button>`;
+    const n = $('#bUpdNow'); if (n) n.onclick = installUpdate;
+    const l = $('#bUpdLater'); if (l) l.onclick = () => { S.set.updSkip = u.version; saveSettings(); renderUpdCard(); };
   }
   function installUpdate() {
     if (!S.update || S.updating != null) return;
-    S.updating = 0; renderUpdateBtn();
-    inv('install_update').catch((e) => { S.updating = null; renderUpdateBtn(); toast(String(e)); });
+    S.updating = 0; renderUpdateBtn(); renderUpdCard();
+    inv('install_update').catch((e) => { S.updating = null; renderUpdateBtn(); renderUpdCard(); toast(String(e)); });
   }
   $('#bUpdate').onclick = (e) => openMenu(e.currentTarget, [
     { label: L.updateNow, value: 'now', icon: ICONS.down }, { label: L.later, value: 'later', icon: ICONS.x }],
@@ -2697,8 +2721,8 @@
       } renderQueue(); renderSheetIfOpen();
       if (p.status === 'cpu') toast(L.cpuWarn);
     });
-    on('update-progress', (p) => { if (p.total) { S.updating = Math.round(p.done / p.total * 100); renderUpdateBtn(); } });
-    setTimeout(() => checkUpdate(false), 4000);
+    on('update-progress', (p) => { if (p.total) { S.updating = Math.round(p.done / p.total * 100); renderUpdateBtn(); renderUpdCard(); } });
+    setTimeout(() => { if (autoUpd()) checkUpdate(false); }, 4000);
   }
 
   if (REAL) bootReal();
@@ -2709,7 +2733,7 @@
     if (qs.get('empty')) { S.queue = []; selectOnly(null); }
     if (qs.get('open')) qs.get('open').split(',').forEach((k) => { S.open[k] = true; });
     if (qs.get('fold')) S.set.foldPresets = true;
-    if (qs.get('update')) S.update = { version: '0.2.0' };
+    if (qs.get('update')) { S.update = { version: '0.2.12' }; setTimeout(renderUpdCard, 0); }
     S.version = ((window.MEC_NEWS || [])[0] || {}).version || S.version;
     if (qs.get('trim')) { const [a, b] = qs.get('trim').split(',').map(Number); const q = selItem(); if (q) q.cuts = [[a, b]]; }
     if (qs.get('cuts')) { const q = selItem(); if (q) { q.cuts = qs.get('cuts').split(';').map((x) => x.split(',').map(Number)); q.cutSel = +(qs.get('cutsel') || 0); q.cutJoin = !!qs.get('join'); } }

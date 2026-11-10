@@ -711,3 +711,22 @@
 .cutter #bCut{margin-left:16px}
 .cutter .controls .mid{gap:6px;margin-left:14px}
 .cutter .ctl.play{margin:0}
+
+/* aviso de versão nova no canto */
+.upd-card{position:fixed;right:18px;bottom:18px;z-index:60;display:flex;align-items:center;gap:12px;max-width:440px;padding:12px 12px 12px 14px;border-radius:12px;
+  background:var(--panel,var(--bg-2));box-shadow:0 0 0 .5px var(--line,rgba(255,255,255,.12)),0 14px 40px rgba(0,0,0,.35);animation:updIn .35s var(--spring) both}
+.upd-card[hidden]{display:none}
+.upd-card .ico{width:30px;height:30px;flex:none;border-radius:8px;display:grid;place-items:center;color:var(--blue);background:color-mix(in srgb,var(--blue) 16%,transparent)}
+.upd-card .ico svg{width:16px;height:16px}
+.upd-card div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.upd-card b{font-size:13px;font-weight:600}
+.upd-card small{font-size:12px;color:var(--text-3);line-height:1.35}
+.upd-card .btn{white-space:nowrap}
+.upd-card .link{white-space:nowrap;color:var(--text-3)}
+.upd-card > i{display:block;width:200px;height:4px;border-radius:2px;background:var(--fill-2);position:relative;overflow:hidden}
+.upd-card > i::after{content:"";position:absolute;inset:0;right:auto;width:var(--p,0%);background:var(--blue);transition:width .3s}
+@keyframes updIn{from{opacity:0;transform:translateY(12px)}}
+.upd-card{top:58px;bottom:auto;max-width:460px;animation-name:updDown}
+.upd-card .btn,.upd-card .link{flex:none}
+.upd-card div{flex:1}
+@keyframes updDown{from{opacity:0;transform:translateY(-10px)}}
