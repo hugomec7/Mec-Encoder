@@ -609,6 +609,19 @@ async fn play_proxy(app: AppHandle, state: State<'_, AppState>, id: u64, cfg: Pr
 #[tauri::command]
 fn previews_size(app: AppHandle) -> u64 { preview_files(&previews_dir(&app)).iter().map(|f| f.1).sum() }
 
+/// Apaga as prévias guardadas que não foram usadas nos últimos `days` dias (0 = nunca apaga por idade).
+#[tauri::command]
+fn previews_prune(app: AppHandle, days: u32) -> u64 {
+    if days == 0 { return 0; }
+    let limit = std::time::Duration::from_secs(days as u64 * 86_400);
+    let now = std::time::SystemTime::now();
+    let mut freed = 0;
+    for (p, len, t) in preview_files(&previews_dir(&app)) {
+        if now.duration_since(t).map_or(false, |age| age > limit) && std::fs::remove_file(&p).is_ok() { freed += len; }
+    }
+    freed
+}
+
 /// Apaga todas as prévias guardadas.
 #[tauri::command]
 fn previews_clear(app: AppHandle, state: State<'_, AppState>) {
@@ -960,7 +973,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             pick, add, pick_dir, save_queue, restore_queue, power, set_watch, job_status, open_jobs_dir, automation_info, forget, duplicate, preview, waveform, render, stop, get_state, save_presets, save_settings,
-            default_presets, play_file, play_live, play_stop, play_proxy, previews_size, previews_clear, import_enc, export_presets, import_presets, reveal, open_data_dir, open_log, open_url, notify, ready, check_update, install_update
+            default_presets, play_file, play_live, play_stop, play_proxy, previews_size, previews_clear, previews_prune, import_enc, export_presets, import_presets, reveal, open_data_dir, open_log, open_url, notify, ready, check_update, install_update
         ])
         .build(tauri::generate_context!())
         .expect("error while building Mec Encoder")

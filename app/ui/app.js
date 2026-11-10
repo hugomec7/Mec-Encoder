@@ -2208,6 +2208,7 @@
       <div class="group">
         ${row(L.playQ, segH('playQ', playQ(), [['auto', 'Auto'], ['360', '360p'], ['540', '540p'], ['720', '720p'], ['1080', '1080p']]), L.playQSub)}
         ${row(L.previewsSaved, `<span class="val tnum" id="prevSize">…</span><button class="field pick" id="bClearPrev">${L.clearPreviews}</button>`, L.previewsSub)}
+        ${row(L.previewsAge, segH('previewDays', String(prevDays()), [['1', L.days(1)], ['7', L.days(7)], ['30', L.days(30)], ['0', L.never]]), L.previewsAgeSub)}
         ${row(L.previewsLimit, segH('previewGB', String(+S.set.previewGB || 5), [['2', '2 GB'], ['5', '5 GB'], ['10', '10 GB'], ['20', '20 GB']]))}
       </div>
       <div class="sec-label">${L.watchTitle}</div>
@@ -2243,6 +2244,7 @@
       if (s.dataset.k === 'parallel') { S.set.parallel = +v; saveSettings(); return; }
       if (s.dataset.k === 'playQ') { S.set.playQ = v; S.queue.forEach((q) => { delete q.liveH; }); saveSettings(); return; }
       if (s.dataset.k === 'previewGB') { S.set.previewGB = +v; saveSettings(); return; }
+      if (s.dataset.k === 'previewDays') { S.set.previewDays = +v; saveSettings(); prunePreviews(); return; }
       S.set.lang = v; saveSettings(); applyLang(); renderAll(); renderSheet();
     }));
     $('#bSheetDef').onclick = (e) => openMenu(e.currentTarget, presetItems(S.set.defaultPreset).filter((i) => !isAudioP(presetOf(i.value)) && !isImageP(presetOf(i.value))), (v) => { S.set.defaultPreset = v; saveSettings(); renderSheet(); renderQueue(); });
@@ -2400,6 +2402,10 @@
     if (!manual && !ok) { clearTimeout(updTimer); updTimer = setTimeout(() => autoUpd() && checkUpdate(false), 10 * 60e3); }
   }
   setInterval(() => { if (REAL && autoUpd()) checkUpdate(false); }, 3 * 3600e3);
+  // prévias guardadas sem uso há mais de N dias (padrão 7) são apagadas ao abrir e a cada 6 horas
+  function prevDays() { return S.set.previewDays == null ? 7 : +S.set.previewDays; }
+  function prunePreviews() { if (REAL && prevDays() > 0) inv('previews_prune', { days: prevDays() }).catch(() => {}); }
+  setInterval(prunePreviews, 6 * 3600e3);
   window.addEventListener('focus', () => { if (REAL && autoUpd() && Date.now() - lastCheck > 30 * 60e3) checkUpdate(false); });
   // aviso no canto: some com "Depois" até sair outra versão
   function renderUpdCard() {
@@ -2736,7 +2742,7 @@
       if (p.status === 'cpu') toast(L.cpuWarn);
     });
     on('update-progress', (p) => { if (p.total) { S.updating = Math.round(p.done / p.total * 100); renderUpdateBtn(); renderUpdCard(); } });
-    setTimeout(() => { if (autoUpd()) checkUpdate(false); }, 4000);
+    setTimeout(() => { if (autoUpd()) checkUpdate(false); prunePreviews(); }, 4000);
   }
 
   if (REAL) bootReal();
