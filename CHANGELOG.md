@@ -8,13 +8,16 @@
 - **⏮ ⏭ go from cut to cut** (start and last frame of each cut; without cuts, the beginning and the end). Shortcuts **↑ ↓**. They replace the 5-second buttons (Shift+← → still jump 5 seconds).
 - **Volume slider** next to the speaker (click the speaker to mute).
 - The **▶ Cuts** button was removed: the normal play does that now.
+- The **In** and **Out** buttons show only their icons again.
 
 **Português**
 - **Versão de teste**: a atualização automática do app não oferece esta versão. Baixe por esta página.
-- **O play mostra o resultado**: com trechos marcados, o play começa na agulha e pula o que foi cortado. Ponha a agulha perto do fim de um trecho e aperte play para ver como ele emenda no próximo. O tempo em cima da prévia mostra onde você está no arquivo final. **Shift+Espaço** toca o original, sem pular nada.
-- **⏮ ⏭ vão de corte em corte** (início e último quadro de cada trecho; sem trechos, o começo e o fim). Atalhos **↑ ↓**. Eles substituem os botões de 5 segundos (Shift+← → continuam pulando 5 segundos).
+- **O play mostra o resultado**: com cortes marcados, o play começa na agulha e pula o que foi cortado. Ponha a agulha perto do fim de um corte e aperte play para ver como ele emenda no próximo. O tempo em cima da prévia mostra onde você está no arquivo final. **Shift+Espaço** toca o original, sem pular nada.
+- **⏮ ⏭ vão de corte em corte** (início e último quadro de cada corte; sem cortes, o começo e o fim). Atalhos **↑ ↓**. Eles substituem os botões de 5 segundos (Shift+← → continuam pulando 5 segundos).
 - **Controle de volume** deslizante ao lado do alto-falante (clicar no alto-falante tira o som).
 - O botão **▶ Trechos** saiu: o play normal já faz isso.
+- Os botões de **Início** e **Fim** voltaram a ser só o ícone.
+- No app em português, **trecho** virou **corte**: "Novo corte", a lista de "Cortes" etc.
 
 ## 0.2.9 (pré-lançamento)
 

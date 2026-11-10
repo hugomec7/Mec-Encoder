@@ -519,6 +519,9 @@
 .cutter .trim-btn:hover{background:var(--fill-2);color:var(--text)}
 .cutter .trim-btn.set{color:var(--yellow)}
 .cutter .trim-btn span{display:inline}
+/* Início e Fim: só o ícone (o nome fica na dica) */
+.cutter #bIn span,.cutter #bOut span{display:none}
+.cutter #bIn,.cutter #bOut{padding:0 9px}
 .cutter #bCut{margin-left:10px}
 .cutter #bIn{margin-right:10px}
 .cutter #bOut{margin-left:10px}
