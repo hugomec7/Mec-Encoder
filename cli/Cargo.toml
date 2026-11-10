@@ -1,6 +1,6 @@
 [package]
 name = "mec-cli"
-version = "0.2.10"
+version = "0.2.11"
 edition = "2021"
 description = "Mec Encoder pela linha de comando (mec.exe): os mesmos presets e o mesmo motor do app"
 license = "MIT"

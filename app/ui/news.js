@@ -1,6 +1,21 @@
 // Gerado por docs/release-notes/make_news.py — não edite à mão.
 window.MEC_NEWS = [
  {
+  "version": "0.2.11",
+  "en": [
+   "**Test version**: not offered by the app's automatic update. Download it from this page.",
+   "**Skip cuts** has its own icon (a jump between two pieces) instead of scissors, turns blue when on and shows two texts: **Skipping cuts** (plays the result) and **Whole video** (plays the original). In the Cutter it is the same size as **New cut**.",
+   "**Quieter play button**: a rounded square with a soft background, like the other controls, instead of the white circle. Simpler play and pause icons.",
+   "**Even spacing** in the Cutter: In, ‹, ⏮, ▶, ⏭, › and Out are the same distance apart, away from the timecode."
+  ],
+  "pt": [
+   "**Versão de teste**: a atualização automática do app não oferece esta versão. Baixe por esta página.",
+   "**Pular cortes** ganhou ícone próprio (um salto entre dois pedaços) no lugar da tesoura, fica azul quando ligado e mostra dois textos: **Pulando cortes** (toca o resultado) e **Vídeo inteiro** (toca o original). No Cortador tem o mesmo tamanho do **Novo corte**.",
+   "**Play mais discreto**: quadrado arredondado com fundo suave, como os outros controles, no lugar do círculo branco. Ícones de play e pause mais simples.",
+   "**Espaçamento igual** no Cortador: Início, ‹, ⏮, ▶, ⏭, › e Fim com a mesma distância entre si, afastados do timecode."
+  ]
+ },
+ {
   "version": "0.2.10",
   "en": [
    "**Test version**: not offered by the app's automatic update. Download it from this page.",
@@ -144,19 +159,6 @@ window.MEC_NEWS = [
    "**Cortar trecho**: marque **Início** e **Fim** na linha do tempo (teclas I e O, ou os botões) e só esse pedaço é convertido. Arraste as bordas para ajustar; com Duplicar dá para tirar vários trechos do mesmo vídeo. O timecode da câmera acompanha o início do trecho. O original nunca é apagado quando você corta.",
    "**Ao terminar: Nada · Suspender · Desligar**, ao lado dos totais. Você tem 60 segundos para cancelar, só acontece se a fila terminou sem erro, e volta para \"Nada\" depois de usar.",
    "Janela de **Novidades** depois de atualizar (também no menu Mec Encoder)."
-  ]
- },
- {
-  "version": "0.2.3",
-  "en": [
-   "**Aspect ratio** (Video and Image): Source · 9:16 · 16:9 · 1:1 · 4:5 · 4:3 · 3:4 · 21:9, with **Fit: Crop** (fills the frame, cuts the edges from the center) or **Bars** (keeps the whole picture, adds black bars). Resolution shows the final size with the ratio applied, and the preview shows the result. Crop/bars run on the CPU (the GPU still decodes and encodes).",
-   "Warning when an H.264 output would be larger than 4096 px on a side.",
-   "Preset folders: same spacing between all folder rows, including \"Presets\"."
-  ],
-  "pt": [
-   "**Proporção** (Vídeo e Imagem): Original · 9:16 · 16:9 · 1:1 · 4:5 · 4:3 · 3:4 · 21:9, com **Encaixe: Cortar** (preenche o quadro, corta as bordas pelo centro) ou **Barras** (mantém a imagem inteira, com barras pretas). A Resolução mostra o tamanho final já com a proporção, e a prévia mostra o resultado. Cortar/barras roda na CPU (a placa continua lendo e gravando).",
-   "Aviso quando um H.264 passaria de 4096 px de lado.",
-   "Pastas de presets: o mesmo espaço entre todas as linhas, inclusive \"Presets\"."
   ]
  }
 ];

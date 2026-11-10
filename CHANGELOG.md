@@ -1,5 +1,19 @@
 # Changelog · Novidades
 
+## 0.2.11 (pré-lançamento)
+
+**English**
+- **Test version**: not offered by the app's automatic update. Download it from this page.
+- **Skip cuts** has its own icon (a jump between two pieces) instead of scissors, turns blue when on and shows two texts: **Skipping cuts** (plays the result) and **Whole video** (plays the original). In the Cutter it is the same size as **New cut**.
+- **Quieter play button**: a rounded square with a soft background, like the other controls, instead of the white circle. Simpler play and pause icons.
+- **Even spacing** in the Cutter: In, ‹, ⏮, ▶, ⏭, › and Out are the same distance apart, away from the timecode.
+
+**Português**
+- **Versão de teste**: a atualização automática do app não oferece esta versão. Baixe por esta página.
+- **Pular cortes** ganhou ícone próprio (um salto entre dois pedaços) no lugar da tesoura, fica azul quando ligado e mostra dois textos: **Pulando cortes** (toca o resultado) e **Vídeo inteiro** (toca o original). No Cortador tem o mesmo tamanho do **Novo corte**.
+- **Play mais discreto**: quadrado arredondado com fundo suave, como os outros controles, no lugar do círculo branco. Ícones de play e pause mais simples.
+- **Espaçamento igual** no Cortador: Início, ‹, ⏮, ▶, ⏭, › e Fim com a mesma distância entre si, afastados do timecode.
+
 ## 0.2.10 (pré-lançamento)
 
 **English**
