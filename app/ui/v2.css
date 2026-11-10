@@ -556,3 +556,13 @@
 .cut-out div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cut-keys{font-size:11px;line-height:1.9;color:var(--text-3)}
 .cutter kbd,.cut-empty kbd{display:inline-block;min-width:18px;padding:0 5px;border-radius:4px;background:var(--fill);border:1px solid var(--stroke-2);font:600 10.5px/16px var(--font);color:var(--text-2);text-align:center}
+
+/* atalhos */
+.sec-label .keys-reset{margin-left:auto;font-size:11.5px;color:var(--text-3)}
+.sec-label .keys-reset:hover{color:var(--blue)}
+.keys-group .keys-title{padding:8px 16px 2px;font-size:11.5px;font-weight:500;color:var(--text-3)}
+.keycap{min-width:44px;height:26px;padding:0 10px;border-radius:6px;background:var(--fill);border:1px solid var(--stroke-2);
+  font:600 12px/24px var(--font);color:var(--text);transition:background .15s,border-color .15s}
+.keycap:hover{background:var(--fill-2)}
+.keycap.empty{color:var(--text-3)}
+.keycap.capturing{border-color:var(--blue);color:var(--blue);background:color-mix(in srgb,var(--blue) 12%,transparent);font-weight:500}

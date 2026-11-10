@@ -161,11 +161,11 @@
     Object.entries(txt).forEach(([id, t]) => { const el = document.getElementById(id); if (el) el.textContent = t; });
     $('#bMin').title = L.minimize; $('#bMax').title = L.maximize; $('#bClose').title = L.close;
     $('#bSetAll').title = L.setAll; $('#bFoldPresets').title = L.presetsFold; $('#bAdd').title = L.addVideos;
-    $('#bIn').title = L.markIn; $('#bOut').title = L.markOut; $('#bCut').title = L.newCut;
+    $('#bIn').title = kf(L.markIn); $('#bOut').title = kf(L.markOut); $('#bCut').title = kf(L.newCut);
     $('#lIn').textContent = L.inLbl; $('#lOut').textContent = L.outLbl; $('#lNewCut').textContent = L.newCutLbl; $('#lOpenCut').textContent = L.openCutLbl;
-    $('#bOpenCut').title = L.openCutter; $('#lCutter').textContent = L.cutter; $('#lCuts').textContent = L.cutsTitle;
+    $('#bOpenCut').title = kf(L.openCutter); $('#lCutter').textContent = L.cutter; $('#lCuts').textContent = L.cutsTitle;
     $('#bCutCancel').textContent = L.cancel; $('#bCutDone').textContent = L.conclude; $('#bClearCuts').textContent = L.clearCuts;
-    $('#lCutSplit').textContent = L.cutSplitBtn; $('#lCutJoin').textContent = L.cutJoinBtn; $('#cutKeys').innerHTML = L.cutKeysTxt; $('#tlHint').textContent = L.tlHint;
+    $('#lCutSplit').textContent = L.cutSplitBtn; $('#lCutJoin').textContent = L.cutJoinBtn; $('#cutKeys').innerHTML = kf(L.cutKeysTxt); $('#tlHint').textContent = kf(L.tlHint);
     renderRenderBtn(); renderUpdateBtn(); if ($('#bAfter')) renderAfter();
   }
 
@@ -435,7 +435,7 @@
     const acts = (q.status === 'ready' || q.status === 'err' ? `<button class="a a-render" data-act="render" title="${q.status === 'err' ? L.retry : L.renderThis}">${q.status === 'err' ? ICONS.again : ICONS.playc}</button>` : '')
       + (q.status === 'err' ? `<button class="a" data-act="copyerr" title="${L.copyDetails}">${ICONS.copy}</button>` : '')
       + (q.status === 'done' ? `<button class="a" data-act="again" title="${L.renderAgain}">${ICONS.again}</button>` : '')
-      + (cutterOk(q) && q.status !== 'done' ? `<button class="a" data-act="cut" title="${L.openCutter}">${ICONS.cut}</button>` : '')
+      + (cutterOk(q) && q.status !== 'done' ? `<button class="a" data-act="cut" title="${kf(L.openCutter)}">${ICONS.cut}</button>` : '')
       + `<button class="a" data-act="reveal" title="${q.status === 'done' ? L.showOutput : L.showInFolder}">${ICONS.reveal}</button>`
       + (q.status !== 'running' ? `<button class="a" data-act="remove" title="${L.remove}">${ICONS.x}</button>` : '');
     return `<div class="item ${isPicked(q.id) ? 'sel' : ''} ${q.id === S.sel && S.picked.size > 1 ? 'primary' : ''} ${q.status === 'running' ? 'running' : ''} ${q.status === 'done' ? 'is-done' : ''} ${enterIds.includes(q.id) ? 'enter' : ''}" data-id="${q.id}" style="--d:${Math.min(8, Math.max(0, enterIds.indexOf(q.id))) * 60}ms">
@@ -594,7 +594,7 @@
     openMenu({ x: e.clientX, y: e.clientY }, [
       ...(q.status === 'ready' || q.status === 'err' ? [{ label: q.status === 'err' ? L.retry : L.renderThis, value: 'render', icon: q.status === 'err' ? ICONS.again : ICONS.playc }] : []),
       ...(q.status === 'done' ? [{ label: L.renderAgain, value: 'again', icon: ICONS.again }] : []),
-      ...(cutterOk(q) ? [{ label: L.openCutter, value: 'cut', icon: ICONS.cut }] : []),
+      ...(cutterOk(q) ? [{ label: kf(L.openCutter), value: 'cut', icon: ICONS.cut }] : []),
       ...(q.status === 'err' ? [{ label: L.copyDetails, value: 'copyerr', icon: ICONS.copy }] : []),
       { label: L.duplicate, value: 'dup', icon: ICONS.dup },
       { label: q.status === 'done' ? L.showOutput : L.showInFolder, value: 'reveal', icon: ICONS.reveal },
@@ -1401,7 +1401,7 @@
     const cs = cutsOf(q); if (!cs) return '';
     const txt = cs.length === 1 ? `${L.trimLbl} ${fmtDur(cs[0][0])}–${fmtDur(cs[0][1])} · ${fmtDur(cs[0][1] - cs[0][0])}`
       : `${L.cutsN(cs.length)} · ${fmtDur(cutsDur(q))} · ${q.cutJoin ? L.cutJoinShort : L.cutSplitShort}`;
-    return `<button class="chip hl trim-chip" style="--c:${COLORS.yellow}" data-trimclear title="${esc(L.openCutter)}">${ICONS.cut}${txt}</button>`;
+    return `<button class="chip hl trim-chip" style="--c:${COLORS.yellow}" data-trimclear title="${esc(kf(L.openCutter))}">${ICONS.cut}${txt}</button>`;
   };
 
   /* ---------- Cortador: página própria, com prévia e linha do tempo grandes e a lista de trechos ----------
@@ -1458,7 +1458,7 @@
         <input class="tcin" data-i="${i}" data-k="b" value="${cutTc(q, b - 1 / fr)}" spellcheck="false" title="${esc(L.cutEnd)}">
         <span class="dur">${fmtDur(b - a)}</span>
         <button class="x" data-del="${i}" title="${esc(L.cutDel)}">${ICONS.x}</button></div>`).join('')
-      : `<div class="cut-empty">${L.cutEmpty}</div>`;
+      : `<div class="cut-empty">${kf(L.cutEmpty)}</div>`;
     markCutRow();
   }
   // a linha do trecho em que a agulha está fica marcada
@@ -1825,6 +1825,10 @@
         ${row(L.jobsFolder, `<button class="field pick" id="bJobs">${L.open}</button>`, L.jobsSub)}
         ${row(L.cliTitle, `<button class="field pick" id="bCli">${L.copyPath}</button>`, `<code>mec convert &lt;${esc(L.cliFiles)}&gt; -p RAW</code>`)}
       </div>
+      <div class="sec-label">${L.shortcuts}<button class="link keys-reset" id="bKeysReset">${L.resetKeys}</button></div>
+      ${[['cutter', L.kgCutter], ['timeline', L.kgTimeline]].map(([g, t]) => `<div class="group keys-group"><div class="keys-title">${t}</div>${KEYS.filter((x) => x[2] === g).map(([a]) =>
+        row(L.act[a], `<button class="keycap ${S.keyCapture === a ? 'capturing' : ''} ${keyOf(a) ? '' : 'empty'}" data-key="${a}">${S.keyCapture === a ? L.pressKey : esc(keyLabel(keyOf(a)))}</button>`)).join('')}</div>`).join('')}
+      <div class="hint">${L.shortcutsHint}</div>
       <div class="group">
         ${row(`${L.version} ${esc(S.version)}`, S.update
           ? `<button class="btn small" id="bSheetUpdate">${L.updateNow} · ${esc(S.update.version)}</button>`
@@ -1844,6 +1848,8 @@
     const cu = $('#bCheckUpdate'); if (cu) cu.onclick = () => checkUpdate(true);
     const su = $('#bSheetUpdate'); if (su) su.onclick = installUpdate;
     $('#bAddWatch').onclick = addWatch;
+    $$('#sheetBody [data-key]').forEach((b) => { b.onclick = () => { S.keyCapture = S.keyCapture === b.dataset.key ? null : b.dataset.key; renderSheet(); }; });
+    $('#bKeysReset').onclick = () => { S.set.keys = {}; S.keyCapture = null; saveSettings(); renderSheet(); applyLang(); };
     $('#bJobs').onclick = () => (REAL ? inv('open_jobs_dir').catch((e) => toast(String(e))) : toast('%APPDATA%\\com.hugomec.mecencoder\\jobs'));
     $('#bCli').onclick = async () => {
       let path = 'C:\\Program Files\\Mec Encoder\\bin\\mec.exe';
@@ -1862,28 +1868,73 @@
     s.classList.toggle('on'); S.set[s.dataset.k] = s.classList.contains('on'); saveSettings();
     if (s.dataset.k === 'sound' && S.set.sound) playDone();
   });
-  const openSheet = (on) => { if (on) renderSheet(); root.classList.toggle('sheet-open', on); };
+  const openSheet = (on) => { S.keyCapture = null; if (on) renderSheet(); root.classList.toggle('sheet-open', on); };
     $('#bDone').onclick = () => openSheet(false);
   $('#sheetBg').onclick = () => openSheet(false);
+  /* ---------- atalhos (configuráveis em Configurações › Atalhos) ---------- */
+  const KEYS = [
+    ['openCutter', 'C', 'cutter'], ['markIn', 'I', 'cutter'], ['markOut', 'O', 'cutter'], ['newCut', 'S', 'cutter'],
+    ['clearCuts', 'Ctrl+Shift+X', 'cutter'], ['cutDone', 'Enter', 'cutter'],
+    ['prevFrame', 'ArrowLeft', 'timeline'], ['nextFrame', 'ArrowRight', 'timeline'], ['back5', 'Shift+ArrowLeft', 'timeline'], ['fwd5', 'Shift+ArrowRight', 'timeline'],
+    ['zoomIn', '=', 'timeline'], ['zoomOut', '-', 'timeline'], ['zoomFit', '\\', 'timeline'],
+  ];
+  const keyOf = (a) => { const k = S.set.keys && S.set.keys[a]; return k != null ? k : (KEYS.find((x) => x[0] === a) || [])[1] || ''; };
+  // tecla do evento → "Ctrl+Shift+X", "S", "ArrowLeft", "=" (símbolos já vêm com o Shift aplicado)
+  function keyName(e) {
+    if (['Control', 'Shift', 'Alt', 'Meta', 'AltGraph'].includes(e.key)) return null;
+    const k = e.key.length === 1 ? e.key.toUpperCase() : e.key;
+    const letter = /^[A-Z0-9]$/.test(k) || k.length > 1;
+    return [(e.ctrlKey || e.metaKey) && 'Ctrl', e.altKey && 'Alt', e.shiftKey && letter && 'Shift', k === ' ' ? 'Space' : k].filter(Boolean).join('+');
+  }
+  const KEY_TXT = { ArrowLeft: '←', ArrowRight: '→', ArrowUp: '↑', ArrowDown: '↓', Space: L.space || 'Space', Escape: 'Esc' };
+  const keyLabel = (k) => (k ? k.split('+').map((p) => KEY_TXT[p] || p).join('+') : L.noKey);
+  const KF = { in: 'markIn', out: 'markOut', cut: 'newCut', open: 'openCutter', clear: 'clearCuts', prev: 'prevFrame', next: 'nextFrame', done: 'cutDone' };
+  // troca {in} {out} {cut}... pelas teclas configuradas
+  const kf = (str) => String(str).replace(/\{(\w+)\}/g, (m, k) => (KF[k] ? esc(keyLabel(keyOf(KF[k]))) : m));
+  function runKey(a, e) {
+    const q = selItem(); const cut = !!S.cutter;
+    switch (a) {
+      case 'openCutter': if (!cut && q) { openCutter(true); return true; } return false;
+      case 'markIn': if (cut) { markTrim('a'); return true; } return false;
+      case 'markOut': if (cut) { markTrim('b'); return true; } return false;
+      case 'newCut': if (cut) { newCut(); return true; } return false;
+      case 'clearCuts': if (cut && q) { setCuts(q, []); return true; } return false;
+      case 'cutDone': if (cut) { openCutter(false); return true; } return false;
+      case 'prevFrame': if (q) { ctl[0].click(); return true; } return false;
+      case 'nextFrame': if (q) { ctl[4].click(); return true; } return false;
+      case 'back5': if (q) { ctl[1].click(); return true; } return false;
+      case 'fwd5': if (q) { ctl[3].click(); return true; } return false;
+      case 'zoomIn': if (q) { zoomAtHead(2); return true; } return false;
+      case 'zoomOut': if (q) { zoomAtHead(0.5); return true; } return false;
+      case 'zoomFit': if (q) { setZoom(1, 0, 0); return true; } return false;
+    }
+    return false;
+  }
+  // escolhendo a tecla de um atalho nas Configurações
+  function captureKey(e) {
+    const a = S.keyCapture; e.preventDefault(); e.stopPropagation();
+    if (e.key === 'Escape') { S.keyCapture = null; renderSheet(); return; }
+    const k = (e.key === 'Backspace' || e.key === 'Delete') ? '' : keyName(e); if (k == null) return;
+    const keys = Object.assign({}, S.set.keys);
+    const other = k && KEYS.find(([x]) => x !== a && keyOf(x) === k);
+    if (other) { keys[other[0]] = ''; toast(L.keyMoved(keyLabel(k), L.act[other[0]])); }
+    keys[a] = k; S.set.keys = keys; S.keyCapture = null; saveSettings(); renderSheet(); applyLang();
+  }
   addEventListener('keydown', (e) => {
-    if (S.cutter && !e.target.closest('input') && (e.key === 'Escape' || e.key === 'Enter') && !$('#menu').classList.contains('show')) { e.preventDefault(); openCutter(false); return; }
+    if (S.keyCapture) { captureKey(e); return; }
+    if (S.cutter && !e.target.closest('input') && e.key === 'Escape' && !$('#menu').classList.contains('show')) { e.preventDefault(); openCutter(false); return; }
     if (e.key === 'Escape') { if (S.powerEnd) { S.powerEnd(); return; } openNews(false); openSheet(false); closeMenu(); if (S.picked.size > 1 && !e.target.closest('input')) { selectOnly(S.sel); renderAll(); } }
     if (e.target.closest('input')) return;
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'o') { e.preventDefault(); if (REAL) inv('pick', { folder: e.shiftKey }); }
+    if (root.classList.contains('sheet-open')) return;
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'o' && !e.altKey && !KEYS.some(([x]) => keyOf(x) === keyName(e))) { e.preventDefault(); if (REAL) inv('pick', { folder: e.shiftKey }); return; }
     if (e.key === ' ' && selItem() && $('#bPlay')) { e.preventDefault(); $('#bPlay').click(); }
-    // cortes: só no Cortador (C abre)
-    if (!S.cutter && !e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === 'c' && selItem()) { openCutter(true); return; }
-    if (S.cutter && !e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === 'i') markTrim('a');
-    if (S.cutter && !e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === 'o') markTrim('b');
-    if (S.cutter && (e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'x') { e.preventDefault(); setCuts(selItem(), []); }
-    if (S.cutter && (e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'k') { e.preventDefault(); newCut(); }
-    if (!e.ctrlKey && !e.metaKey && (e.key === '=' || e.key === '+') && selItem()) zoomAtHead(2);
-    if (!e.ctrlKey && !e.metaKey && (e.key === '-' || e.key === '_') && selItem()) zoomAtHead(0.5);
-    if (!e.ctrlKey && !e.metaKey && e.key === '\\' && selItem()) setZoom(1, 0, 0);
-    if (e.key === 'ArrowLeft' && selItem()) ctl[e.shiftKey ? 1 : 0].click();
-    if (e.key === 'ArrowRight' && selItem()) ctl[e.shiftKey ? 3 : 4].click();
+    const k = keyName(e);
+    if (k) {
+      const hit = KEYS.find(([a]) => keyOf(a) === k) || (k === '+' && !KEYS.some(([a]) => keyOf(a) === '+') ? ['zoomIn'] : null);
+      if (hit && runKey(hit[0], e)) { e.preventDefault(); return; }
+    }
     if (e.key === 'Delete' && S.picked.size && !S.cutter) pickedItems().forEach((q) => removeItem(q.id));
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a' && S.queue.length) {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a' && S.queue.length && !S.cutter) {
       e.preventDefault(); S.picked = new Set(S.queue.map((q) => q.id)); if (S.sel == null) S.sel = S.queue[0].id; renderAll(true);
     }
   });
