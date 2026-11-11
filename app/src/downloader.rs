@@ -214,6 +214,35 @@ pub fn dl_open_dir(app: AppHandle, path: Option<PathBuf>) -> Result<(), String> 
     std::process::Command::new(if cfg!(windows) { "explorer.exe" } else { "xdg-open" }).arg(dir).spawn().map(|_| ()).map_err(|e| e.to_string())
 }
 
+/// Abre o arquivo baixado no player padrão do Windows.
+#[tauri::command]
+pub fn dl_play(path: PathBuf) -> Result<(), String> {
+    if !path.is_file() { return Err("source-missing".into()); }
+    std::process::Command::new(if cfg!(windows) { "explorer.exe" } else { "xdg-open" }).arg(&path).spawn().map(|_| ()).map_err(|e| e.to_string())
+}
+
+/// Nome de arquivo sem os caracteres que o Windows não aceita.
+fn clean_name(name: &str) -> String {
+    let s: String = name.chars().map(|c| if r#"<>:"/\|?*"#.contains(c) || c.is_control() { ' ' } else { c }).collect();
+    s.trim().trim_end_matches(['.', ' ']).chars().take(180).collect()
+}
+
+/// Renomeia o arquivo baixado (a extensão fica). Devolve o caminho novo; "exists" se já houver outro com esse nome.
+#[tauri::command]
+pub fn dl_rename(path: PathBuf, name: String) -> Result<PathBuf, String> {
+    if !path.is_file() { return Err("source-missing".into()); }
+    let name = clean_name(&name);
+    if name.is_empty() { return Err("empty name".into()); }
+    let ext = path.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
+    let new = path.with_file_name(format!("{name}{ext}"));
+    if new == path { return Ok(path); }
+    // só a caixa mudou (ex.: "video" → "Video"): no Windows é o mesmo arquivo
+    let same = new.to_string_lossy().to_lowercase() == path.to_string_lossy().to_lowercase();
+    if new.exists() && !same { return Err("exists".into()); }
+    std::fs::rename(&path, &new).map_err(|e| match mec_core::command::explain(&e.to_string()) { "unknown" => e.to_string(), c => c.to_string() })?;
+    Ok(new)
+}
+
 /// Texto do Ctrl+C (até 20 mil letras). Vazio se não for texto.
 #[tauri::command]
 pub fn dl_clipboard() -> String {
@@ -274,6 +303,12 @@ pub fn clean_work(app: &AppHandle) { let _ = std::fs::remove_dir_all(tools_dir(a
 #[cfg(test)]
 mod tests {
     use super::find_hash;
+    #[test]
+    fn names() {
+        assert_eq!(super::clean_name("  Natura vs Boticário: quem? *ganha*.  "), "Natura vs Boticário  quem   ganha");
+        assert_eq!(super::clean_name("a/b\\c"), "a b c");
+    }
+
     #[test]
     fn hashes() {
         let sums = "aaaa  yt-dlp\nb1946ac92492d2347c6235b4d2611184b1946ac92492d2347c6235b4d2611184  yt-dlp.exe\n";

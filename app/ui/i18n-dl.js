@@ -2,6 +2,7 @@
 (() => {
   const T = {
     en: {
+      dlPlay: 'Play', dlRename: 'Click to rename', dlNameTaken: 'There is already a file with this name',
       tabConvert: 'Convert', tabDownload: 'Download', kgDownload: 'Download',
       dlCap: 'Downloads the link in Ctrl+C right away, in the best quality', dlVideo: 'Download video', dlAudio: 'Download audio',
       dlClip: 'In Ctrl+C', dlClipNone: 'No link in Ctrl+C', dlClipN: (n) => `${n} links`,
@@ -30,6 +31,7 @@
       },
     },
     pt: {
+      dlPlay: 'Assistir', dlRename: 'Clique para renomear', dlNameTaken: 'Já existe um arquivo com esse nome',
       tabConvert: 'Converter', tabDownload: 'Baixar', kgDownload: 'Baixar',
       dlCap: 'Baixa o link do Ctrl+C na hora, na maior qualidade', dlVideo: 'Baixar vídeo', dlAudio: 'Baixar áudio',
       dlClip: 'No Ctrl+C', dlClipNone: 'Nenhum link no Ctrl+C', dlClipN: (n) => `${n} links`,
@@ -58,6 +60,7 @@
       },
     },
     es: {
+      dlPlay: 'Reproducir', dlRename: 'Haz clic para renombrar', dlNameTaken: 'Ya existe un archivo con ese nombre',
       tabConvert: 'Convertir', tabDownload: 'Descargar', kgDownload: 'Descargar',
       dlCap: 'Descarga al instante el enlace del Ctrl+C, en la mejor calidad', dlVideo: 'Descargar video', dlAudio: 'Descargar audio',
       dlClip: 'En el Ctrl+C', dlClipNone: 'No hay enlace en el Ctrl+C', dlClipN: (n) => `${n} enlaces`,
@@ -86,6 +89,7 @@
       },
     },
     fr: {
+      dlPlay: 'Lire', dlRename: 'Cliquez pour renommer', dlNameTaken: 'Un fichier porte déjà ce nom',
       tabConvert: 'Convertir', tabDownload: 'Télécharger', kgDownload: 'Télécharger',
       dlCap: 'Télécharge tout de suite le lien du Ctrl+C, en meilleure qualité', dlVideo: 'Télécharger la vidéo', dlAudio: 'Télécharger l’audio',
       dlClip: 'Dans le Ctrl+C', dlClipNone: 'Aucun lien dans le Ctrl+C', dlClipN: (n) => `${n} liens`,
@@ -114,6 +118,7 @@
       },
     },
     de: {
+      dlPlay: 'Abspielen', dlRename: 'Zum Umbenennen klicken', dlNameTaken: 'Es gibt schon eine Datei mit diesem Namen',
       tabConvert: 'Konvertieren', tabDownload: 'Herunterladen', kgDownload: 'Herunterladen',
       dlCap: 'Lädt den Link aus Strg+C sofort herunter, in bester Qualität', dlVideo: 'Video laden', dlAudio: 'Audio laden',
       dlClip: 'In Strg+C', dlClipNone: 'Kein Link in Strg+C', dlClipN: (n) => `${n} Links`,
@@ -142,6 +147,7 @@
       },
     },
     it: {
+      dlPlay: 'Riproduci', dlRename: 'Clicca per rinominare', dlNameTaken: 'Esiste già un file con questo nome',
       tabConvert: 'Converti', tabDownload: 'Scarica', kgDownload: 'Scarica',
       dlCap: 'Scarica subito il link del Ctrl+C, nella qualità migliore', dlVideo: 'Scarica video', dlAudio: 'Scarica audio',
       dlClip: 'Nel Ctrl+C', dlClipNone: 'Nessun link nel Ctrl+C', dlClipN: (n) => `${n} link`,
@@ -170,6 +176,7 @@
       },
     },
     ru: {
+      dlPlay: 'Воспроизвести', dlRename: 'Щёлкните, чтобы переименовать', dlNameTaken: 'Файл с таким именем уже есть',
       tabConvert: 'Конвертер', tabDownload: 'Загрузка', kgDownload: 'Загрузка',
       dlCap: 'Сразу скачивает ссылку из Ctrl+C в лучшем качестве', dlVideo: 'Скачать видео', dlAudio: 'Скачать аудио',
       dlClip: 'В Ctrl+C', dlClipNone: 'В Ctrl+C нет ссылки', dlClipN: (n) => `ссылок: ${n}`,
@@ -198,6 +205,7 @@
       },
     },
     ja: {
+      dlPlay: '再生', dlRename: 'クリックして名前を変更', dlNameTaken: '同じ名前のファイルがすでにあります',
       tabConvert: '変換', tabDownload: 'ダウンロード', kgDownload: 'ダウンロード',
       dlCap: 'Ctrl+C のリンクをすぐに最高画質でダウンロード', dlVideo: '動画をダウンロード', dlAudio: '音声をダウンロード',
       dlClip: 'Ctrl+C', dlClipNone: 'Ctrl+C にリンクがありません', dlClipN: (n) => `リンク ${n} 件`,
@@ -226,6 +234,7 @@
       },
     },
     ko: {
+      dlPlay: '재생', dlRename: '클릭해서 이름 바꾸기', dlNameTaken: '같은 이름의 파일이 이미 있습니다',
       tabConvert: '변환', tabDownload: '다운로드', kgDownload: '다운로드',
       dlCap: 'Ctrl+C의 링크를 바로 최고 화질로 다운로드', dlVideo: '동영상 다운로드', dlAudio: '오디오 다운로드',
       dlClip: 'Ctrl+C', dlClipNone: 'Ctrl+C에 링크가 없습니다', dlClipN: (n) => `링크 ${n}개`,
@@ -254,6 +263,7 @@
       },
     },
     zh: {
+      dlPlay: '播放', dlRename: '点击重命名', dlNameTaken: '已有同名文件',
       tabConvert: '转换', tabDownload: '下载', kgDownload: '下载',
       dlCap: '立即以最高画质下载 Ctrl+C 中的链接', dlVideo: '下载视频', dlAudio: '下载音频',
       dlClip: 'Ctrl+C 中', dlClipNone: 'Ctrl+C 中没有链接', dlClipN: (n) => `${n} 个链接`,

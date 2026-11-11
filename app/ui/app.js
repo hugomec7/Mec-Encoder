@@ -2406,13 +2406,16 @@
      Até 3 downloads ao mesmo tempo; a lista fica guardada neste PC (só os que terminaram). */
   const DL = { list: [], running: 0, tools: null, setup: null, clip: [], seq: 0, entered: false, updating: false };
   const DL_MAX = 3;
-  const dlSet = () => { S.set.dl = Object.assign({ web: true, audio: 'wav', dir: '', multi: 'video' }, S.set.dl || {}); return S.set.dl; };
+  // sempre o mesmo objeto (o switch e os seletores mudam este, não uma cópia)
+  const dlSet = () => { if (!S.set.dl || typeof S.set.dl !== 'object') S.set.dl = {};
+    const d = S.set.dl; [['web', true], ['audio', 'wav'], ['dir', ''], ['multi', 'video']].forEach(([k, v]) => { if (d[k] === undefined) d[k] = v; }); return d; };
   const DL_ICONS = {
     folder: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M2 4.8A1.8 1.8 0 0 1 3.8 3h2.6l1.5 1.5h4.3A1.8 1.8 0 0 1 14 6.3v5A1.8 1.8 0 0 1 12.2 13H3.8A1.8 1.8 0 0 1 2 11.2z"/></svg>',
     queue: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2l6 3.3-6 3.3-6-3.3z"/><path d="M2 8.7l6 3.3 6-3.3"/></svg>',
     note: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 12V3.5l7-1.5V10.5"/><circle cx="4.2" cy="12" r="1.8"/><circle cx="11.2" cy="10.5" r="1.8"/></svg>',
     film: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><rect x="2.5" y="3" width="11" height="10" rx="2"/><path d="M6.8 6.2v3.6L9.8 8z" fill="currentColor"/></svg>',
     clip: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><rect x="3.5" y="2.5" width="9" height="11.5" rx="2"/><path d="M6 2.5h4v2H6z"/></svg>',
+    play: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M5 3.3v9.4c0 .5.6.8 1 .5l7-4.7a.6.6 0 0 0 0-1L6 2.8c-.4-.3-1 0-1 .5z"/></svg>',
     ok: '<svg class="dk-ok" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5l3 3 6-7"/></svg>',
   };
   // links de um texto: com https://, com www. ou "dominio.com/caminho" numa linha
@@ -2597,17 +2600,44 @@
     const rm = `<button class="dk-ib x hov" data-act="remove" title="${esc(L.dlRemove)}">${ICONS.x}</button>`;
     if (it.status === 'done') {
       const toQ = it.kind === 'video' || it.kind === 'audio' ? `<button class="dk-ib" data-act="queue" title="${esc(L.dlToQueue)}">${DL_ICONS.queue}</button>` : '';
-      return `<div class="dk-done">${DL_ICONS.ok}${esc(L.dlReady)}<span class="dk-sz">${it.size ? dlBytes(it.size) : ''}</span><span class="dk-acts">${toQ}<button class="dk-ib" data-act="show" title="${esc(L.showInFolder)}">${DL_ICONS.folder}</button>${rm}</span></div>`;
+      const play = `<button class="dk-ib" data-act="play" title="${esc(L.dlPlay)}">${DL_ICONS.play}</button>`;
+      return `<div class="dk-done">${DL_ICONS.ok}${esc(L.dlReady)}<span class="dk-sz">${it.size ? dlBytes(it.size) : ''}</span><span class="dk-acts">${play}${toQ}<button class="dk-ib" data-act="show" title="${esc(L.showInFolder)}">${DL_ICONS.folder}</button>${rm}</span></div>`;
     }
     const acts = `<div class="dk-err-acts"><button class="link" data-act="retry">${esc(L.dlRetry)}</button><button class="link" data-act="remove">${esc(L.dlRemove)}</button></div>`;
     if (it.status === 'cancel') return `<span class="dk-muted">${esc(L.dlCancelled)}</span>${acts}`;
     return `<span class="dk-err" title="${esc(it.err || '')}">${esc(dlErrText(it))}</span>${acts}`;
   }
+  // nome mostrado: o do arquivo depois de pronto (muda ao renomear); antes, o título do site
+  function dlName(it) {
+    const f = it.status === 'done' && (it.files || [])[0];
+    if (f) { const base = String(f).split(/[\\/]/).pop(); const i = base.lastIndexOf('.'); return i > 0 ? base.slice(0, i) : base; }
+    return (it.meta && it.meta.title) || dlShort(it.url);
+  }
+  const dlCanRename = (it) => it.status === 'done' && (it.files || []).length === 1;
+  function dlStartRename(it, el) {
+    const old = dlName(it);
+    const inp = document.createElement('input'); inp.className = 'dk-rename'; inp.value = old; inp.spellcheck = false;
+    el.replaceWith(inp); inp.focus(); inp.select();
+    let done = false;
+    const finish = async (save) => {
+      if (done) return; done = true;
+      const name = inp.value.trim();
+      if (save && name && name !== old) {
+        if (REAL) {
+          try { it.files = [await inv('dl_rename', { path: it.files[0], name })]; dlSave(); }
+          catch (e) { const c = String(e); toast(c === 'exists' ? L.dlNameTaken : (L.errs[c.split('|')[0]] || c)); }
+        } else { it.files = [String(it.files[0]).replace(/[^\\/]+(?=\.[^.\\/]+$)/, name)]; }
+      }
+      dlPatch(it);
+    };
+    inp.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') finish(true); if (e.key === 'Escape') finish(false); });
+    inp.addEventListener('blur', () => finish(true));
+  }
   function dlRowHtml(it) {
     const th = dlThumb(it); const m = it.meta || {};
     const thumb = typeof th === 'string' ? `<div class="dk-th">${th}</div>` : `<div class="dk-th ${th.o}">${th.html}</div>`;
     return `<div class="dk-row" data-dl="${it.id}">${thumb}
-      <div class="dk-info"><div class="dk-ttl" title="${esc(it.url)}">${esc(m.title || dlShort(it.url))}</div><div class="dk-meta">${dlMetaLine(it)}</div></div>
+      <div class="dk-info"><div class="dk-ttl${dlCanRename(it) ? ' can-rename' : ''}" title="${esc(dlCanRename(it) ? L.dlRename : it.url)}">${esc(dlName(it))}</div><div class="dk-meta">${dlMetaLine(it)}</div></div>
       <div class="dk-st">${dlStatus(it)}</div></div>`;
   }
   function dlFixImgs(scope) {
@@ -2666,6 +2696,7 @@
     const it = DL.list.find((x) => x.id === +b.closest('.dk-row').dataset.dl); if (!it) return;
     const a = b.dataset.act;
     if (a === 'cancel') dlCancel(it);
+    else if (a === 'play') dlPlay(it);
     else if (a === 'retry') dlRetry(it);
     else if (a === 'remove') dlRemove(it);
     else if (a === 'show') { if (REAL) inv('reveal', { path: (it.files || [])[0] }).catch(() => {}); else toast(L.revealToast); }
@@ -2674,11 +2705,20 @@
       toast(L.dlSent((it.files || [1]).length), true); setView('conv');
     }
   });
-  $('#dlRows').addEventListener('dblclick', (e) => {
-    const r = e.target.closest('.dk-row'); if (!r || e.target.closest('button')) return;
-    const it = DL.list.find((x) => x.id === +r.dataset.dl);
-    if (it && it.status === 'done' && REAL) inv('reveal', { path: (it.files || [])[0] }).catch(() => {});
+  // clicar no nome renomeia; dois cliques na linha abre no player do Windows
+  $('#dlRows').addEventListener('click', (e) => {
+    const t = e.target.closest('.dk-ttl.can-rename'); if (!t) return;
+    const it = DL.list.find((x) => x.id === +t.closest('.dk-row').dataset.dl); if (it) dlStartRename(it, t);
   });
+  $('#dlRows').addEventListener('dblclick', (e) => {
+    const r = e.target.closest('.dk-row'); if (!r || e.target.closest('button, input, .dk-ttl')) return;
+    const it = DL.list.find((x) => x.id === +r.dataset.dl);
+    if (it && it.status === 'done') dlPlay(it);
+  });
+  function dlPlay(it) {
+    if (!REAL) { toast(L.dlPlay); return; }
+    inv('dl_play', { path: (it.files || [])[0] }).catch((e) => toast(L.errs[String(e)] || String(e)));
+  }
   $('#bDlClear').onclick = () => { DL.list = DL.list.filter((it) => !['done', 'err', 'cancel'].includes(it.status)); dlSave(); dlRender(); };
   $('#bDlOpen').onclick = () => { if (REAL) inv('dl_open_dir', { path: dlSet().dir || null }).catch((e) => toast(String(e))); else toast(L.revealToast); };
   $('#bDlVideo').onclick = () => dlQuick('video');
@@ -2737,7 +2777,7 @@
       p += 0.07;
       if (p < 1) it.step = { stage: 'download', p, done: total * p, total, speed: 8.2e6, eta: (1 - p) * 4 };
       else if (p < 1.6 && it.kind === 'video' && it.meta.vcodec !== 'h264') it.step = { stage: 'web', p: (p - 1) / 0.6, speed: 6.1, eta: null };
-      else { clearInterval(it.timer); Object.assign(it, { status: 'done', size: total * 0.48, files: ['C:\\x.mp4'] }); it.step = null; DL.running--; dlSave(); dlPump(); }
+      else { clearInterval(it.timer); Object.assign(it, { status: 'done', size: total * 0.48, files: ['C:\\Users\\Hugo\\Downloads\\Mec Encoder\\' + it.meta.title + (it.kind === 'audio' ? '.wav' : '.mp4')] }); it.step = null; DL.running--; dlSave(); dlPump(); }
       dlPatch(it);
     }, 250);
   }
@@ -2748,8 +2788,8 @@
         step: { stage: 'download', p: 0.62, done: 18.4e6, total: 29.6e6, speed: 8.2e6, eta: 2 } },
       { id: 4, url: 'https://www.youtube.com/watch?v=Qx81kLm2aZc', kind: 'video', status: 'run', meta: { title: 'How I edit street interviews in Premiere Pro', site: 'Youtube', width: 3840, height: 2160, fps: 30, duration: 728, vcodec: 'vp09.00.51.08', thumbnail: thumb(210, false) },
         step: { stage: 'web', p: 0.38, speed: 6.1 } },
-      { id: 3, url: 'https://x.com/streetq/status/1856043291711', kind: 'video', status: 'done', size: 14.2e6, files: ['C:\\x.mp4'], meta: { title: 'Asked strangers for a hug in Times Square', site: 'Twitter', width: 720, height: 1280, fps: 30, duration: 58, thumbnail: thumb(330, true) } },
-      { id: 2, url: 'https://www.youtube.com/watch?v=mD1v3', kind: 'audio', audioFmt: 'wav', status: 'done', size: 55.3e6, files: ['C:\\x.wav'], meta: { title: 'Midnight Drive · lo-fi beat, no copyright', site: 'Youtube', duration: 192 } },
+      { id: 3, url: 'https://x.com/streetq/status/1856043291711', kind: 'video', status: 'done', size: 14.2e6, files: ['C:\\Users\\Hugo\\Downloads\\Mec Encoder\\Asked strangers for a hug in Times Square.mp4'], meta: { title: 'Asked strangers for a hug in Times Square', site: 'Twitter', width: 720, height: 1280, fps: 30, duration: 58, thumbnail: thumb(330, true) } },
+      { id: 2, url: 'https://www.youtube.com/watch?v=mD1v3', kind: 'audio', audioFmt: 'wav', status: 'done', size: 55.3e6, files: ['C:\\Users\\Hugo\\Downloads\\Mec Encoder\\Midnight Drive · lo-fi beat, no copyright.wav'], meta: { title: 'Midnight Drive · lo-fi beat, no copyright', site: 'Youtube', duration: 192 } },
       { id: 1, url: 'https://www.instagram.com/reel/DB7xQwPtL4e', kind: 'video', status: 'err', errCode: 'dl-login', err: '[Instagram] DB7xQwPtL4e: Requested content is not available, rate-limit reached or login required', meta: { site: 'Instagram' } },
     ];
     DL.running = 0; DL.seq = 10;
