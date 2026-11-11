@@ -445,3 +445,44 @@ fn cuts_join_pcm_timecode() {
     assert_eq!(o.audio[0].codec, "pcm_s16be");
     assert!(o.timecode.starts_with("07:51:08:"), "{}", o.timecode);
 }
+
+/// Exportar do Cortador ("só corte"): tudo Original. H.264 + AAC 1080×1920 30 fps sai H.264 + AAC 1080×1920 30 fps,
+/// com a duração do trecho e "_corte" no nome, ao lado do original.
+#[test]
+fn trim_only_keeps_format() {
+    use mec_core::preset::{Audio, Bitrate, Fps, Output, Toggle};
+    use mec_core::render::{render_cuts, Engine, Hooks};
+    use std::sync::{atomic::AtomicBool, Mutex};
+    let (Some(ff), Some(fp)) = (tool("ffmpeg"), tool("ffprobe")) else { eprintln!("sem ffmpeg, pulando"); return };
+    let d = dir("trimonly");
+    let src = d.join("Baixado do X.mp4");
+    run(&ff, &["-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=s=540x960:r=30", "-f", "lavfi", "-i", "sine=f=440:r=44100", "-t", "4",
+        "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-b:v", "2000k", "-c:a", "aac", "-b:a", "128k"].iter().map(|s| s.to_string())
+        .chain([src.to_string_lossy().into_owned()]).collect::<Vec<_>>());
+    let info = probe(&fp, &src).unwrap();
+    let e = Engine { ffmpeg: ff, ffprobe: fp.clone(), encoder: Encoder::Cpu { preset: "ultrafast".into() }, gpu: None };
+    let children = Mutex::new(std::collections::HashMap::new());
+    let cancel = AtomicBool::new(false);
+    let h = Hooks { id: 1, children: &children, cancel: &cancel, progress: &|_| {}, log: &|_| {}, started: &|_| {} };
+    let p = Preset {
+        codec: "source".into(), bits: 0, chroma: "source".into(), container: "source".into(), scale: "source".into(), aspect: "source".into(),
+        bitrate: Bitrate { mode: "source".into(), kbps: 20_000, rc: "cbr".into(), level: String::new() }, max_quality: true,
+        fps: Fps { conform: false, value: "source".into() }, hdr_to_sdr: false,
+        audio: Audio { codec: "copy".into(), channels: "source".into(), ..Audio::default() },
+        output: Output { suffix: Toggle { on: true, text: "_corte".into() }, subfolder: Toggle::default(), delete_source: false, folder: Toggle::default(), keep_tree: false },
+        ..Preset::default()
+    };
+    let r = render_cuts(&e, &info, &p, &mec_core::Naming::default(), &[(1.0, 2.5)], false, &h).unwrap();
+    assert_eq!(r.output, d.join("Baixado do X_corte.mp4"));
+    let o = probe(&fp, &r.output).unwrap();
+    let v = o.video.as_ref().unwrap();
+    assert_eq!((v.codec.as_str(), v.width, v.height), ("h264", 540, 960));
+    assert!((v.fps - 30.0).abs() < 0.1, "{}", v.fps);
+    assert_eq!(o.audio[0].codec, "aac");
+    assert!((o.duration - 1.5).abs() < 0.1, "{}", o.duration);
+    // vários cortes separados: _corte_01, _corte_02
+    let r2 = render_cuts(&e, &info, &p, &mec_core::Naming::default(), &[(0.2, 0.8), (2.0, 3.0)], false, &h).unwrap();
+    let names: Vec<String> = r2.parts.iter().map(|x| x.file_name().unwrap().to_string_lossy().into_owned()).collect();
+    assert_eq!(names, vec!["Baixado do X_corte_01.mp4", "Baixado do X_corte_02.mp4"]);
+    let _ = std::fs::remove_dir_all(&d);
+}

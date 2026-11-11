@@ -174,7 +174,7 @@
     $('#bIn').title = kf(L.markIn); $('#bOut').title = kf(L.markOut); $('#bCut').title = kf(L.newCut);
     $('#lIn').textContent = L.inLbl; $('#lOut').textContent = L.outLbl; $('#lNewCut').textContent = L.newCutLbl; $('#lOpenCut').textContent = L.openCutLbl;
     $('#bOpenCut').title = kf(L.openCutter); $('#lCutter').textContent = L.cutter; $('#lCuts').textContent = L.cutsTitle;
-    $('#bCutCancel').textContent = L.cancel; $('#bCutDone').textContent = L.conclude; $('#bClearCuts').textContent = L.clearCuts;
+    $('#bCutCancel').textContent = L.cancel; $('#bCutDone').textContent = L.cutConvert; $('#bCutDone').title = L.cutConvertTip; $('#bClearCuts').textContent = L.clearCuts;
     $('#bCutExport').textContent = L.cutExport; $('#bCutExport').title = L.cutExportTip;
     $('#lCutBlankT').textContent = L.cutBlankT; $('#lCutBlankS').textContent = L.cutBlankS; $('#bCutOpenFile').textContent = L.cutOpenFile;
     if (S.plReady) { renderPlayUi(); applyVol(); }
@@ -458,7 +458,7 @@
         <div class="meta">
           <div class="name" title="${esc(q.path || q.file)}">${esc(q.file)}</div>
           ${q.status === 'err' ? `<div class="spec err-line" title="${esc(q.error || '')}">${esc(errText(q))}</div>` : `<div class="spec">${q.status === 'running' ? timeLine(q) : q.src.audioOnly ? `${dir}${audioSrcTxt(q.src)}` : q.src.isImage ? `${dir}${q.src.codec} · ${q.src.w}×${q.src.h}` : `${dir}${q.src.w}×${q.src.h} · ${q.src.codec} · ${fpsTxt(q.src.fps)} fps${q.src.vfr ? ' VFR' : ''}`}</div>`}
-          <div class="row2"><span class="badge" style="--c:${c}"><i></i>${esc(p.name)}${same(q.cfg, p) ? '' : '*'}</span>${cutsOf(q) ? `<span class="trim-tag" title="${esc(cutTitle(q))}">${ICONS.cut}${q.cuts.length > 1 ? `${q.cuts.length} · ` : ''}${fmtDur(cutsDur(q))}${q.cuts.length > 1 && q.cutJoin ? ` · ${L.cutJoinShort}` : ''}</span>` : ''}
+          <div class="row2">${q.trimOnly ? `<span class="badge" style="--c:var(--text-3)"><i></i>${esc(L.trimOnlyBadge)}</span>` : `<span class="badge" style="--c:${c}"><i></i>${esc(p.name)}${same(q.cfg, p) ? '' : '*'}</span>`}${cutsOf(q) ? `<span class="trim-tag" title="${esc(cutTitle(q))}">${ICONS.cut}${q.cuts.length > 1 ? `${q.cuts.length} · ` : ''}${fmtDur(cutsDur(q))}${q.cuts.length > 1 && q.cutJoin ? ` · ${L.cutJoinShort}` : ''}</span>` : ''}
             ${w.length ? `<span class="warn" title="${esc(w.join('\n'))}">${ICONS.warn}</span>` : ''}${st}</div>
         </div>
         <div class="acts">${acts}</div>
@@ -1520,9 +1520,14 @@
     if (q) Object.assign(q, { cuts: S.cutter.before.cuts, cutJoin: S.cutter.before.cutJoin, cutSel: S.cutter.before.cutSel });
     openCutter(false);
   }
-  $('#bCutDone').onclick = () => openCutter(false);
+  $('#bCutDone').onclick = () => { const id = S.cutter && S.cutter.id; openCutter(false); const q = itemOf(id); if (q) { q.trimOnly = false; selectOnly(q.id); setView('conv'); renderAll(); } };
   // Exportar: fecha o Cortador e já renderiza este vídeo com os cortes
-  $('#bCutExport').onclick = () => { const id = S.cutter && S.cutter.id; openCutter(false); if (id != null) renderOne(id); };
+  $('#bCutExport').onclick = () => {
+    const q = itemOf(S.cutter && S.cutter.id); openCutter(false);
+    if (!q) return;
+    if (q.status === 'done') { q.status = 'ready'; q.p = 0; }
+    q.trimOnly = true; renderQueue(); renderOne(q.id, true); toast(L.trimOnlyToast(q.file), true);
+  };
   $('#bCutOpenFile').onclick = () => { S.cutAfterAdd = { any: true }; if (REAL) inv('pick', { folder: false }).catch(() => {}); else { const q = S.queue.find((x) => cutterOk(x)); if (q) { S.cutAfterAdd = null; selectOnly(q.id); openCutter(true); } } };
   $('#bCutCancel').onclick = cancelCutter;
   $('#bOpenCut').onclick = () => openCutter(true);
@@ -3176,6 +3181,17 @@
     S.queue.forEach((q) => { if (q.status === 'running') { q.status = 'ready'; q.p = 0; } q.queued = false; });
     S.job = null; renderRenderBtn(); renderQueue();
   }
+  // Exportar do Cortador: só corta. Tudo Original (codec, profundidade, croma, fps, bitrate, formato e áudio),
+  // sem HDR→SDR, sem escala nem giro; salva ao lado do original com _corte. O preset do vídeo não muda.
+  function trimOnlyCfg(q) {
+    const b = clone(q.cfg);
+    const out = { suffix: { on: true, text: '_corte' }, subfolder: { on: false, text: '' }, deleteSource: false, folder: { on: false, text: '' }, keepTree: false };
+    if (q.src.audioOnly) return Object.assign(b, { kind: 'audio', audio: Object.assign({}, b.audio, { codec: 'copy', channels: 'source' }), output: out, metadata: true });
+    return Object.assign(b, { kind: 'video', codec: 'source', bits: 0, chroma: 'source', container: 'source', scale: 'source', aspect: 'source', rotate: 0,
+      bitrate: { mode: 'source', kbps: (b.bitrate && b.bitrate.kbps) || 20000, rc: 'cbr', level: '' }, maxQuality: true,
+      fps: { conform: false, value: 'source' }, hdrToSdr: false,
+      audio: Object.assign({}, b.audio, { codec: 'copy', channels: 'source' }), output: out, metadata: true, avSync: true });
+  }
   function renderOne(id, quiet) {
     const q = itemOf(id); if (!q || q.status !== 'ready') return;
     if (!S.job) { startJob({ mode: 'single', list: [id] }); return; }
@@ -3208,7 +3224,9 @@
           if (twin && q.cfg.output.deleteSource) toast(L.keptForCopy);
           const naming = Object.assign({ dir: q.dir || '', n: S.queue.indexOf(q) + 1 }, nowTags());
           jobUpdate(q);
-          const r = await inv('render', { id: q.id, naming, cuts: cutsOf(q) || [], join: !!q.cutJoin, cfg: twin ? Object.assign(clone(q.cfg), { output: Object.assign(clone(q.cfg.output), { deleteSource: false }) }) : q.cfg });
+          const cfg = q.trimOnly ? trimOnlyCfg(q) : twin ? Object.assign(clone(q.cfg), { output: Object.assign(clone(q.cfg.output), { deleteSource: false }) }) : q.cfg;
+          const r = await inv('render', { id: q.id, naming, cuts: cutsOf(q) || [], join: !!q.cutJoin, cfg });
+          q.trimOnly = false;
           q.status = 'done'; q.p = 1; q.out = r.output; q.parts = r.parts && r.parts.length > 1 ? r.parts : null; q.outMb = r.size / 1e6; q.took = elapsedOf(q); J.done++; jobUpdate(q);
           if (r.deleted) toast(L.deletedOrig);
           if (J.mode === 'single') notify(L.rendered(q.file) + ' · ' + fmtDur(q.took));
