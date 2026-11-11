@@ -578,6 +578,11 @@
     return { code: m ? m[1] : L.errs[s] ? s : null, details: m ? m[2] : s };
   }
   const errText = (q) => (q.errCode && L.errs[q.errCode]) || String(q.error || '').split('\n').filter(Boolean).pop() || L.error;
+  function copyText(txt, msg) {
+    const ok = () => toast(msg || L.copied, true);
+    const old = () => { const t = document.createElement('textarea'); t.value = txt; document.body.append(t); t.select(); try { document.execCommand('copy'); ok(); } catch {} t.remove(); };
+    try { navigator.clipboard.writeText(txt).then(ok, old); } catch { old(); }
+  }
   function copyErr(q) {
     const txt = [`Mec Encoder ${S.version}`, q.path || q.file, `Preset: ${(q.cfg && q.cfg.name) || ''}`, `GPU: ${S.engine.gpu || '-'} (${S.engine.status})`,
       `Error: ${q.errCode || 'unknown'}`, errText(q), '', q.error || ''].join('\n');
@@ -1118,7 +1123,7 @@
     const t = fullDur(q) * S.t; const max = viewMax(q); const key = JSON.stringify([q.id, out, Math.round(t * 30), out ? q.cfg : 0, max]);
     if (key === st.key) return; st.key = key;
     // Cortador: motor do player (sem espera, sem FFmpeg novo a cada clique)
-    if (out && S.cutter && !VW.off && !q.src.isImage) { clearTimeout(st.timer); st.seq++; viewRequest(q, t, max); return; }
+    if (!VW.off && !q.src.isImage && !q.src.audioOnly) { clearTimeout(st.timer); st.seq++; viewRequest(q, t, max, out); return; }
     const cv = fr.querySelector('canvas.pv-cv'); if (cv) cv.remove();
     clearTimeout(st.timer); st.busy = true;
     st.timer = setTimeout(() => {
@@ -1132,43 +1137,47 @@
       }).catch(done);
     }, 70);
   }
-  /* Motor do player (etapa 1, só no Cortador): cada clique ou arraste pede o quadro ao motor, que mantém o
+  /* Motor do player (Cortador e Converter, os dois lados do Comparar): cada clique ou arraste pede o quadro ao motor, que mantém o
      vídeo aberto e pula direto até ele. Enquanto um quadro está a caminho, guarda só o último pedido. */
-  const VW = { busy: false, want: null, off: false, n: 0 };
+  // um pedido por lado: Resultado (out) e Original (in, no Comparar)
+  const VW = { out: { busy: false, want: null }, in: { busy: false, want: null }, off: false, n: 0 };
   const viewNote = (line) => { inv('view_note', { line }).catch(() => {}); };
-  function viewRequest(q, t, max) {
-    VW.want = { q, t, max }; pvSt.out.busy = true;
-    if (!VW.busy) viewPump();
+  function viewRequest(q, t, max, out = true) {
+    const side = out ? 'out' : 'in'; const V = VW[side];
+    V.want = { q, t, max, out }; pvSt[side].busy = true;
+    if (!V.busy) viewPump(side);
   }
-  async function viewPump() {
-    const w = VW.want; VW.want = null;
+  async function viewPump(side) {
+    const V = VW[side]; const w = V.want; V.want = null;
     if (!w) return;
-    VW.busy = true; const t0 = performance.now();
+    V.busy = true; const t0 = performance.now();
     try {
-      const buf = await inv('view_frame', { id: w.q.id, cfg: w.q.cfg, t: w.t, output: true, max: w.max });
+      const buf = await inv('view_frame', { id: w.q.id, cfg: w.q.cfg, t: w.t, output: w.out, max: w.max });
       const dv = new DataView(buf); const fw = dv.getUint32(0, true); const fh = dv.getUint32(4, true);
-      const fr = $('#frame');
-      if (selItem() === w.q && S.cutter && fr.dataset.id === String(w.q.id) && fw && fh) {
+      const fr = $(w.out ? '#frame' : '#frameIn');
+      if (selItem() === w.q && fr.dataset.id === String(w.q.id) && fw && fh && (w.out || S.cmp)) {
         let cv = fr.querySelector('canvas.pv-cv');
-        if (!cv) { cv = document.createElement('canvas'); cv.className = 'pv-cv'; const v = fr.querySelector('video.pv-vid'); fr.insertBefore(cv, v || null); applyPz(); }
+        if (!cv) { cv = document.createElement('canvas'); cv.className = 'pv-cv'; const v = fr.querySelector('video.pv-vid, canvas.pv-gl'); fr.insertBefore(cv, v || null); applyPz(); }
         if (cv.width !== fw || cv.height !== fh) { cv.width = fw; cv.height = fh; }
         cv.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(buf, 48, fw * fh * 4), fw, fh), 0, 0);
-        const ms = performance.now() - t0; const fl = dv.getUint32(44, true); const hw = fl & 1; const mem = fl & 2; const n = dv.getUint32(20, true);
-        const st = $('#pvStat');
-        if (st) { st.hidden = false; st.textContent = `${L.viewEngine} · ${Math.round(ms)} ms · ${mem ? L.viewMem : `${hw ? L.viewGpu : L.viewCpu}${n ? ` · ${L.viewFrames(n)}` : ''}`} · ${fw}×${fh}`; }
-        viewNote(`motor | ${w.q.name} t=${w.t.toFixed(3)} | ${Math.round(ms)} ms até aparecer (motor ${Math.round(dv.getFloat32(36, true))} ms, ${mem ? 'da memória' : `${n} quadros, ${hw ? 'placa' : 'CPU'}`}, ${fw}x${fh})`);
+        if (w.out) {
+          const ms = performance.now() - t0; const fl = dv.getUint32(44, true); const hw = fl & 1; const mem = fl & 2; const n = dv.getUint32(20, true);
+          const st = $('#pvStat');
+          if (st) { st.hidden = false; st.textContent = `${L.viewEngine} · ${Math.round(ms)} ms · ${mem ? L.viewMem : `${hw ? L.viewGpu : L.viewCpu}${n ? ` · ${L.viewFrames(n)}` : ''}`} · ${fw}×${fh}`; }
+          viewNote(`motor | ${S.cutter ? 'Cortador' : 'Converter'} | ${w.q.name} t=${w.t.toFixed(3)} | ${Math.round(ms)} ms até aparecer (motor ${Math.round(dv.getFloat32(36, true))} ms, ${mem ? 'da memória' : `${n} quadros, ${hw ? 'placa' : 'CPU'}`}, ${fw}x${fh})`);
+        }
       }
     } catch (e) {
       const msg = String(e && e.message || e);
       console.warn('view', msg);
       // sem o motor (ou erro nele): volta para a prévia por imagem
       if (msg.includes('no-viewer') || ++VW.n >= 3) VW.off = true;
-      pvSt.out.key = ''; VW.busy = false; VW.want = null; pvSt.out.busy = false;
-      const q = selItem(); if (q) requestPreview(q, true);
+      ['out', 'in'].forEach((k) => { pvSt[k].key = ''; VW[k].busy = false; VW[k].want = null; pvSt[k].busy = false; });
+      const q = selItem(); if (q) requestFrames(q);
       return;
     }
-    VW.busy = false;
-    if (VW.want) viewPump(); else { pvSt.out.busy = false; flushStill(); }
+    V.busy = false;
+    if (V.want) viewPump(side); else { pvSt[side].busy = false; if (side === 'out') flushStill(); }
   }
   // tocando: o vídeo já mostra a imagem; a prévia de quadros volta ao pausar
   const requestFrames = (q) => { if (q.src.audioOnly || PL.on) return; requestPreview(q, true); if (S.cmp) requestPreview(q, false); };
@@ -1579,8 +1588,8 @@
       $('#pvMeta').before($('.stage')); $('#pvMeta').after($('.transport'));
       root.classList.remove('cutter-open'); $('#cutter').hidden = true; S.cutter = null;
     }
-    // o quadro do motor fica só no Cortador; abrir já acorda o motor
-    pvSt.out.key = ''; if (!on) { const cv = $('#frame canvas.pv-cv'); if (cv) cv.remove(); }
+    // abrir/fechar o Cortador pede o quadro de novo (sai da memória do motor)
+    pvSt.out.key = '';
     if (!on && S.view === 'cut') { S.view = 'conv'; root.dataset.view = 'conv'; }
     if (on && S.view !== 'cut') { S.view = 'cut'; root.dataset.view = 'cut'; }
     if (typeof syncTabs === 'function') syncTabs();
@@ -2592,6 +2601,7 @@
   const dlSet = () => { if (!S.set.dl || typeof S.set.dl !== 'object') S.set.dl = {};
     const d = S.set.dl; [['web', true], ['audio', 'wav'], ['dir', ''], ['multi', 'video'], ['quality', 0]].forEach(([k, v]) => { if (d[k] === undefined) d[k] = v; }); return d; };
   const DL_ICONS = {
+    link: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.8 9.2a2.8 2.8 0 0 0 4 0l2-2a2.8 2.8 0 0 0-4-4l-.7.7"/><path d="M9.2 6.8a2.8 2.8 0 0 0-4 0l-2 2a2.8 2.8 0 0 0 4 4l.7-.7"/></svg>',
     folder: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M2 4.8A1.8 1.8 0 0 1 3.8 3h2.6l1.5 1.5h4.3A1.8 1.8 0 0 1 14 6.3v5A1.8 1.8 0 0 1 12.2 13H3.8A1.8 1.8 0 0 1 2 11.2z"/></svg>',
     queue: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2l6 3.3-6 3.3-6-3.3z"/><path d="M2 8.7l6 3.3 6-3.3"/></svg>',
     note: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 12V3.5l7-1.5V10.5"/><circle cx="4.2" cy="12" r="1.8"/><circle cx="11.2" cy="10.5" r="1.8"/></svg>',
@@ -2813,9 +2823,11 @@
     const rm = `<button class="dk-ib x hov" data-act="remove" title="${esc(L.dlRemove)}">${ICONS.x}</button>`;
     if (it.status === 'done') {
       const toCut = it.kind !== 'thumb' ? `<button class="dk-ib" data-act="cut" title="${esc(L.dlToCutter)}">${ICONS.cut}</button>` : '';
+      // o link fica guardado: copiar ou baixar de novo (escolhendo qualidade, só áudio...)
+      const links = it.url ? `<button class="dk-ib" data-act="again" title="${esc(L.dlAgain)}">${ICONS.again}</button><button class="dk-ib" data-act="copylink" title="${esc(L.dlCopyLink)}">${DL_ICONS.link}</button>` : '';
       const toQ = it.kind !== 'thumb' ? `<button class="dk-ib" data-act="queue" title="${esc(L.dlToQueue)}">${DL_ICONS.queue}</button>` : '';
       const ex = (it.extras || []).map((x) => String(x).split('.').pop().toUpperCase()).filter((v, i, a) => a.indexOf(v) === i);
-      return `<div class="dk-done">${DL_ICONS.ok}${esc(L.dlReady)}<span class="dk-sz">${it.size ? dlBytes(it.size) : ''}${ex.length ? ' · +' + esc(ex.join(' +')) : ''}</span><span class="dk-acts">${toCut}${toQ}<button class="dk-ib" data-act="show" title="${esc(L.showInFolder)}">${DL_ICONS.folder}</button>${rm}</span></div>`;
+      return `<div class="dk-done">${DL_ICONS.ok}${esc(L.dlReady)}<span class="dk-sz">${it.size ? dlBytes(it.size) : ''}${ex.length ? ' · +' + esc(ex.join(' +')) : ''}</span><span class="dk-acts">${links}${toCut}${toQ}<button class="dk-ib" data-act="show" title="${esc(L.showInFolder)}">${DL_ICONS.folder}</button>${rm}</span></div>`;
     }
     const acts = `<div class="dk-err-acts"><button class="link" data-act="retry">${esc(L.dlRetry)}</button><button class="link" data-act="remove">${esc(L.dlRemove)}</button></div>`;
     if (it.status === 'cancel') return `<span class="dk-muted">${esc(L.dlCancelled)}</span>${acts}`;
@@ -2932,6 +2944,8 @@
       else { const q = S.queue.find((x) => cutterOk(x)); setView('conv', true); if (q) { selectOnly(q.id); renderAll(); openCutter(true); } }
     }
     else if (a === 'login') { const acc = dlAccOf(it); if (acc) dlLogin(acc.id); }
+    else if (a === 'copylink') copyText(it.url, L.dlLinkCopied);
+    else if (a === 'again') dlPickOpen(it.url, it.kind === 'audio' ? 'audio' : 'video');
     else if (a === 'retry') dlRetry(it);
     else if (a === 'remove') dlRemove(it);
     else if (a === 'show') { if (REAL) inv('reveal', { path: (it.files || [])[0] }).catch(() => {}); else toast(L.revealToast); }
