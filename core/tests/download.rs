@@ -48,7 +48,7 @@ fn video_web_ready_and_audio() {
 
     // vídeo, Pronto para web: VP9/Opus vira H.264/AAC .mp4
     let ev = Mutex::new(Vec::new());
-    let job = Job { url: url.clone(), kind: Kind::Video, web: true, audio: "wav".into(), dest: dest.clone() };
+    let job = Job { url: url.clone(), kind: Kind::Video, web: true, audio: "wav".into(), dest: dest.clone(), ..Default::default() };
     let r = get(&t, &job, &d.join("w1"), &ev).unwrap();
     assert_eq!(r.files.len(), 1);
     assert_eq!(r.web, "encode");
@@ -98,5 +98,43 @@ fn video_web_ready_and_audio() {
     let bad = get(&t, &Job { url: format!("{url}nope"), ..job.clone() }, &d.join("w5"), &ev).unwrap_err();
     assert!(bad.contains('|') || !bad.is_empty(), "{bad}");
     eprintln!("erro do link quebrado: {bad}");
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+/// Página com vídeo, legenda e miniatura (como os sites mostram): até 360p, legenda em .srt e JPG ao lado;
+/// e "só a miniatura".
+#[test]
+fn subs_thumb_and_height() {
+    let Some((t, ff)) = setup() else { eprintln!("sem yt-dlp/ffmpeg, pulando"); return };
+    let d = dir("extras");
+    let src = make_webm(&ff, &d);
+    let vtt = d.join("legenda.vtt");
+    std::fs::write(&vtt, "WEBVTT\n\n00:00:00.000 --> 00:00:01.500\nOlá, mundo\n").unwrap();
+    let jpg = d.join("capa.jpg");
+    assert!(Command::new(&ff).args(["-v", "error", "-y", "-f", "lavfi", "-i", "color=c=red:s=320x180", "-frames:v", "1"]).arg(&jpg).status().unwrap().success());
+    let srv = play::Server::start(ff.clone(), |_, _| {}).unwrap();
+    let (vu, su, ju) = (srv.file("clip.webm", &src), srv.file("legenda.vtt", &vtt), srv.file("capa.jpg", &jpg));
+    let html = d.join("page.html");
+    std::fs::write(&html, format!("<!doctype html><html><head><title>Teste de página</title><meta property=\"og:title\" content=\"Teste de página\">\
+        <meta property=\"og:image\" content=\"{ju}\"></head><body><video controls src=\"{vu}\"><track kind=\"subtitles\" srclang=\"pt\" src=\"{su}\"></video></body></html>")).unwrap();
+    let page = srv.file("page.html", &html);
+    let dest = d.join("out");
+    let ev = Mutex::new(Vec::new());
+    let job = Job { url: page.clone(), kind: Kind::Video, web: true, audio: "wav".into(), dest: dest.clone(), height: 360, subs: vec!["pt".into()], thumb: true };
+    let r = get(&t, &job, &d.join("w1"), &ev).unwrap();
+    eprintln!("arquivos: {:?} extras: {:?}", r.files, r.extras);
+    assert_eq!(r.files.len(), 1);
+    let stem = r.files[0].file_stem().unwrap().to_string_lossy().into_owned();
+    assert!(r.extras.iter().any(|x| x.file_name().unwrap().to_string_lossy() == format!("{stem}.pt.srt")), "{:?}", r.extras);
+    assert!(r.extras.iter().any(|x| x.file_name().unwrap().to_string_lossy() == format!("{stem}.jpg")), "{:?}", r.extras);
+    let srt = std::fs::read_to_string(r.extras.iter().find(|x| x.extension().unwrap() == "srt").unwrap()).unwrap();
+    assert!(srt.contains("Olá, mundo") && srt.contains("-->"), "{srt}");
+
+    // só a miniatura
+    let ev = Mutex::new(Vec::new());
+    let rt = get(&t, &Job { kind: Kind::Thumb, subs: vec![], thumb: false, ..job.clone() }, &d.join("w2"), &ev).unwrap();
+    eprintln!("miniatura: {:?}", rt.files);
+    assert_eq!(rt.files.len(), 1);
+    assert_eq!(rt.files[0].extension().unwrap(), "jpg");
     let _ = std::fs::remove_dir_all(&d);
 }

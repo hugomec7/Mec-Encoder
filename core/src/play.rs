@@ -420,6 +420,9 @@ pub fn mime_of(p: &Path) -> &'static str {
         Some("wav") => "audio/wav",
         Some("flac") => "audio/flac",
         Some("ogg" | "opus") => "audio/ogg",
+        Some("html" | "htm") => "text/html; charset=utf-8",
+        Some("vtt") => "text/vtt",
+        Some("jpg" | "jpeg") => "image/jpeg",
         _ => "application/octet-stream",
     }
 }

@@ -161,7 +161,7 @@ pub async fn dl_update(app: AppHandle, state: State<'_, AppState>) -> Result<Str
 /// Andamento: evento "dl-event" com { id, meta } ou { id, step }.
 #[tauri::command]
 pub async fn dl_start(app: AppHandle, state: State<'_, AppState>, id: u64, url: String, kind: String, web: bool, audio: String,
-                      dest: Option<PathBuf>) -> Result<download::Done, String> {
+                      dest: Option<PathBuf>, height: Option<u32>, subs: Option<Vec<String>>, thumb: Option<bool>) -> Result<download::Done, String> {
     let yt = ytdlp_path(&app);
     if !yt.is_file() { return Err("dl-setup".into()); }
     let deno = Some(deno_path(&app)).filter(|d| d.is_file());
@@ -175,7 +175,8 @@ pub async fn dl_start(app: AppHandle, state: State<'_, AppState>, id: u64, url: 
     let tools = Tools { ytdlp: yt.clone(), deno, ffmpeg: e.ffmpeg()?, ffprobe: e.ffprobe()?, encoder: e.encoder.lock().unwrap().clone(),
                         cache: Some(tools_dir(&app).join("cache")), cookies };
     let dest = dest.filter(|d| !d.as_os_str().is_empty()).unwrap_or_else(|| default_dir(&app));
-    let job = Job { url, kind: if kind == "audio" { Kind::Audio } else { Kind::Video }, web, audio, dest };
+    let kind = match kind.as_str() { "audio" => Kind::Audio, "thumb" => Kind::Thumb, _ => Kind::Video };
+    let job = Job { url, kind, web, audio, dest, height: height.unwrap_or(0), subs: subs.unwrap_or_default(), thumb: thumb.unwrap_or(false) };
     let work = tools_dir(&app).join("work").join(id.to_string());
     let dls = state.downloads.clone();
     let cancel = Arc::new(AtomicBool::new(false));
@@ -301,6 +302,45 @@ pub async fn dl_login(app: AppHandle, site: String, title: String) -> Result<(),
         let _ = app2.emit("dl-login", json!({ "site": id, "ok": ok }));
     });
     Ok(())
+}
+
+/// Lê o que o link tem (para "Escolher qualidade…"): título, duração, formatos, legendas e miniatura.
+/// Só os campos que a janela usa (o JSON inteiro do YouTube passa de 1 MB).
+#[tauri::command]
+pub async fn dl_info(app: AppHandle, state: State<'_, AppState>, url: String) -> Result<Value, String> {
+    let yt = ytdlp_path(&app);
+    if !yt.is_file() { return Err("dl-setup".into()); }
+    let e = state.engine.clone();
+    let deno = Some(deno_path(&app)).filter(|d| d.is_file());
+    let files = account_files(&app);
+    let ck = (!files.is_empty()).then(|| {
+        let f = accounts_dir(&app).join(format!("info-{}.txt", std::process::id()));
+        std::fs::write(&f, download::merge_cookie_files(&files)).ok().map(|_| f)
+    }).flatten();
+    let tools = Tools { ytdlp: yt, deno, ffmpeg: e.ffmpeg()?, ffprobe: e.ffprobe()?, encoder: e.encoder.lock().unwrap().clone(),
+                        cache: Some(tools_dir(&app).join("cache")), cookies: ck.clone() };
+    let res = tauri::async_runtime::spawn_blocking(move || download::info(&url, &tools)).await.map_err(|e| e.to_string())?;
+    if let Some(f) = ck { let _ = std::fs::remove_file(f); }
+    let text = res?;
+    let v: Value = serde_json::from_str(&text).map_err(|e| e.to_string())?;
+    let pick = |o: &Value, keys: &[&str]| -> Value {
+        let mut m = serde_json::Map::new();
+        for k in keys { if let Some(x) = o.get(*k) { if !x.is_null() { m.insert((*k).to_string(), x.clone()); } } }
+        Value::Object(m)
+    };
+    let formats: Vec<Value> = v.get("formats").and_then(|f| f.as_array()).map(|a| a.iter().map(|f|
+        pick(f, &["format_id", "ext", "vcodec", "acodec", "width", "height", "fps", "tbr", "vbr", "abr", "filesize", "filesize_approx", "protocol", "dynamic_range"])).collect()).unwrap_or_default();
+    let langs = |key: &str| -> Value {
+        json!(v.get(key).and_then(|s| s.as_object()).map(|m| m.iter().map(|(lang, list)| json!({
+            "lang": lang, "name": list.get(0).and_then(|x| x.get("name")).cloned().unwrap_or(Value::Null) })).collect::<Vec<_>>()).unwrap_or_default())
+    };
+    let mut out = pick(&v, &["title", "duration", "extractor_key", "thumbnail", "width", "height", "webpage_url", "is_live", "_type"]);
+    if let Value::Object(m) = &mut out {
+        m.insert("formats".into(), json!(formats));
+        m.insert("subs".into(), langs("subtitles"));
+        m.insert("autoSubs".into(), langs("automatic_captions"));
+    }
+    Ok(out)
 }
 
 /// Abre o arquivo baixado no player padrão do Windows.

@@ -2408,7 +2408,7 @@
   const DL_MAX = 3;
   // sempre o mesmo objeto (o switch e os seletores mudam este, não uma cópia)
   const dlSet = () => { if (!S.set.dl || typeof S.set.dl !== 'object') S.set.dl = {};
-    const d = S.set.dl; [['web', true], ['audio', 'wav'], ['dir', ''], ['multi', 'video']].forEach(([k, v]) => { if (d[k] === undefined) d[k] = v; }); return d; };
+    const d = S.set.dl; [['web', true], ['audio', 'wav'], ['dir', ''], ['multi', 'video'], ['quality', 0]].forEach(([k, v]) => { if (d[k] === undefined) d[k] = v; }); return d; };
   const DL_ICONS = {
     folder: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M2 4.8A1.8 1.8 0 0 1 3.8 3h2.6l1.5 1.5h4.3A1.8 1.8 0 0 1 14 6.3v5A1.8 1.8 0 0 1 12.2 13H3.8A1.8 1.8 0 0 1 2 11.2z"/></svg>',
     queue: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2l6 3.3-6 3.3-6-3.3z"/><path d="M2 8.7l6 3.3 6-3.3"/></svg>',
@@ -2447,7 +2447,7 @@
 
   function dlSave() {
     const keep = DL.list.filter((it) => ['done', 'err', 'cancel'].includes(it.status)).slice(0, 60)
-      .map(({ id, url, kind, status, meta, files, size, web, err, errCode, t }) => ({ id, url, kind, status, meta, files, size, web, err, errCode, t }));
+      .map(({ id, url, kind, status, meta, files, size, web, err, errCode, t, extras, height, subs, thumb, audioFmt }) => ({ id, url, kind, status, meta, files, size, web, err, errCode, t, extras, height, subs, thumb, audioFmt }));
     store.set('mec.downloads', JSON.stringify(keep));
   }
   function dlLoad() {
@@ -2517,10 +2517,11 @@
     if (!DL.clip.length) { toast(L.dlNoLink); return; }
     dlAdd(DL.clip, kind);
   }
-  function dlAdd(urls, kind) {
+  // opts (de "Escolher qualidade…"): { height, subs, thumb }; sem opts, vale a Qualidade das opções
+  function dlAdd(urls, kind, opts) {
     const now = Date.now();
     urls.slice().reverse().forEach((url) => {
-      DL.list.unshift({ id: ++DL.seq, url, kind, status: 'wait', meta: null, step: null, t: now, web: '' });
+      DL.list.unshift(Object.assign({ id: ++DL.seq, url, kind, status: 'wait', meta: null, step: null, t: now, web: '' }, opts || {}));
     });
     dlRender(); dlPump();
   }
@@ -2536,8 +2537,10 @@
     DL.running++; dlPatch(it);
     if (!REAL) { dlDemoRun(it); return; }
     try {
-      const d = await inv('dl_start', { id: it.id, url: it.url, kind: it.kind, web: !!set.web, audio: set.audio, dest: set.dir || null });
-      Object.assign(it, { status: 'done', files: d.files, size: d.size, web: d.web, meta: Object.assign({}, it.meta, d.meta.title ? d.meta : {}) });
+      const height = it.height != null ? it.height : +set.quality || 0;
+      const d = await inv('dl_start', { id: it.id, url: it.url, kind: it.kind, web: !!set.web, audio: set.audio, dest: set.dir || null,
+        height, subs: it.subs || [], thumb: !!it.thumb });
+      Object.assign(it, { status: 'done', files: d.files, size: d.size, web: d.web, extras: d.extras || [], meta: Object.assign({}, it.meta, d.meta.title ? d.meta : {}) });
       notify(L.dlDone((it.meta && it.meta.title) || dlShort(it.url)));
     } catch (e) {
       const s = String(e);
@@ -2561,6 +2564,7 @@
   }
   function dlThumb(it) {
     if (it.kind === 'audio') return `<span class="dk-au">${DL_ICONS.note}</span>`;
+    if (it.kind === 'thumb' && !(it.meta && it.meta.thumbnail)) return `<span class="dk-au">${ICONS.image}</span>`;
     const m = it.meta || {};
     const o = m.width && m.height ? (m.height > m.width * 1.1 ? 'v' : m.width > m.height * 1.1 ? 'h' : 's') : 'v';
     const ph = `<span class="dk-ph">${it.status === 'err' ? ICONS.x : DL_ICONS.film}</span>`;
@@ -2569,6 +2573,7 @@
   function dlMetaLine(it) {
     const m = it.meta || {}; const site = dlSite(it); const p = [];
     if (it.kind === 'audio') { p.push(String(it.audioFmt || dlSet().audio).toUpperCase()); }
+    else if (it.kind === 'thumb') { p.push('JPG'); }
     else {
       if (m.width && m.height) p.push(`${m.width}×${m.height}`);
       if (m.fps) p.push(`${num(m.fps, 2)} fps`);
@@ -2600,9 +2605,10 @@
     }
     const rm = `<button class="dk-ib x hov" data-act="remove" title="${esc(L.dlRemove)}">${ICONS.x}</button>`;
     if (it.status === 'done') {
-      const toQ = it.kind === 'video' || it.kind === 'audio' ? `<button class="dk-ib" data-act="queue" title="${esc(L.dlToQueue)}">${DL_ICONS.queue}</button>` : '';
+      const toQ = it.kind !== 'thumb' ? `<button class="dk-ib" data-act="queue" title="${esc(L.dlToQueue)}">${DL_ICONS.queue}</button>` : '';
       const play = `<button class="dk-ib" data-act="play" title="${esc(L.dlPlay)}">${DL_ICONS.play}</button>`;
-      return `<div class="dk-done">${DL_ICONS.ok}${esc(L.dlReady)}<span class="dk-sz">${it.size ? dlBytes(it.size) : ''}</span><span class="dk-acts">${play}${toQ}<button class="dk-ib" data-act="show" title="${esc(L.showInFolder)}">${DL_ICONS.folder}</button>${rm}</span></div>`;
+      const ex = (it.extras || []).map((x) => String(x).split('.').pop().toUpperCase()).filter((v, i, a) => a.indexOf(v) === i);
+      return `<div class="dk-done">${DL_ICONS.ok}${esc(L.dlReady)}<span class="dk-sz">${it.size ? dlBytes(it.size) : ''}${ex.length ? ' · +' + esc(ex.join(' +')) : ''}</span><span class="dk-acts">${play}${toQ}<button class="dk-ib" data-act="show" title="${esc(L.showInFolder)}">${DL_ICONS.folder}</button>${rm}</span></div>`;
     }
     const acts = `<div class="dk-err-acts"><button class="link" data-act="retry">${esc(L.dlRetry)}</button><button class="link" data-act="remove">${esc(L.dlRemove)}</button></div>`;
     if (it.status === 'cancel') return `<span class="dk-muted">${esc(L.dlCancelled)}</span>${acts}`;
@@ -2748,10 +2754,13 @@
     const dir = set.dir || (DL.tools && DL.tools.defaultDir) || (REAL ? '' : 'C:\\Users\\Hugo\\Downloads\\Mec Encoder');
     $('#dlSet').innerHTML = `
       <div class="row"><div class="lbl">${esc(L.dlWeb)}<small>${esc(L.dlWebSub)}</small></div><span class="switch ${set.web ? 'on' : ''}" id="dlWeb"></span></div>
-      <div class="row"><div class="lbl">${esc(L.dlAudioFmt)}</div>${segH('dlAudioFmt', set.audio, [['wav', 'WAV'], ['m4a', 'M4A'], ['mp3', 'MP3'], ['flac', 'FLAC']])}</div>
+      <div class="row"><div class="lbl">${esc(L.dlQuality)}</div><span id="dlQSeg">${segH('dlQuality', +set.quality || 0, [[0, L.dlQMax], [1080, '1080p'], [720, '720p'], [480, '480p']])}</span></div>
+      <div class="row"><div class="lbl">${esc(L.dlAudioFmt)}</div><span id="dlASeg">${segH('dlAudioFmt', set.audio, [['wav', 'WAV'], ['m4a', 'M4A'], ['mp3', 'MP3'], ['flac', 'FLAC']])}</span></div>
       <div class="row"><div class="lbl">${esc(L.dlSaveIn)}<button class="dk-pathfull" id="bDlDirOpen" title="${esc(L.dlOpen)}">${esc(dir)}</button></div><button class="dk-change" id="bDlDir">${esc(L.dlChange)}</button></div>`;
     $('#dlWeb').onclick = () => { set.web = !set.web; saveSettings(); $('#dlWeb').classList.toggle('on', set.web); };
-    seg($('#dlSet .seg'), (v) => { set.audio = v; saveSettings(); });
+    seg($('#dlASeg .seg'), (v) => { set.audio = v; saveSettings(); });
+    seg($('#dlQSeg .seg'), (v) => { set.quality = +v; saveSettings(); });
+    $('#lDlPick').textContent = L.dlPick;
     $('#bDlDirOpen').onclick = () => $('#bDlOpen').click();
     $('#bDlDir').onclick = async () => {
       let d = null;
@@ -2768,6 +2777,115 @@
     const d0 = new Date(); d0.setHours(0, 0, 0, 0); const d1 = new Date(ms); d1.setHours(0, 0, 0, 0);
     const days = Math.round((d0 - d1) / 864e5);
     return days <= 0 ? L.dlToday : days === 1 ? L.dlYesterday : L.dlDaysAgo(days);
+  }
+
+  /* "Escolher qualidade…": lê o link do Ctrl+C e mostra o que ele tem, com o tamanho de cada opção */
+  const PK = { info: null, err: null, url: '', choice: 'v0', sub: '', thumb: false, busy: false };
+  const dlMin = (x) => Math.min(x.width || x.height || 0, x.height || x.width || 0);
+  // agrupa os formatos por resolução (lado menor, como o 1080p de um vídeo em pé) e estima o tamanho de cada uma
+  function dlSummary(info, web) {
+    const f = info.formats || []; const dur = info.duration || 0;
+    const size = (x) => (x ? x.filesize || x.filesize_approx || ((x.tbr || x.vbr || x.abr || 0) * 125 * dur) : 0);
+    const isV = (x) => x.vcodec && x.vcodec !== 'none' && (x.height || x.width);
+    const isA = (x) => x.acodec && x.acodec !== 'none' && (!x.vcodec || x.vcodec === 'none');
+    const is264 = (x) => /^(avc|h264)/i.test(x.vcodec || '');
+    const rate = (x) => x.tbr || x.vbr || x.abr || size(x) / Math.max(1, dur) / 125 || 0;
+    let auds = f.filter(isA).sort((a, b) => rate(b) - rate(a));
+    if (web && auds.some((a) => /^(mp4a|aac)/i.test(a.acodec))) auds = auds.filter((a) => /^(mp4a|aac)/i.test(a.acodec)).concat(auds);
+    const bestA = auds[0] || null;
+    const vids = f.filter(isV);
+    const ps = [...new Set(vids.map(dlMin))].filter((p) => p > 0).sort((a, b) => b - a);
+    const rows = ps.map((p) => {
+      let c = vids.filter((x) => dlMin(x) === p);
+      if (web && c.some(is264)) c = c.filter(is264);
+      c.sort((a, b) => (b.fps || 0) - (a.fps || 0) || rate(b) - rate(a));
+      const v = c[0]; const hasA = v.acodec && v.acodec !== 'none';
+      return { p, w: v.width, h: v.height, fps: v.fps, codec: dlCodec(v.vcodec), size: size(v) + (hasA ? 0 : size(bestA)) };
+    });
+    return { rows, audio: bestA ? { size: size(bestA), codec: dlCodec(bestA.acodec) || String(bestA.acodec || '').split('.')[0].toUpperCase() } : null };
+  }
+  function dlLangName(code, name) {
+    const base = String(code).replace(/-orig$/, '');
+    try { const n = new Intl.DisplayNames([locale()], { type: 'language' }).of(base); if (n && n !== base) return n.charAt(0).toUpperCase() + n.slice(1); } catch {}
+    return name || code;
+  }
+  function dlSubList(info) {
+    const out = (info.subs || []).filter((s) => s.lang !== 'live_chat').map((s) => ({ lang: s.lang, label: dlLangName(s.lang, s.name) }));
+    // automáticas: só a do idioma original do vídeo (as traduzidas são dezenas)
+    (info.autoSubs || []).filter((s) => /-orig$/.test(s.lang)).forEach((s) => out.push({ lang: s.lang, label: `${dlLangName(s.lang, s.name)} ${L.dlAutoSub}` }));
+    return out;
+  }
+  async function dlPickOpen() {
+    await dlClipRead();
+    if (!DL.clip.length) { toast(L.dlNoLink); return; }
+    Object.assign(PK, { info: null, err: null, url: DL.clip[0], choice: 'v0', sub: '', thumb: false });
+    $('#dlPickBg').hidden = false; dlPickRender();
+    try {
+      PK.info = REAL ? await inv('dl_info', { url: PK.url }) : await new Promise((r) => setTimeout(() => r(dlDemoInfo()), 500));
+      const sl = dlSubList(PK.info); const want = (S.set.lang || 'pt').slice(0, 2);
+      PK.sub = ''; PK.subDefault = (sl.find((x) => x.lang.startsWith(want)) || sl[0] || {}).lang || '';
+    } catch (e) { const s = String(e); const i = s.indexOf('|'); PK.err = { code: i > 0 ? s.slice(0, i) : s.startsWith('dl-') ? s : 'unknown', detail: i > 0 ? s.slice(i + 1) : s }; }
+    dlPickRender();
+  }
+  function dlPickClose() { $('#dlPickBg').hidden = true; PK.info = null; }
+  function dlPickRender() {
+    const el = $('#dlPick'); const set = dlSet();
+    const head = (t, sub, img) => `<div class="dk-pk-head">${img ? `<img src="${esc(img)}" referrerpolicy="no-referrer" alt="">` : ''}<div><b>${esc(t)}</b><small>${sub}</small></div>
+      <button class="dk-ib x" id="bPkX" title="${esc(L.cancel)}">${ICONS.x}</button></div>`;
+    if (!PK.info) {
+      el.innerHTML = head(dlShort(PK.url), '', '') + (PK.err
+        ? `<div class="dk-pk-msg"><span class="dk-err" title="${esc(PK.err.detail)}">${esc((L.dlErrs && L.dlErrs[PK.err.code]) || (L.errs && L.errs[PK.err.code]) || L.dlErrs.unknown)}</span></div>`
+        : `<div class="dk-pk-msg dk-muted">${esc(L.dlReading)}</div>`) + `<div class="dk-pk-foot"><button class="dk-go" id="bPkCancel">${esc(L.cancel)}</button></div>`;
+      $('#bPkX').onclick = dlPickClose; $('#bPkCancel').onclick = dlPickClose; return;
+    }
+    const info = PK.info; const sm = dlSummary(info, set.web); const subs = dlSubList(info);
+    const site = dlSite({ url: PK.url, meta: { site: info.extractor_key } });
+    const opt = (id, label, size, extra) => `<label class="dk-pk-opt ${PK.choice === id ? 'on' : ''}"><input type="radio" name="pk" value="${id}" ${PK.choice === id ? 'checked' : ''}>
+      <span class="dk-pk-l">${label}</span><span class="dk-pk-x">${extra || ''}</span><span class="dk-pk-s">${size ? '≈ ' + dlBytes(size) : ''}</span></label>`;
+    const best = sm.rows[0];
+    const vrows = sm.rows.length ? [opt('v0', `${esc(L.dlQMax)}${best ? ` <em>${best.p}p</em>` : ''}`, best && best.size, best ? esc([best.fps ? num(best.fps, 2) + ' fps' : '', set.web ? 'H.264' : best.codec].filter(Boolean).join(' · ')) : '')]
+      .concat(sm.rows.slice(1).map((r) => opt('v' + r.p, `${r.p}p`, r.size, esc([r.fps ? num(r.fps, 2) + ' fps' : '', set.web ? 'H.264' : r.codec].filter(Boolean).join(' · '))))) : [];
+    const aFmt = String(set.audio).toUpperCase();
+    const curSub = subs.find((x) => x.lang === (PK.sub || PK.subDefault));
+    el.innerHTML = head(info.title || dlShort(PK.url), esc([site, info.duration ? dlDur(info.duration) : ''].filter(Boolean).join(' · ')), info.thumbnail) + `
+      <div class="dk-pk-body">
+        ${vrows.length ? `<p class="dk-cap">${esc(L.dlPickVideo)}${set.web ? ` · ${esc(L.dlWeb)}` : ''}</p><div class="dk-pk-group">${vrows.join('')}</div>` : ''}
+        <p class="dk-cap">${esc(L.dlPickOther)}</p><div class="dk-pk-group">
+          ${opt('a', esc(L.dlPickAudio), sm.audio && sm.audio.size, esc(aFmt))}
+          ${info.thumbnail ? opt('t', esc(L.dlPickThumb), 0, 'JPG') : ''}
+        </div>
+        ${PK.choice !== 't' ? `<p class="dk-cap">${esc(L.dlExtras)}</p><div class="dk-pk-group">
+          <div class="dk-pk-opt dk-pk-check ${subs.length ? '' : 'off'}"><span class="switch ${PK.sub ? 'on' : ''}" id="pkSub" ${subs.length ? '' : 'aria-disabled="true"'}></span><span class="dk-pk-l">${esc(L.dlWithSubs)}</span>
+            ${subs.length ? `<button class="field pick dd" id="pkLang" data-menu="1">${esc(curSub ? curSub.label : '')}${ICONS.chev || ''}</button>` : `<span class="dk-pk-x">${esc(L.dlNoSubs)}</span>`}</div>
+          ${info.thumbnail ? `<div class="dk-pk-opt dk-pk-check"><span class="switch ${PK.thumb ? 'on' : ''}" id="pkThumb"></span><span class="dk-pk-l">${esc(L.dlWithThumb)}</span></div>` : ''}
+        </div>` : ''}
+      </div>
+      <div class="dk-pk-foot"><button class="dk-go" id="bPkCancel">${esc(L.cancel)}</button><button class="dk-btn dk-pri dk-pk-go" id="bPkGo">${esc(L.dlGo)}</button></div>`;
+    $('#bPkX').onclick = dlPickClose; $('#bPkCancel').onclick = dlPickClose;
+    $$('input[name="pk"]', el).forEach((r) => { r.onchange = () => { PK.choice = r.value; const sc = $('.dk-pk-body', el).scrollTop; dlPickRender(); $('.dk-pk-body', el).scrollTop = sc; }; });
+    const ps = $('#pkSub'); if (ps && subs.length) ps.onclick = () => { PK.sub = PK.sub ? '' : PK.subDefault; dlPickRender(); };
+    const pt = $('#pkThumb'); if (pt) pt.onclick = () => { PK.thumb = !PK.thumb; dlPickRender(); };
+    const pl = $('#pkLang'); if (pl) pl.onclick = (e) => openMenu(e.currentTarget, subs.map((x) => ({ label: x.label, value: x.lang, sel: x.lang === (PK.sub || PK.subDefault) })),
+      (v) => { PK.subDefault = v; PK.sub = v; dlPickRender(); });
+    $('#bPkGo').onclick = () => {
+      const c = PK.choice; const opts = { subs: PK.sub && c !== 't' ? [PK.sub] : [], thumb: PK.thumb && c !== 't' };
+      const title = info.title || '';
+      let kind = 'video';
+      if (c === 'a') kind = 'audio'; else if (c === 't') kind = 'thumb'; else opts.height = c === 'v0' ? 0 : +c.slice(1);
+      dlAdd([PK.url], kind, Object.assign(opts, { meta: { title, site: info.extractor_key, duration: info.duration, thumbnail: info.thumbnail,
+        width: best && kind === 'video' ? (sm.rows.find((r) => 'v' + r.p === c) || best).w : 0, height: best && kind === 'video' ? (sm.rows.find((r) => 'v' + r.p === c) || best).h : 0 } }));
+      dlPickClose();
+    };
+  }
+  $('#bDlPick').onclick = dlPickOpen;
+  $('#dlPickBg').addEventListener('mousedown', (e) => { if (e.target.id === 'dlPickBg') dlPickClose(); });
+  addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#dlPickBg').hidden && !$('#menu').classList.contains('show')) { e.stopPropagation(); dlPickClose(); } }, true);
+  function dlDemoInfo() {
+    const mk = (id, h, tbr, v, a) => ({ format_id: id, height: h, width: Math.round(h * 9 / 16), fps: 30, vcodec: v || 'avc1.640028', acodec: a || 'none', tbr, ext: 'mp4' });
+    return { title: 'Natura vs Boticário! Quem tem os MELHORES perfumes?!', duration: 59, extractor_key: 'Youtube', thumbnail: 'data:image/svg+xml,' + encodeURIComponent(scene(300, false).replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ')),
+      formats: [mk('137', 1920, 4400), mk('248', 1920, 3900, 'vp09.00.40.08'), mk('136', 1280, 2800), mk('135', 854, 400), mk('134', 640, 420),
+        { format_id: '140', vcodec: 'none', acodec: 'mp4a.40.2', abr: 129, ext: 'm4a' }, { format_id: '251', vcodec: 'none', acodec: 'opus', abr: 140, ext: 'webm' }],
+      subs: [{ lang: 'pt', name: 'Portuguese' }], autoSubs: [{ lang: 'pt-orig', name: 'Portuguese (Original)' }, { lang: 'en', name: 'English' }] };
   }
 
   /* contas: entrar no site numa janela própria; a sessão fica só neste PC e vale para os downloads */

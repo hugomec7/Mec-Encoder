@@ -28,11 +28,17 @@ pub const YTDLP_SUMS: &str = "https://github.com/yt-dlp/yt-dlp/releases/latest/d
 pub const DENO_URL: &str = "https://github.com/denoland/deno/releases/latest/download/deno-x86_64-pc-windows-msvc.zip";
 pub const DENO_SUM: &str = "https://github.com/denoland/deno/releases/latest/download/deno-x86_64-pc-windows-msvc.zip.sha256sum";
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Kind { Video, Audio }
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Kind {
+    #[default]
+    Video,
+    Audio,
+    /// Só a miniatura (JPG).
+    Thumb,
+}
 
 /// Um download pedido pela interface.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Job {
     pub url: String,
     pub kind: Kind,
@@ -42,6 +48,12 @@ pub struct Job {
     pub audio: String,
     /// Pasta final (ex.: Downloads\Mec Encoder).
     pub dest: PathBuf,
+    /// Altura máxima do vídeo (1080, 720...); 0 = a maior que tiver.
+    pub height: u32,
+    /// Legendas a baixar ("pt", "en", "en-orig"...), em .srt ao lado do vídeo.
+    pub subs: Vec<String>,
+    /// Baixar a miniatura (JPG) junto.
+    pub thumb: bool,
 }
 
 /// Programas que o download usa.
@@ -102,6 +114,8 @@ pub struct Done {
     /// Acabamento para web: "" (não precisou ou desligado), "remux" (só reorganizou) ou "encode" (converteu).
     pub web: String,
     pub meta: Meta,
+    /// Legendas e miniatura que vieram junto.
+    pub extras: Vec<PathBuf>,
 }
 
 /// Uma linha do yt-dlp que interessa.
@@ -136,16 +150,25 @@ pub fn ytdlp_args(job: &Job, t: &Tools, work: &Path) -> Vec<String> {
     match job.kind {
         Kind::Video => {
             a.extend(["-f".into(), "bv*+ba/b".into()]);
-            // Maior resolução e fps primeiro; empatou, prefere o que já é H.264 + AAC (evita converter).
-            if job.web { a.extend(["-S".into(), "res,fps,vcodec:h264,acodec:aac".into()]); }
+            // Maior resolução (até a escolhida) e fps primeiro; empatou, prefere o que já é H.264 + AAC (evita converter).
+            let res = if job.height > 0 { format!("res:{}", job.height) } else { "res".into() };
+            if job.web { a.extend(["-S".into(), format!("{res},fps,vcodec:h264,acodec:aac")]); }
+            else if job.height > 0 { a.extend(["-S".into(), res]); }
             a.extend(["--merge-output-format".into(), "mp4/mkv".into()]);
         }
+        Kind::Thumb => a.push("--skip-download".into()),
         Kind::Audio => {
             let fmt = match job.audio.as_str() { "m4a" | "mp3" | "flac" | "wav" => job.audio.as_str(), _ => "wav" };
             a.extend(["-f".into(), "ba/b".into(), "-x".into(), "--audio-format".into(), fmt.into()]);
             match fmt { "mp3" => a.extend(["--audio-quality".into(), "320K".into()]), "m4a" => a.extend(["--audio-quality".into(), "256K".into()]), _ => {} }
         }
     }
+    if !job.subs.is_empty() && job.kind != Kind::Thumb {
+        a.extend(["--write-subs".into(), "--write-auto-subs".into(), "--sub-langs".into(), job.subs.join(","), "--convert-subs".into(), "srt".into()]);
+    }
+    if job.thumb || job.kind == Kind::Thumb { a.extend(["--write-thumbnail".into(), "--convert-thumbnails".into(), "jpg".into()]); }
+    // só a miniatura não chega no "antes de baixar": as informações saem logo depois de escolher o formato
+    let when = if job.kind == Kind::Thumb { "video" } else { "before_dl" };
     for p in [
         format!("before_dl:{P}T %(title)s"),
         format!("before_dl:{P}I %(extractor_key)s|%(width)s|%(height)s|%(fps)s|%(duration)s|%(vcodec)s|%(acodec)s"),
@@ -153,13 +176,36 @@ pub fn ytdlp_args(job: &Job, t: &Tools, work: &Path) -> Vec<String> {
         format!("before_dl:{P}S %(requested_formats.0.format_id)s={}|%(requested_formats.1.format_id)s={}",
                 "%(requested_formats.0.filesize,requested_formats.0.filesize_approx)s", "%(requested_formats.1.filesize,requested_formats.1.filesize_approx)s"),
         format!("after_move:{P}F %(filepath)s"),
-    ] { a.extend(["--print".into(), p]); }
+    ] { a.extend(["--print".into(), if when == "before_dl" { p } else { p.replacen("before_dl:", "video:", 1) }]); }
     a.extend(["--progress-template".into(),
         format!("download:{P}P %(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s|%(info.format_id)s")]);
     a.extend(["--progress-template".into(), format!("postprocess:{P}Q %(progress.postprocessor)s|%(progress.status)s")]);
     a.push("--".into());
     a.push(job.url.trim().to_string());
     a
+}
+
+/// Argumentos para só ler o que o link tem (qualidades, legendas, miniatura), sem baixar: JSON na saída.
+pub fn info_args(url: &str, t: &Tools) -> Vec<String> {
+    let mut a: Vec<String> = ["--ignore-config", "--no-playlist", "-J", "--no-warnings", "--no-colors", "--encoding", "utf-8"].iter().map(|s| s.to_string()).collect();
+    if let Some(d) = &t.deno { a.extend(["--js-runtimes".into(), format!("deno:{}", d.display())]); }
+    if let Some(c) = &t.cookies { a.extend(["--cookies".into(), c.to_string_lossy().into_owned()]); }
+    match &t.cache { Some(c) => a.extend(["--cache-dir".into(), c.to_string_lossy().into_owned()]), None => a.push("--no-cache-dir".into()) }
+    a.extend(["--".into(), url.trim().to_string()]);
+    a
+}
+
+/// Roda o yt-dlp só para ler o link. Devolve o JSON (texto) ou o erro traduzido ("código|detalhe").
+pub fn info(url: &str, t: &Tools) -> Result<String, String> {
+    let o = tools::command(&t.ytdlp).args(info_args(url, t)).env("PYTHONIOENCODING", "utf-8").env("PYTHONUTF8", "1")
+        .stdin(Stdio::null()).output().map_err(|e| format!("yt-dlp: {e}"))?;
+    let out = String::from_utf8_lossy(&o.stdout).into_owned();
+    if o.status.success() && out.trim_start().starts_with('{') { return Ok(out); }
+    let err = String::from_utf8_lossy(&o.stderr);
+    let detail = err.lines().filter_map(|l| l.strip_prefix("ERROR: ")).collect::<Vec<_>>().join(" / ");
+    let detail = if detail.is_empty() { err.trim().to_string() } else { detail };
+    let code = classify(&detail);
+    Err(if code == "unknown" { detail } else { format!("{code}|{detail}") })
 }
 
 /// Lê uma linha do yt-dlp (saída ou erro).
@@ -425,6 +471,7 @@ fn run_inner(job: &Job, t: &Tools, work: &Path, h: &Hooks, on: &(dyn Fn(Event) +
     // o caminho que o yt-dlp imprimiu não bateu (acento ou símbolo no título, em outra codificação):
     // a pasta de trabalho é só deste download, então o que sobrou nela é o resultado
     if ok && files.is_empty() { files = leftovers(work); }
+    if job.kind == Kind::Thumb { files = extras_in(work).into_iter().filter(|f| is_image(f)).collect(); }
     if !ok || files.is_empty() {
         let detail = if !errs.is_empty() { errs.join(" / ") } else { tail.into_inner().unwrap().join(" / ") };
         let detail = if detail.is_empty() { "yt-dlp failed".to_string() } else { detail };
@@ -438,7 +485,7 @@ fn run_inner(job: &Job, t: &Tools, work: &Path, h: &Hooks, on: &(dyn Fn(Event) +
     for f in files {
         let stem = f.file_stem().map(|x| x.to_string_lossy().into_owned()).unwrap_or_default();
         let ext = f.extension().map(|x| x.to_string_lossy().to_lowercase()).unwrap_or_default();
-        let finished = if job.kind == Kind::Video && job.web {
+        let finished = if job.kind == Kind::Video && job.web && !is_image(&f) {
             let info = probe(&t.ffprobe, &f).map_err(|e| format!("output check failed: {e}"))?;
             if info.video.is_none() && info.audio.is_empty() { return Err("output check failed: empty file".into()); }
             let dest = free_path(&job.dest, &stem, "mp4");
@@ -463,8 +510,37 @@ fn run_inner(job: &Job, t: &Tools, work: &Path, h: &Hooks, on: &(dyn Fn(Event) +
         out.size += std::fs::metadata(&finished).map(|m| m.len()).unwrap_or(0);
         out.files.push(finished);
     }
+    // legendas e miniatura ao lado do vídeo, com o mesmo nome: "Vídeo.pt.srt", "Vídeo.jpg"
+    if job.kind != Kind::Thumb {
+        let base = out.files.first().and_then(|f| f.file_stem()).map(|x| x.to_string_lossy().into_owned()).unwrap_or_default();
+        let src_stem = s.files.first().and_then(|f| f.file_stem()).map(|x| x.to_string_lossy().into_owned());
+        for x in extras_in(work) {
+            let name = x.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            let ext = x.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
+            // "Título.pt.srt" → idioma "pt"
+            let lang = if ext == "srt" || ext == "vtt" {
+                let stem = name.trim_end_matches(&format!(".{ext}"));
+                match &src_stem { Some(ss) if stem.starts_with(ss.as_str()) => stem[ss.len()..].trim_start_matches('.').to_string(),
+                                  _ => stem.rsplit('.').next().unwrap_or("").to_string() }
+            } else { String::new() };
+            let stem = if lang.is_empty() { base.clone() } else { format!("{base}.{lang}") };
+            let dest = free_path(&job.dest, &stem, &ext);
+            if move_file(&x, &dest).is_ok() { out.extras.push(dest); }
+        }
+    }
     (h.log)(&format!("download | {} | ok | {}", job.url, out.files.iter().map(|f| f.display().to_string()).collect::<Vec<_>>().join(", ")));
     Ok(out)
+}
+
+fn is_image(p: &Path) -> bool { p.extension().map_or(false, |e| matches!(e.to_string_lossy().to_lowercase().as_str(), "jpg" | "jpeg" | "png" | "webp")) }
+
+/// Legendas e miniaturas na pasta de trabalho.
+pub fn extras_in(work: &Path) -> Vec<PathBuf> {
+    let mut v: Vec<PathBuf> = std::fs::read_dir(work).into_iter().flatten().flatten().map(|e| e.path())
+        .filter(|p| p.is_file() && (is_image(p) || p.extension().map_or(false, |e| matches!(e.to_string_lossy().to_lowercase().as_str(), "srt" | "vtt"))))
+        .collect();
+    v.sort();
+    v
 }
 
 /// Arquivos prontos numa pasta de trabalho (sem pedaços .part, .ytdl, .temp ou do acabamento).
@@ -475,7 +551,7 @@ pub fn leftovers(work: &Path) -> Vec<PathBuf> {
         .filter(|p| {
             let name = p.file_name().map(|n| n.to_string_lossy().to_lowercase()).unwrap_or_default();
             !(name.ends_with(".part") || name.ends_with(".ytdl") || name.contains(".temp.") || name.contains(".part-frag")
-              || name.starts_with("web-") || name.ends_with(".json") || name.ends_with(".jpg") || name.ends_with(".webp"))
+              || name.starts_with("web-") || name.ends_with(".json") || is_image(p) || name.ends_with(".srt") || name.ends_with(".vtt"))
         })
         .map(|p| (std::fs::metadata(&p).map(|m| m.len()).unwrap_or(0), p))
         .collect();
@@ -520,7 +596,7 @@ impl State {
 mod tests {
     use super::*;
 
-    fn job(kind: Kind, web: bool) -> Job { Job { url: "https://youtu.be/abc".into(), kind, web, audio: "wav".into(), dest: "/d".into() } }
+    fn job(kind: Kind, web: bool) -> Job { Job { url: "https://youtu.be/abc".into(), kind, web, audio: "wav".into(), dest: "/d".into(), ..Default::default() } }
     fn tools_() -> Tools {
         Tools { ytdlp: "/t/yt-dlp".into(), deno: Some("/t/deno".into()), ffmpeg: "/f/ffmpeg".into(), ffprobe: "/f/ffprobe".into(),
                 encoder: Encoder::Nvenc, cache: None, cookies: None }
@@ -534,7 +610,20 @@ mod tests {
         assert!(a.contains("--no-playlist") && a.contains("--ignore-config") && a.contains("--encoding utf-8"), "{a}");
         assert!(a.ends_with("-- https://youtu.be/abc"), "{a}");
         let b = ytdlp_args(&job(Kind::Video, false), &tools_(), Path::new("/w")).join(" ");
-        assert!(!b.contains("vcodec:h264"), "{b}");
+        assert!(!b.contains("vcodec:h264") && !b.contains("-S ") && !b.contains("--write-"), "{b}");
+        // até 1080p, com legendas e miniatura
+        let q = Job { height: 1080, subs: vec!["pt".into(), "en-orig".into()], thumb: true, ..job(Kind::Video, true) };
+        let qa = ytdlp_args(&q, &tools_(), Path::new("/w")).join(" ");
+        assert!(qa.contains("-S res:1080,fps,vcodec:h264,acodec:aac"), "{qa}");
+        assert!(qa.contains("--write-subs --write-auto-subs --sub-langs pt,en-orig --convert-subs srt"), "{qa}");
+        assert!(qa.contains("--write-thumbnail --convert-thumbnails jpg"), "{qa}");
+        let qn = ytdlp_args(&Job { height: 720, ..job(Kind::Video, false) }, &tools_(), Path::new("/w")).join(" ");
+        assert!(qn.contains("-S res:720 "), "{qn}");
+        let inf = info_args("https://youtu.be/x", &tools_()).join(" ");
+        assert!(inf.contains("-J") && inf.contains("--no-playlist") && inf.ends_with("-- https://youtu.be/x"), "{inf}");
+        // só a miniatura
+        let th = ytdlp_args(&job(Kind::Thumb, true), &tools_(), Path::new("/w")).join(" ");
+        assert!(th.contains("--skip-download") && th.contains("--write-thumbnail") && th.contains("video:MECT") && !th.contains("-f bv"), "{th}");
         let mut j = job(Kind::Audio, true); j.audio = "mp3".into();
         let c = ytdlp_args(&j, &tools_(), Path::new("/w")).join(" ");
         assert!(c.contains("-f ba/b -x --audio-format mp3 --audio-quality 320K"), "{c}");

@@ -979,7 +979,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             pick, add, pick_dir, save_queue, restore_queue, power, set_watch, job_status, open_jobs_dir, automation_info, forget, duplicate, preview, waveform, render, stop, get_state, save_presets, save_settings,
             default_presets, play_file, play_live, play_stop, play_proxy, previews_size, previews_clear, previews_prune, import_enc, export_presets, import_presets, reveal, open_data_dir, open_log, open_url, notify, ready, check_update, install_update,
-            downloader::dl_status, downloader::dl_install, downloader::dl_update, downloader::dl_start, downloader::dl_cancel, downloader::dl_open_dir, downloader::dl_clipboard, downloader::dl_play, downloader::dl_rename, downloader::dl_accounts, downloader::dl_login, downloader::dl_logout
+            downloader::dl_status, downloader::dl_install, downloader::dl_update, downloader::dl_start, downloader::dl_cancel, downloader::dl_open_dir, downloader::dl_clipboard, downloader::dl_play, downloader::dl_rename, downloader::dl_accounts, downloader::dl_login, downloader::dl_logout, downloader::dl_info
         ])
         .build(tauri::generate_context!())
         .expect("error while building Mec Encoder")

@@ -2,6 +2,7 @@
 (() => {
   const T = {
     en: {
+      dlQuality: 'Quality', dlQMax: 'Best', dlPick: 'Choose quality…', dlReading: 'Reading the link…', dlPickVideo: 'Video', dlPickOther: 'Other', dlPickAudio: 'Audio only', dlPickThumb: 'Thumbnail only', dlExtras: 'Together', dlWithSubs: 'Subtitles', dlWithThumb: 'Thumbnail (JPG)', dlAutoSub: '(automatic)', dlNoSubs: 'No subtitles',
       dlAccounts: 'Accounts', dlAccountsSub: 'For Instagram and videos that need a login. The session stays only on this PC', dlConnected: 'Connected', dlSignOut: 'Sign out', dlSignInShort: 'Sign in', dlSigningIn: 'Opening…',
       dlSignIn: (s) => `Sign in to ${s}`, dlLoginTitle: (s) => `Sign in to ${s} · Mec Encoder`, dlLoggedIn: (s) => `Connected to ${s}`,
       dlPlay: 'Play', dlRename: 'Click to rename', dlNameTaken: 'There is already a file with this name',
@@ -33,6 +34,7 @@
       },
     },
     pt: {
+      dlQuality: 'Qualidade', dlQMax: 'Máxima', dlPick: 'Escolher qualidade…', dlReading: 'Lendo o link…', dlPickVideo: 'Vídeo', dlPickOther: 'Outros', dlPickAudio: 'Só áudio', dlPickThumb: 'Só a miniatura', dlExtras: 'Junto', dlWithSubs: 'Legenda', dlWithThumb: 'Miniatura (JPG)', dlAutoSub: '(automática)', dlNoSubs: 'Sem legenda',
       dlAccounts: 'Contas', dlAccountsSub: 'Para Instagram e vídeos que pedem login. A sessão fica só neste PC', dlConnected: 'Conectado', dlSignOut: 'Sair', dlSignInShort: 'Entrar', dlSigningIn: 'Abrindo…',
       dlSignIn: (s) => `Entrar no ${s}`, dlLoginTitle: (s) => `Entrar no ${s} · Mec Encoder`, dlLoggedIn: (s) => `Conectado ao ${s}`,
       dlPlay: 'Assistir', dlRename: 'Clique para renomear', dlNameTaken: 'Já existe um arquivo com esse nome',
@@ -64,6 +66,7 @@
       },
     },
     es: {
+      dlQuality: 'Calidad', dlQMax: 'Máxima', dlPick: 'Elegir calidad…', dlReading: 'Leyendo el enlace…', dlPickVideo: 'Video', dlPickOther: 'Otros', dlPickAudio: 'Solo audio', dlPickThumb: 'Solo la miniatura', dlExtras: 'Junto', dlWithSubs: 'Subtítulos', dlWithThumb: 'Miniatura (JPG)', dlAutoSub: '(automáticos)', dlNoSubs: 'Sin subtítulos',
       dlAccounts: 'Cuentas', dlAccountsSub: 'Para Instagram y videos que piden iniciar sesión. La sesión queda solo en este PC', dlConnected: 'Conectado', dlSignOut: 'Cerrar sesión', dlSignInShort: 'Entrar', dlSigningIn: 'Abriendo…',
       dlSignIn: (s) => `Entrar en ${s}`, dlLoginTitle: (s) => `Entrar en ${s} · Mec Encoder`, dlLoggedIn: (s) => `Conectado a ${s}`,
       dlPlay: 'Reproducir', dlRename: 'Haz clic para renombrar', dlNameTaken: 'Ya existe un archivo con ese nombre',
@@ -95,6 +98,7 @@
       },
     },
     fr: {
+      dlQuality: 'Qualité', dlQMax: 'Maximale', dlPick: 'Choisir la qualité…', dlReading: 'Lecture du lien…', dlPickVideo: 'Vidéo', dlPickOther: 'Autres', dlPickAudio: 'Audio seul', dlPickThumb: 'Miniature seule', dlExtras: 'Avec', dlWithSubs: 'Sous-titres', dlWithThumb: 'Miniature (JPG)', dlAutoSub: '(automatiques)', dlNoSubs: 'Pas de sous-titres',
       dlAccounts: 'Comptes', dlAccountsSub: 'Pour Instagram et les vidéos qui demandent une connexion. La session reste sur ce PC', dlConnected: 'Connecté', dlSignOut: 'Se déconnecter', dlSignInShort: 'Se connecter', dlSigningIn: 'Ouverture…',
       dlSignIn: (s) => `Se connecter à ${s}`, dlLoginTitle: (s) => `Se connecter à ${s} · Mec Encoder`, dlLoggedIn: (s) => `Connecté à ${s}`,
       dlPlay: 'Lire', dlRename: 'Cliquez pour renommer', dlNameTaken: 'Un fichier porte déjà ce nom',
@@ -126,6 +130,7 @@
       },
     },
     de: {
+      dlQuality: 'Qualität', dlQMax: 'Maximal', dlPick: 'Qualität wählen…', dlReading: 'Link wird gelesen…', dlPickVideo: 'Video', dlPickOther: 'Andere', dlPickAudio: 'Nur Audio', dlPickThumb: 'Nur Vorschaubild', dlExtras: 'Dazu', dlWithSubs: 'Untertitel', dlWithThumb: 'Vorschaubild (JPG)', dlAutoSub: '(automatisch)', dlNoSubs: 'Keine Untertitel',
       dlAccounts: 'Konten', dlAccountsSub: 'Für Instagram und Videos mit Anmeldung. Die Sitzung bleibt nur auf diesem PC', dlConnected: 'Verbunden', dlSignOut: 'Abmelden', dlSignInShort: 'Anmelden', dlSigningIn: 'Wird geöffnet…',
       dlSignIn: (s) => `Bei ${s} anmelden`, dlLoginTitle: (s) => `Bei ${s} anmelden · Mec Encoder`, dlLoggedIn: (s) => `Mit ${s} verbunden`,
       dlPlay: 'Abspielen', dlRename: 'Zum Umbenennen klicken', dlNameTaken: 'Es gibt schon eine Datei mit diesem Namen',
@@ -157,6 +162,7 @@
       },
     },
     it: {
+      dlQuality: 'Qualità', dlQMax: 'Massima', dlPick: 'Scegli la qualità…', dlReading: 'Lettura del link…', dlPickVideo: 'Video', dlPickOther: 'Altro', dlPickAudio: 'Solo audio', dlPickThumb: 'Solo miniatura', dlExtras: 'Insieme', dlWithSubs: 'Sottotitoli', dlWithThumb: 'Miniatura (JPG)', dlAutoSub: '(automatici)', dlNoSubs: 'Nessun sottotitolo',
       dlAccounts: 'Account', dlAccountsSub: 'Per Instagram e i video che richiedono l’accesso. La sessione resta solo su questo PC', dlConnected: 'Connesso', dlSignOut: 'Esci', dlSignInShort: 'Accedi', dlSigningIn: 'Apertura…',
       dlSignIn: (s) => `Accedi a ${s}`, dlLoginTitle: (s) => `Accedi a ${s} · Mec Encoder`, dlLoggedIn: (s) => `Connesso a ${s}`,
       dlPlay: 'Riproduci', dlRename: 'Clicca per rinominare', dlNameTaken: 'Esiste già un file con questo nome',
@@ -188,6 +194,7 @@
       },
     },
     ru: {
+      dlQuality: 'Качество', dlQMax: 'Максимальное', dlPick: 'Выбрать качество…', dlReading: 'Читаю ссылку…', dlPickVideo: 'Видео', dlPickOther: 'Другое', dlPickAudio: 'Только аудио', dlPickThumb: 'Только обложка', dlExtras: 'Вместе', dlWithSubs: 'Субтитры', dlWithThumb: 'Обложка (JPG)', dlAutoSub: '(автоматические)', dlNoSubs: 'Нет субтитров',
       dlAccounts: 'Аккаунты', dlAccountsSub: 'Для Instagram и видео, где нужен вход. Сессия хранится только на этом ПК', dlConnected: 'Подключено', dlSignOut: 'Выйти', dlSignInShort: 'Войти', dlSigningIn: 'Открывается…',
       dlSignIn: (s) => `Войти в ${s}`, dlLoginTitle: (s) => `Вход в ${s} · Mec Encoder`, dlLoggedIn: (s) => `Подключено: ${s}`,
       dlPlay: 'Воспроизвести', dlRename: 'Щёлкните, чтобы переименовать', dlNameTaken: 'Файл с таким именем уже есть',
@@ -219,6 +226,7 @@
       },
     },
     ja: {
+      dlQuality: '画質', dlQMax: '最高', dlPick: '画質を選ぶ…', dlReading: 'リンクを読み込み中…', dlPickVideo: '動画', dlPickOther: 'その他', dlPickAudio: '音声のみ', dlPickThumb: 'サムネイルのみ', dlExtras: '一緒に', dlWithSubs: '字幕', dlWithThumb: 'サムネイル (JPG)', dlAutoSub: '(自動)', dlNoSubs: '字幕なし',
       dlAccounts: 'アカウント', dlAccountsSub: 'Instagram やログインが必要な動画用。セッションはこの PC にだけ保存されます', dlConnected: '接続済み', dlSignOut: 'ログアウト', dlSignInShort: 'ログイン', dlSigningIn: '開いています…',
       dlSignIn: (s) => `${s} にログイン`, dlLoginTitle: (s) => `${s} にログイン · Mec Encoder`, dlLoggedIn: (s) => `${s} に接続しました`,
       dlPlay: '再生', dlRename: 'クリックして名前を変更', dlNameTaken: '同じ名前のファイルがすでにあります',
@@ -250,6 +258,7 @@
       },
     },
     ko: {
+      dlQuality: '화질', dlQMax: '최고', dlPick: '화질 선택…', dlReading: '링크를 읽는 중…', dlPickVideo: '동영상', dlPickOther: '기타', dlPickAudio: '오디오만', dlPickThumb: '썸네일만', dlExtras: '함께', dlWithSubs: '자막', dlWithThumb: '썸네일 (JPG)', dlAutoSub: '(자동)', dlNoSubs: '자막 없음',
       dlAccounts: '계정', dlAccountsSub: 'Instagram과 로그인이 필요한 동영상용. 세션은 이 PC에만 저장됩니다', dlConnected: '연결됨', dlSignOut: '로그아웃', dlSignInShort: '로그인', dlSigningIn: '여는 중…',
       dlSignIn: (s) => `${s} 로그인`, dlLoginTitle: (s) => `${s} 로그인 · Mec Encoder`, dlLoggedIn: (s) => `${s}에 연결됨`,
       dlPlay: '재생', dlRename: '클릭해서 이름 바꾸기', dlNameTaken: '같은 이름의 파일이 이미 있습니다',
@@ -281,6 +290,7 @@
       },
     },
     zh: {
+      dlQuality: '画质', dlQMax: '最高', dlPick: '选择画质…', dlReading: '正在读取链接…', dlPickVideo: '视频', dlPickOther: '其他', dlPickAudio: '仅音频', dlPickThumb: '仅缩略图', dlExtras: '一起下载', dlWithSubs: '字幕', dlWithThumb: '缩略图 (JPG)', dlAutoSub: '（自动）', dlNoSubs: '没有字幕',
       dlAccounts: '账户', dlAccountsSub: '用于 Instagram 和需要登录的视频。会话只保存在这台电脑上', dlConnected: '已连接', dlSignOut: '退出', dlSignInShort: '登录', dlSigningIn: '正在打开…',
       dlSignIn: (s) => `登录 ${s}`, dlLoginTitle: (s) => `登录 ${s} · Mec Encoder`, dlLoggedIn: (s) => `已连接 ${s}`,
       dlPlay: '播放', dlRename: '点击重命名', dlNameTaken: '已有同名文件',
