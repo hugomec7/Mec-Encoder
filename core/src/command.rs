@@ -481,6 +481,25 @@ pub fn apply_trim(plan: &mut Plan, info: &MediaInfo, a: f64, b: f64) {
     }
     let at = plan.args.len().saturating_sub(1);
     plan.args.splice(at..at, ["-t".to_string(), fmt(b - a)]);
+    trim_audio_reencode(plan, info);
+}
+
+/// Áudio copiado num trecho começa no pacote anterior ao corte (até ~1 s antes), escondido por uma
+/// "edit list". Editores respeitam, mas players como o MPC tocam esse áudio a mais e seguram o vídeo
+/// no começo. Então, ao cortar, o áudio é regravado no mesmo formato do original, começando junto do vídeo.
+fn trim_audio_reencode(plan: &mut Plan, info: &MediaInfo) {
+    let Some(i) = plan.args.windows(2).position(|w| w[0] == "-c:a" && w[1] == "copy") else { return };
+    let Some(src) = info.audio.first() else { return };
+    let kbps = if src.bitrate_kbps == 0 { 256 } else { src.bitrate_kbps.clamp(64, 320) };
+    let enc: Vec<String> = match src.codec.as_str() {
+        c if c.starts_with("pcm_") => vec![c.into()],
+        "flac" => vec!["flac".into()],
+        "mp3" => vec!["libmp3lame".into(), "-b:a".into(), format!("{}k", [128, 160, 192, 224, 256, 320].into_iter().min_by_key(|k| (*k as i64 - kbps as i64).abs()).unwrap_or(320))],
+        _ => vec!["aac".into(), "-b:a".into(), format!("{kbps}k")],
+    };
+    let mut new = vec!["-c:a".to_string()];
+    new.extend(enc);
+    plan.args.splice(i..i + 2, new);
 }
 
 /// Áudio dos trechos que vão ser colados: PCM, sem atraso de codificador (o áudio final é feito uma vez só, na colagem).

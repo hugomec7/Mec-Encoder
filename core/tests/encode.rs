@@ -395,6 +395,31 @@ fn cuts_split_and_join() {
     assert!(left.is_empty(), "sobrou: {left:?}");
 }
 
+/// Um corte só com áudio copiado: o áudio é regravado e começa junto do vídeo, sem ~1 s escondido
+/// antes do corte (o MPC tocava esse pedaço e travava o vídeo no começo).
+#[test]
+fn single_cut_audio_starts_with_video() {
+    use mec_core::render::{render_cuts, Engine, Hooks};
+    use std::sync::{atomic::AtomicBool, Mutex};
+    let (Some(ff), Some(fp)) = (tool("ffmpeg"), tool("ffprobe")) else { eprintln!("sem ffmpeg, pulando"); return };
+    let d = dir("cut1");
+    let src = make_iphone_like(&ff, &d, false);
+    let info = probe(&fp, &src).unwrap();
+    let e = Engine { ffmpeg: ff, ffprobe: fp.clone(), encoder: Encoder::Cpu { preset: "ultrafast".into() }, gpu: None };
+    let children = Mutex::new(std::collections::HashMap::new());
+    let cancel = AtomicBool::new(false);
+    let h = Hooks { id: 1, children: &children, cancel: &cancel, progress: &|_| {}, log: &|_| {}, started: &|_| {} };
+    let p = Preset::defaults().into_iter().find(|p| p.id == "iphone-4k60").unwrap();
+    assert_eq!(p.audio.codec, "copy");
+    let out = render_cuts(&e, &info, &p, &mec_core::Naming::default(), &[(1.3, 2.6)], false, &h).unwrap().output;
+    let o = Command::new(&fp).args(["-v", "error", "-select_streams", "a:0", "-show_entries", "packet=pts_time", "-of", "csv=p=0"]).arg(&out).output().unwrap();
+    let first: f64 = String::from_utf8_lossy(&o.stdout).lines().next().unwrap().trim_end_matches(',').parse().unwrap();
+    // o AAC tem 1 pacote de atraso de codificador (~21 ms); antes vinha quase 1 s
+    assert!(first > -0.05, "áudio começa {first:.3}s antes do vídeo");
+    let oi = probe(&fp, &out).unwrap();
+    assert!((oi.duration - 1.3).abs() < 0.1, "{}", oi.duration);
+}
+
 /// Juntar trechos de um arquivo com PCM e timecode (tipo FX30) num .mp4: áudio continua PCM, timecode do 1º trecho.
 #[test]
 fn cuts_join_pcm_timecode() {
