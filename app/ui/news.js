@@ -1,6 +1,27 @@
 // Gerado por docs/release-notes/make_news.py — não edite à mão.
 window.MEC_NEWS = [
  {
+  "version": "0.3.1",
+  "en": [
+   "**Accounts** in the Download tab: Instagram, YouTube, X, Facebook and TikTok. **Sign in** opens the site's own login page in a private window; as soon as you are in, the app saves the session and closes the window. The session stays only on this PC and is used by every download from that site. **Sign out** deletes it.",
+   "A download that needs a login shows **Sign in to Instagram** (or the site) right on the row; after you sign in, it starts again by itself.",
+   "**Quality** in the tab options: Best, 1080p, 720p or 480p, used by the quick buttons and the several-links box. 1080p counts the shorter side, so a vertical 1080×1920 video is 1080p.",
+   "**Choose quality…** (under the quick buttons): reads the link in Ctrl+C and shows each resolution with fps and estimated size, plus **Audio only** and **Thumbnail only**.",
+   "**Subtitles** (pick the language, including YouTube's automatic one) and the **thumbnail** can come together, saved next to the video with the same name (Video.pt.srt, Video.jpg).",
+   "**Only a section** (from 1:20 to 1:45): downloads just that piece, cut on the exact frame. The file name carries the section.",
+   "**Playlists, channels and profiles**: the link opens a list to tick which videos to download, as video or audio and in the chosen quality. The quick buttons open this list too, instead of downloading hundreds of videos at once."
+  ],
+  "pt": [
+   "**Contas** na aba Baixar: Instagram, YouTube, X, Facebook e TikTok. **Entrar** abre a página de login do próprio site numa janela anônima; assim que você entra, o app guarda a sessão e fecha a janela. A sessão fica só neste PC e vale para todos os downloads daquele site. **Sair** apaga a sessão.",
+   "Um download que precisa de login mostra **Entrar no Instagram** (ou no site) na própria linha; depois de entrar, ele recomeça sozinho.",
+   "**Qualidade** nas opções da aba: Máxima, 1080p, 720p ou 480p, usada pelos botões rápidos e pela caixa de vários links. O 1080p conta pelo lado menor, então um vídeo em pé 1080×1920 é 1080p.",
+   "**Escolher qualidade…** (embaixo dos botões rápidos): lê o link do Ctrl+C e mostra cada resolução com fps e tamanho estimado, além de **Só áudio** e **Só a miniatura**.",
+   "**Legenda** (com o idioma, inclusive a automática do YouTube) e **miniatura** podem vir junto, salvas ao lado do vídeo com o mesmo nome (Vídeo.pt.srt, Vídeo.jpg).",
+   "**Só um trecho** (de 1:20 até 1:45): baixa só esse pedaço, cortado no quadro exato. O nome do arquivo leva o trecho.",
+   "**Playlists, canais e perfis**: o link abre uma lista para marcar quais vídeos baixar, em vídeo ou áudio e na qualidade escolhida. Os botões rápidos também abrem essa lista, em vez de baixar centenas de vídeos de uma vez."
+  ]
+ },
+ {
   "version": "0.3.0",
   "en": [
    "**New Download tab** (Ctrl+2): copy a video link from YouTube, TikTok, X, Facebook, Reddit and hundreds of other sites, and click **Download video** or **Download audio**. It downloads right away in the best quality, without asking anything. Shortcuts in the tab: **Ctrl+V** (video) and **Ctrl+Shift+V** (audio). The link in Ctrl+C shows under the buttons.",
@@ -168,15 +189,6 @@ window.MEC_NEWS = [
    "**Pasta de tarefas (automação)**: com o Mec Encoder aberto, coloque um .json com os arquivos e o preset na pasta de tarefas (Configurações › Automação › Abrir) e ele entra na fila e renderiza sozinho. O andamento vai para `<nome>.status.json` (situação, progresso, saída e erro de cada arquivo). Dá para pedir pasta de saída, sufixo, subpasta e trecho. O formato está em jobs\\README.txt.",
    "**Linha de comando: mec.exe** (na pasta bin do app): `mec convert <arquivos ou pastas> --preset RAW`, com `--out`, `--suffix`, `--trim`, `--parallel`, `--dry-run` e `--json` (uma linha por evento). Também `mec presets`, `mec probe` e `mec engine`. Mesmos presets e mesmo motor do app. Configurações › Automação › Copiar caminho.",
    "O motor de render agora fica no núcleo, o mesmo para o app e o mec.exe."
-  ]
- },
- {
-  "version": "0.2.5",
-  "en": [
-   "**Update** no longer opens a black command window while installing. Only the small Windows installer progress bar shows, and the app opens again by itself. (This update itself may still show the window one last time.)"
-  ],
-  "pt": [
-   "**Atualizar** não abre mais uma janela preta de comando durante a instalação. Só aparece a barrinha de progresso do instalador do Windows, e o app abre de novo sozinho. (Esta atualização ainda pode mostrar a janela uma última vez.)"
   ]
  }
 ];
