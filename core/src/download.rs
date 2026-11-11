@@ -54,6 +54,15 @@ pub struct Job {
     pub subs: Vec<String>,
     /// Baixar a miniatura (JPG) junto.
     pub thumb: bool,
+    /// Só um trecho (início, fim) em segundos: baixa só esse pedaço, cortado no quadro certo.
+    pub section: Option<(f64, f64)>,
+}
+
+/// "1m20s" para o nome do arquivo de um trecho (dois-pontos não pode em nome de arquivo).
+pub fn section_label(t: f64) -> String {
+    let t = t.max(0.0).floor() as u64;
+    let (h, m, s) = (t / 3600, t / 60 % 60, t % 60);
+    if h > 0 { format!("{h}h{m:02}m{s:02}s") } else if m > 0 { format!("{m}m{s:02}s") } else { format!("{s}s") }
 }
 
 /// Programas que o download usa.
@@ -146,7 +155,15 @@ pub fn ytdlp_args(job: &Job, t: &Tools, work: &Path) -> Vec<String> {
     if let Some(d) = &t.deno { a.extend(["--js-runtimes".into(), format!("deno:{}", d.display())]); }
     if let Some(c) = &t.cookies { a.extend(["--cookies".into(), c.to_string_lossy().into_owned()]); }
     match &t.cache { Some(c) => a.extend(["--cache-dir".into(), c.to_string_lossy().into_owned()]), None => a.push("--no-cache-dir".into()) }
-    a.extend(["-P".into(), work.to_string_lossy().into_owned(), "-o".into(), "%(title).150B.%(ext)s".into()]);
+    let name = match job.section {
+        Some((x, y)) if job.kind != Kind::Thumb => format!("%(title).130B ({}-{}).%(ext)s", section_label(x), section_label(y)),
+        _ => "%(title).150B.%(ext)s".into(),
+    };
+    a.extend(["-P".into(), work.to_string_lossy().into_owned(), "-o".into(), name]);
+    if let Some((x, y)) = job.section.filter(|_| job.kind != Kind::Thumb) {
+        // só esse pedaço; com o corte no quadro certo (o ffmpeg reconverte só o trecho)
+        a.extend(["--download-sections".into(), format!("*{:.3}-{:.3}", x.max(0.0), y.max(x + 0.1)), "--force-keyframes-at-cuts".into()]);
+    }
     match job.kind {
         Kind::Video => {
             a.extend(["-f".into(), "bv*+ba/b".into()]);
@@ -187,7 +204,8 @@ pub fn ytdlp_args(job: &Job, t: &Tools, work: &Path) -> Vec<String> {
 
 /// Argumentos para só ler o que o link tem (qualidades, legendas, miniatura), sem baixar: JSON na saída.
 pub fn info_args(url: &str, t: &Tools) -> Vec<String> {
-    let mut a: Vec<String> = ["--ignore-config", "--no-playlist", "-J", "--no-warnings", "--no-colors", "--encoding", "utf-8"].iter().map(|s| s.to_string()).collect();
+    // --flat-playlist: link de playlist ou perfil volta rápido, só com a lista (título e link de cada vídeo)
+    let mut a: Vec<String> = ["--ignore-config", "--no-playlist", "--flat-playlist", "-J", "--no-warnings", "--no-colors", "--encoding", "utf-8"].iter().map(|s| s.to_string()).collect();
     if let Some(d) = &t.deno { a.extend(["--js-runtimes".into(), format!("deno:{}", d.display())]); }
     if let Some(c) = &t.cookies { a.extend(["--cookies".into(), c.to_string_lossy().into_owned()]); }
     match &t.cache { Some(c) => a.extend(["--cache-dir".into(), c.to_string_lossy().into_owned()]), None => a.push("--no-cache-dir".into()) }
@@ -621,6 +639,10 @@ mod tests {
         assert!(qn.contains("-S res:720 "), "{qn}");
         let inf = info_args("https://youtu.be/x", &tools_()).join(" ");
         assert!(inf.contains("-J") && inf.contains("--no-playlist") && inf.ends_with("-- https://youtu.be/x"), "{inf}");
+        let sec = ytdlp_args(&Job { section: Some((80.0, 105.5)), ..job(Kind::Video, true) }, &tools_(), Path::new("/w")).join(" ");
+        assert!(sec.contains("--download-sections *80.000-105.500 --force-keyframes-at-cuts"), "{sec}");
+        assert!(sec.contains("-o %(title).130B (1m20s-1m45s).%(ext)s"), "{sec}");
+        assert_eq!(section_label(3725.0), "1h02m05s");
         // só a miniatura
         let th = ytdlp_args(&job(Kind::Thumb, true), &tools_(), Path::new("/w")).join(" ");
         assert!(th.contains("--skip-download") && th.contains("--write-thumbnail") && th.contains("video:MECT") && !th.contains("-f bv"), "{th}");

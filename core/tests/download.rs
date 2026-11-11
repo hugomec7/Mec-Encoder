@@ -120,7 +120,7 @@ fn subs_thumb_and_height() {
     let page = srv.file("page.html", &html);
     let dest = d.join("out");
     let ev = Mutex::new(Vec::new());
-    let job = Job { url: page.clone(), kind: Kind::Video, web: true, audio: "wav".into(), dest: dest.clone(), height: 360, subs: vec!["pt".into()], thumb: true };
+    let job = Job { url: page.clone(), kind: Kind::Video, web: true, audio: "wav".into(), dest: dest.clone(), height: 360, subs: vec!["pt".into()], thumb: true, ..Default::default() };
     let r = get(&t, &job, &d.join("w1"), &ev).unwrap();
     eprintln!("arquivos: {:?} extras: {:?}", r.files, r.extras);
     assert_eq!(r.files.len(), 1);
@@ -129,6 +129,14 @@ fn subs_thumb_and_height() {
     assert!(r.extras.iter().any(|x| x.file_name().unwrap().to_string_lossy() == format!("{stem}.jpg")), "{:?}", r.extras);
     let srt = std::fs::read_to_string(r.extras.iter().find(|x| x.extension().unwrap() == "srt").unwrap()).unwrap();
     assert!(srt.contains("Olá, mundo") && srt.contains("-->"), "{srt}");
+
+    // só um trecho: 0,5 s a 1,5 s
+    let ev = Mutex::new(Vec::new());
+    let rs = get(&t, &Job { url: vu.clone(), section: Some((0.5, 1.5)), subs: vec![], thumb: false, height: 0, ..job.clone() }, &d.join("w3"), &ev).unwrap();
+    let is = mec_core::probe::probe(&t.ffprobe, &rs.files[0]).unwrap();
+    eprintln!("trecho: {:?} {:.2}s", rs.files, is.duration);
+    assert!((is.duration - 1.0).abs() < 0.2, "{}", is.duration);
+    assert!(rs.files[0].to_string_lossy().contains("(0s-2s)") || rs.files[0].to_string_lossy().contains("(1s-2s)") || rs.files[0].to_string_lossy().contains("s-"), "{:?}", rs.files);
 
     // só a miniatura
     let ev = Mutex::new(Vec::new());

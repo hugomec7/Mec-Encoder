@@ -919,3 +919,20 @@
 .dk-pk-foot{display:flex;justify-content:flex-end;gap:8px;padding:12px 16px;border-top:1px solid var(--sep)}
 .dk-pk-foot .dk-go{margin-left:0}
 .dk-pk-go{width:auto;height:32px;padding:0 18px;border-radius:9px;font-size:12.5px}
+
+.dk-pk-sec{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-3)}
+.dk-pk-sec input.dk-tc{flex:none;min-width:64px;max-width:64px;padding:0 4px;box-sizing:border-box}
+.dk-tc{width:64px;height:26px;border-radius:7px;border:1px solid var(--stroke-2);background:var(--stage);color:var(--text);font:400 12px var(--mono);text-align:center;outline:none}
+.dk-tc:focus{border-color:color-mix(in srgb,var(--blue) 60%,transparent)}
+.dk-tc.bad{border-color:var(--red)}
+.dk-pk-tools{display:flex;align-items:center;gap:8px;padding:12px 20px 4px}
+.dk-pk-tools .seg button{height:26px;padding:0 10px}
+.dk-pk-tools .link{margin-left:auto;font-size:12px;color:var(--text-2)}
+.dk-pk-list{padding-top:6px;max-height:min(420px,calc(100vh - 300px))}
+.dk-pk-entry{display:grid;grid-template-columns:18px 24px minmax(0,1fr) auto;align-items:center;gap:8px;min-height:34px;padding:0 10px;border-radius:9px;cursor:pointer;font-size:12.5px}
+.dk-pk-entry:hover{background:var(--hover)}
+.dk-pk-entry input{margin:0;accent-color:var(--blue);width:15px;height:15px}
+.dk-pk-entry:not(.on) .dk-pk-t{color:var(--text-3)}
+.dk-pk-n{font:400 11px var(--mono);color:var(--text-3);text-align:right}
+.dk-pk-t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dk-pk-go:disabled{opacity:.45;cursor:default}

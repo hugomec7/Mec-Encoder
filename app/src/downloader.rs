@@ -161,7 +161,8 @@ pub async fn dl_update(app: AppHandle, state: State<'_, AppState>) -> Result<Str
 /// Andamento: evento "dl-event" com { id, meta } ou { id, step }.
 #[tauri::command]
 pub async fn dl_start(app: AppHandle, state: State<'_, AppState>, id: u64, url: String, kind: String, web: bool, audio: String,
-                      dest: Option<PathBuf>, height: Option<u32>, subs: Option<Vec<String>>, thumb: Option<bool>) -> Result<download::Done, String> {
+                      dest: Option<PathBuf>, height: Option<u32>, subs: Option<Vec<String>>, thumb: Option<bool>,
+                      section: Option<Vec<f64>>) -> Result<download::Done, String> {
     let yt = ytdlp_path(&app);
     if !yt.is_file() { return Err("dl-setup".into()); }
     let deno = Some(deno_path(&app)).filter(|d| d.is_file());
@@ -176,7 +177,8 @@ pub async fn dl_start(app: AppHandle, state: State<'_, AppState>, id: u64, url: 
                         cache: Some(tools_dir(&app).join("cache")), cookies };
     let dest = dest.filter(|d| !d.as_os_str().is_empty()).unwrap_or_else(|| default_dir(&app));
     let kind = match kind.as_str() { "audio" => Kind::Audio, "thumb" => Kind::Thumb, _ => Kind::Video };
-    let job = Job { url, kind, web, audio, dest, height: height.unwrap_or(0), subs: subs.unwrap_or_default(), thumb: thumb.unwrap_or(false) };
+    let job = Job { url, kind, web, audio, dest, height: height.unwrap_or(0), subs: subs.unwrap_or_default(), thumb: thumb.unwrap_or(false),
+                    section: section.filter(|v| v.len() == 2 && v[1] > v[0]).map(|v| (v[0], v[1])) };
     let work = tools_dir(&app).join("work").join(id.to_string());
     let dls = state.downloads.clone();
     let cancel = Arc::new(AtomicBool::new(false));
@@ -334,8 +336,17 @@ pub async fn dl_info(app: AppHandle, state: State<'_, AppState>, url: String) ->
         json!(v.get(key).and_then(|s| s.as_object()).map(|m| m.iter().map(|(lang, list)| json!({
             "lang": lang, "name": list.get(0).and_then(|x| x.get("name")).cloned().unwrap_or(Value::Null) })).collect::<Vec<_>>()).unwrap_or_default())
     };
-    let mut out = pick(&v, &["title", "duration", "extractor_key", "thumbnail", "width", "height", "webpage_url", "is_live", "_type"]);
+    let mut out = pick(&v, &["title", "duration", "extractor_key", "thumbnail", "width", "height", "webpage_url", "is_live", "_type", "playlist_count", "uploader"]);
+    // playlist ou perfil: a lista de vídeos (até 1000)
+    let entries: Vec<Value> = v.get("entries").and_then(|e| e.as_array()).map(|a| a.iter().take(1000).filter_map(|e| {
+        let url = e.get("webpage_url").or_else(|| e.get("url")).and_then(|u| u.as_str())?;
+        if !url.starts_with("http") { return None; }
+        let thumb = e.get("thumbnail").cloned().or_else(|| e.get("thumbnails").and_then(|t| t.as_array()).and_then(|t| t.last()).and_then(|t| t.get("url")).cloned());
+        Some(json!({ "url": url, "title": e.get("title").cloned().unwrap_or(Value::Null), "duration": e.get("duration").cloned().unwrap_or(Value::Null),
+                     "thumbnail": thumb.unwrap_or(Value::Null) }))
+    }).collect()).unwrap_or_default();
     if let Value::Object(m) = &mut out {
+        if !entries.is_empty() { m.insert("entries".into(), json!(entries)); }
         m.insert("formats".into(), json!(formats));
         m.insert("subs".into(), langs("subtitles"));
         m.insert("autoSubs".into(), langs("automatic_captions"));

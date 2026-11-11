@@ -2447,7 +2447,7 @@
 
   function dlSave() {
     const keep = DL.list.filter((it) => ['done', 'err', 'cancel'].includes(it.status)).slice(0, 60)
-      .map(({ id, url, kind, status, meta, files, size, web, err, errCode, t, extras, height, subs, thumb, audioFmt }) => ({ id, url, kind, status, meta, files, size, web, err, errCode, t, extras, height, subs, thumb, audioFmt }));
+      .map(({ id, url, kind, status, meta, files, size, web, err, errCode, t, extras, height, subs, thumb, audioFmt, section }) => ({ id, url, kind, status, meta, files, size, web, err, errCode, t, extras, height, subs, thumb, audioFmt, section }));
     store.set('mec.downloads', JSON.stringify(keep));
   }
   function dlLoad() {
@@ -2515,7 +2515,19 @@
   async function dlQuick(kind) {
     await dlClipRead();
     if (!DL.clip.length) { toast(L.dlNoLink); return; }
+    // perfil, canal ou playlist: mostra a lista para escolher (não baixa centenas de vídeos de uma vez)
+    const list = DL.clip.find(dlIsList);
+    if (list) { dlPickOpen(list, kind); return; }
     dlAdd(DL.clip, kind);
+  }
+  function dlIsList(u) {
+    let x; try { x = new URL(u); } catch { return false; }
+    const h = x.hostname.replace(/^(www|m|mobile)\./, ''); const parts = x.pathname.split('/').filter(Boolean);
+    if (/(^|\.)youtube\.com$/.test(h)) return (parts[0] === 'playlist' && x.searchParams.has('list')) || (/^@/.test(parts[0] || '') && !['shorts', 'watch', 'live'].includes(parts[1])) || ['channel', 'c', 'user'].includes(parts[0]);
+    if (/(^|\.)tiktok\.com$/.test(h)) return /^@/.test(parts[0] || '') && !['video', 'photo'].includes(parts[1]);
+    if (/(^|\.)instagram\.com$/.test(h)) return parts.length === 1 && !['p', 'reel', 'reels', 'tv', 'stories', 'explore'].includes(parts[0]);
+    if (/(^|\.)(x|twitter)\.com$/.test(h)) return parts.length === 1 || (parts.length === 2 && ['media', 'with_replies'].includes(parts[1]));
+    return false;
   }
   // opts (de "Escolher qualidade…"): { height, subs, thumb }; sem opts, vale a Qualidade das opções
   function dlAdd(urls, kind, opts) {
@@ -2539,7 +2551,7 @@
     try {
       const height = it.height != null ? it.height : +set.quality || 0;
       const d = await inv('dl_start', { id: it.id, url: it.url, kind: it.kind, web: !!set.web, audio: set.audio, dest: set.dir || null,
-        height, subs: it.subs || [], thumb: !!it.thumb });
+        height, subs: it.subs || [], thumb: !!it.thumb, section: it.section || null });
       Object.assign(it, { status: 'done', files: d.files, size: d.size, web: d.web, extras: d.extras || [], meta: Object.assign({}, it.meta, d.meta.title ? d.meta : {}) });
       notify(L.dlDone((it.meta && it.meta.title) || dlShort(it.url)));
     } catch (e) {
@@ -2578,7 +2590,8 @@
       if (m.width && m.height) p.push(`${m.width}×${m.height}`);
       if (m.fps) p.push(`${num(m.fps, 2)} fps`);
     }
-    if (m.duration) p.push(dlDur(m.duration));
+    if (it.section) p.push(`${dlDur(it.section[0])}–${dlDur(it.section[1])}`);
+    else if (m.duration) p.push(dlDur(m.duration));
     if (it.status === 'run' && it.kind !== 'audio' && m.vcodec) { const c = dlCodec(m.vcodec); if (c) p.push(c); }
     return `${site ? `<b>${esc(site)}</b>` : ''}${site && p.length ? ' · ' : ''}${esc(p.join(' · '))}`;
   }
@@ -2815,13 +2828,14 @@
     (info.autoSubs || []).filter((s) => /-orig$/.test(s.lang)).forEach((s) => out.push({ lang: s.lang, label: `${dlLangName(s.lang, s.name)} ${L.dlAutoSub}` }));
     return out;
   }
-  async function dlPickOpen() {
-    await dlClipRead();
-    if (!DL.clip.length) { toast(L.dlNoLink); return; }
-    Object.assign(PK, { info: null, err: null, url: DL.clip[0], choice: 'v0', sub: '', thumb: false });
+  async function dlPickOpen(url, kind) {
+    if (!url) { await dlClipRead(); if (!DL.clip.length) { toast(L.dlNoLink); return; } url = DL.clip[0]; }
+    Object.assign(PK, { info: null, err: null, url, choice: 'v0', sub: '', thumb: false, sec: false, from: '', to: '', listKind: kind === 'audio' ? 'audio' : 'video', listQ: +dlSet().quality || 0, sel: null });
     $('#dlPickBg').hidden = false; dlPickRender();
     try {
-      PK.info = REAL ? await inv('dl_info', { url: PK.url }) : await new Promise((r) => setTimeout(() => r(dlDemoInfo()), 500));
+      PK.info = REAL ? await inv('dl_info', { url: PK.url }) : await new Promise((r) => setTimeout(() => r(dlIsList(PK.url) ? dlDemoList() : dlDemoInfo()), 500));
+      if (PK.info.entries) PK.sel = new Set(PK.info.entries.map((_, i) => i));
+      PK.to = PK.info.duration ? dlDur(PK.info.duration) : ''; PK.from = '0:00';
       const sl = dlSubList(PK.info); const want = (S.set.lang || 'pt').slice(0, 2);
       PK.sub = ''; PK.subDefault = (sl.find((x) => x.lang.startsWith(want)) || sl[0] || {}).lang || '';
     } catch (e) { const s = String(e); const i = s.indexOf('|'); PK.err = { code: i > 0 ? s.slice(0, i) : s.startsWith('dl-') ? s : 'unknown', detail: i > 0 ? s.slice(i + 1) : s }; }
@@ -2838,7 +2852,9 @@
         : `<div class="dk-pk-msg dk-muted">${esc(L.dlReading)}</div>`) + `<div class="dk-pk-foot"><button class="dk-go" id="bPkCancel">${esc(L.cancel)}</button></div>`;
       $('#bPkX').onclick = dlPickClose; $('#bPkCancel').onclick = dlPickClose; return;
     }
-    const info = PK.info; const sm = dlSummary(info, set.web); const subs = dlSubList(info);
+    const info = PK.info;
+    if (info.entries) { dlPickRenderList(el, head); return; }
+    const sm = dlSummary(info, set.web); const subs = dlSubList(info);
     const site = dlSite({ url: PK.url, meta: { site: info.extractor_key } });
     const opt = (id, label, size, extra) => `<label class="dk-pk-opt ${PK.choice === id ? 'on' : ''}"><input type="radio" name="pk" value="${id}" ${PK.choice === id ? 'checked' : ''}>
       <span class="dk-pk-l">${label}</span><span class="dk-pk-x">${extra || ''}</span><span class="dk-pk-s">${size ? '≈ ' + dlBytes(size) : ''}</span></label>`;
@@ -2858,6 +2874,8 @@
           <div class="dk-pk-opt dk-pk-check ${subs.length ? '' : 'off'}"><span class="switch ${PK.sub ? 'on' : ''}" id="pkSub" ${subs.length ? '' : 'aria-disabled="true"'}></span><span class="dk-pk-l">${esc(L.dlWithSubs)}</span>
             ${subs.length ? `<button class="field pick dd" id="pkLang" data-menu="1">${esc(curSub ? curSub.label : '')}${ICONS.chev || ''}</button>` : `<span class="dk-pk-x">${esc(L.dlNoSubs)}</span>`}</div>
           ${info.thumbnail ? `<div class="dk-pk-opt dk-pk-check"><span class="switch ${PK.thumb ? 'on' : ''}" id="pkThumb"></span><span class="dk-pk-l">${esc(L.dlWithThumb)}</span></div>` : ''}
+          ${info.duration ? `<div class="dk-pk-opt dk-pk-check"><span class="switch ${PK.sec ? 'on' : ''}" id="pkSec"></span><span class="dk-pk-l">${esc(L.dlSection)}</span>
+            ${PK.sec ? `<span class="dk-pk-sec">${esc(L.dlFrom)} <input class="dk-tc" id="pkFrom" value="${esc(PK.from)}" spellcheck="false"> ${esc(L.dlTo)} <input class="dk-tc" id="pkTo" value="${esc(PK.to)}" spellcheck="false"></span>` : ''}</div>` : ''}
         </div>` : ''}
       </div>
       <div class="dk-pk-foot"><button class="dk-go" id="bPkCancel">${esc(L.cancel)}</button><button class="dk-btn dk-pri dk-pk-go" id="bPkGo">${esc(L.dlGo)}</button></div>`;
@@ -2865,10 +2883,19 @@
     $$('input[name="pk"]', el).forEach((r) => { r.onchange = () => { PK.choice = r.value; const sc = $('.dk-pk-body', el).scrollTop; dlPickRender(); $('.dk-pk-body', el).scrollTop = sc; }; });
     const ps = $('#pkSub'); if (ps && subs.length) ps.onclick = () => { PK.sub = PK.sub ? '' : PK.subDefault; dlPickRender(); };
     const pt = $('#pkThumb'); if (pt) pt.onclick = () => { PK.thumb = !PK.thumb; dlPickRender(); };
+    const pc = $('#pkSec'); if (pc) pc.onclick = () => { PK.sec = !PK.sec; dlPickRender(); if (PK.sec) $('#pkFrom').select(); };
+    ['pkFrom', 'pkTo'].forEach((idn) => { const i = $('#' + idn); if (!i) return;
+      i.addEventListener('input', () => { PK[idn === 'pkFrom' ? 'from' : 'to'] = i.value; i.classList.remove('bad'); });
+      i.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') $('#bPkGo').click(); }); });
     const pl = $('#pkLang'); if (pl) pl.onclick = (e) => openMenu(e.currentTarget, subs.map((x) => ({ label: x.label, value: x.lang, sel: x.lang === (PK.sub || PK.subDefault) })),
       (v) => { PK.subDefault = v; PK.sub = v; dlPickRender(); });
     $('#bPkGo').onclick = () => {
       const c = PK.choice; const opts = { subs: PK.sub && c !== 't' ? [PK.sub] : [], thumb: PK.thumb && c !== 't' };
+      if (PK.sec && c !== 't') {
+        const a = dlParseTime(PK.from); const b = dlParseTime(PK.to); const dur = info.duration || Infinity;
+        if (a == null || b == null || b <= a || a >= dur) { ['pkFrom', 'pkTo'].forEach((x) => $('#' + x).classList.add('bad')); toast(L.dlSectionBad); return; }
+        opts.section = [a, Math.min(b, dur)];
+      }
       const title = info.title || '';
       let kind = 'video';
       if (c === 'a') kind = 'audio'; else if (c === 't') kind = 'thumb'; else opts.height = c === 'v0' ? 0 : +c.slice(1);
@@ -2877,9 +2904,46 @@
       dlPickClose();
     };
   }
-  $('#bDlPick').onclick = dlPickOpen;
+  $('#bDlPick').onclick = () => dlPickOpen();
   $('#dlPickBg').addEventListener('mousedown', (e) => { if (e.target.id === 'dlPickBg') dlPickClose(); });
   addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#dlPickBg').hidden && !$('#menu').classList.contains('show')) { e.stopPropagation(); dlPickClose(); } }, true);
+  // "1:20", "1:02:03", "80" ou "80,5" → segundos
+  function dlParseTime(t) {
+    const p = String(t || '').trim().replace(',', '.').split(':');
+    if (!p[0] || p.length > 3 || p.some((x) => !/^\d+(\.\d+)?$/.test(x))) return null;
+    return p.reduce((acc, x) => acc * 60 + parseFloat(x), 0);
+  }
+  // playlist, perfil ou canal: lista para marcar os vídeos, com Vídeo/Áudio e a qualidade
+  function dlPickRenderList(el, head) {
+    const info = PK.info; const es = info.entries; const n = PK.sel.size;
+    const site = dlSite({ url: PK.url, meta: { site: info.extractor_key } });
+    el.innerHTML = head(info.title || info.uploader || dlShort(PK.url), esc([site, L.dlListN(es.length)].filter(Boolean).join(' · ')), '') + `
+      <div class="dk-pk-tools"><span id="pkKind">${segH('pkKind', PK.listKind, [['video', L.dlVideoShort], ['audio', L.dlAudioShort]])}</span>
+        ${PK.listKind === 'video' ? `<span id="pkQ">${segH('pkQ', PK.listQ, [[0, L.dlQMax], [1080, '1080p'], [720, '720p'], [480, '480p']])}</span>` : ''}
+        <button class="link" id="pkAll">${esc(n === es.length ? L.dlSelNone : L.dlSelAll)}</button></div>
+      <div class="dk-pk-body dk-pk-list">${es.map((e, i) => `<label class="dk-pk-entry ${PK.sel.has(i) ? 'on' : ''}"><input type="checkbox" data-i="${i}" ${PK.sel.has(i) ? 'checked' : ''}>
+        <span class="dk-pk-n">${i + 1}</span><span class="dk-pk-t">${esc(e.title || dlShort(e.url))}</span><span class="dk-pk-s">${e.duration ? dlDur(e.duration) : ''}</span></label>`).join('')}</div>
+      <div class="dk-pk-foot"><button class="dk-go" id="bPkCancel">${esc(L.cancel)}</button><button class="dk-btn dk-pri dk-pk-go" id="bPkGo" ${n ? '' : 'disabled'}>${esc(L.dlGoVideos(n))}</button></div>`;
+    $('#bPkX').onclick = dlPickClose; $('#bPkCancel').onclick = dlPickClose;
+    seg($('#pkKind .seg'), (v) => { PK.listKind = v; dlPickRender(); });
+    const q = $('#pkQ .seg'); if (q) seg(q, (v) => { PK.listQ = +v; });
+    $('#pkAll').onclick = () => { PK.sel = PK.sel.size === es.length ? new Set() : new Set(es.map((_, i) => i)); const sc = $('.dk-pk-list', el).scrollTop; dlPickRender(); $('.dk-pk-list', el).scrollTop = sc; };
+    $$('input[type="checkbox"]', el).forEach((c) => { c.onchange = () => { const i = +c.dataset.i; if (c.checked) PK.sel.add(i); else PK.sel.delete(i);
+      c.closest('.dk-pk-entry').classList.toggle('on', c.checked); const k = PK.sel.size; const g = $('#bPkGo'); g.textContent = L.dlGoVideos(k); g.disabled = !k;
+      $('#pkAll').textContent = k === es.length ? L.dlSelNone : L.dlSelAll; }; });
+    $('#bPkGo').onclick = () => {
+      const pick = es.filter((_, i) => PK.sel.has(i)); if (!pick.length) return;
+      // um item por vídeo, na ordem da lista (a fila baixa 3 por vez)
+      const now = Date.now();
+      pick.slice().reverse().forEach((e) => DL.list.unshift({ id: ++DL.seq, url: e.url, kind: PK.listKind, status: 'wait', t: now, web: '',
+        height: PK.listKind === 'video' ? PK.listQ : 0, meta: { title: e.title || '', duration: e.duration || 0, thumbnail: e.thumbnail || '', site: info.extractor_key } }));
+      dlPickClose(); dlRender(); dlPump();
+    };
+  }
+  function dlDemoList() {
+    const t = ['Hug Challenge com estranhos na Paulista', 'Perguntei para casais quanto eles ganham', 'Quiz de 100 reais no metrô', 'Liguei para minha ex no FaceTime', 'Quem acerta a música ganha'];
+    return { _type: 'playlist', title: '@frankiebruno', extractor_key: 'TikTokUser', entries: t.map((title, i) => ({ url: `https://www.tiktok.com/@frankiebruno/video/74318042198${i}`, title, duration: 31 + i * 9 })) };
+  }
   function dlDemoInfo() {
     const mk = (id, h, tbr, v, a) => ({ format_id: id, height: h, width: Math.round(h * 9 / 16), fps: 30, vcodec: v || 'avc1.640028', acodec: a || 'none', tbr, ext: 'mp4' });
     return { title: 'Natura vs Boticário! Quem tem os MELHORES perfumes?!', duration: 59, extractor_key: 'Youtube', thumbnail: 'data:image/svg+xml,' + encodeURIComponent(scene(300, false).replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ')),
