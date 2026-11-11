@@ -2,32 +2,44 @@
 
 [English](README.md) · **Português**
 
-Conversor de vídeo para Windows, rápido e minimalista, feito para editores de vídeos curtos.
+![Mec Encoder: converter, cortar e baixar vídeo](docs/screenshots/hero.png)
+
+Ferramenta de vídeo para Windows, rápida, feita para editores de vídeos curtos: **converter, cortar e baixar** num app só.
 Feito em **Rust** (Tauri 2) com **FFmpeg** e encode por **NVIDIA NVENC**.
 
-![Mec Encoder convertendo um vídeo do iPhone](docs/screenshots/main.png)
-
-![Renderizando uma fila de 13 vídeos com NVENC](docs/screenshots/rendering.png)
+![Converter: vídeo HDR do iPhone, Original e Resultado lado a lado](docs/screenshots/convert.png)
 
 <p>
-  <img src="docs/screenshots/empty-queue.png" width="49%" alt="Fila vazia, editando um preset">
-  <img src="docs/screenshots/settings.png" width="49%" alt="Configurações">
+  <img src="docs/screenshots/cutter.png" width="49%" alt="Cortador: dois cortes na linha do tempo, no quadro exato">
+  <img src="docs/screenshots/download.png" width="49%" alt="Baixar: download rápido do Ctrl+C, pronto para web">
+</p>
+<p>
+  <img src="docs/screenshots/rendering.png" width="49%" alt="Renderizando a fila com NVENC">
+  <img src="docs/screenshots/gif.png" width="49%" alt="Vídeo para GIF">
 </p>
 
-
+**Converter**
 - Converte vídeos do iPhone para **frame rate constante** (ex.: 59,94 fps), mantendo bitrate e qualidade.
-- Gera **proxy** em 25% com sufixo e subpasta automáticos.
 - Converte **HDR do iPhone (HLG) para Rec. 709** com tone mapping de verdade (a mesma sequência de filtros Hable do HandBrake), automaticamente quando o vídeo é HDR.
 - **Mantém o arquivo da câmera como está** quando você quer: codec, croma (4:2:2), profundidade, frame rate, .mp4/.mov, áudio PCM e timecode em Original.
-- **Converte áudio** (WAV, MP3, AAC, FLAC) e extrai o áudio de vídeos.
-- **Converte imagens** (JPG, PNG, WebP), com redimensionar e girar.
-- **Arraste arquivos ou pastas inteiras**: todos os vídeos de dentro, inclusive das subpastas, entram na fila.
-- **Fila em que cada vídeo tem o próprio preset**, visível ao lado do nome.
-- **Prévia do resultado** antes de renderizar: rotação, escala e cor, com **Comparar** para ver o original lado a lado.
-- **8-bit ou 10-bit**, sincronia A/V, cópia dos metadados, apagar o original só depois do render conferido.
+- Gera **proxy** em 25% com sufixo e subpasta automáticos.
+- **Áudio** (WAV, MP3, AAC, FLAC), **imagens** (JPG, PNG, WebP) e **vídeo para GIF** (largura, FPS, qualidade, repetir).
+- **Fila em que cada vídeo tem o próprio preset**; arraste arquivos ou pastas inteiras; renderize um vídeo só ou a fila inteira.
+- **Prévia do resultado** com **Comparar** para ver o original lado a lado.
 - **Presets** para criar, compartilhar e importar do Shutter Encoder (`.enc`).
-- **Renderize um vídeo só ou a fila inteira**, reordene arrastando, arraste um preset até o vídeo, mostrar na pasta.
-- Inglês e português; temas claro, escuro e OLED.
+
+**Cortar**
+- Marque um ou vários cortes na linha do tempo (I, O, S), **no quadro exato**, separados ou juntos.
+- **Exportar** só corta: tudo fica como no original (codec, resolução, fps, bitrate, áudio). **Converter** leva os cortes para a aba Converter.
+- Toque o resultado pulando o que foi cortado, em loop, com velocidade, forma de onda e zoom na linha do tempo.
+
+**Baixar**
+- **Download rápido**: pega o link do Ctrl+C e baixa na melhor qualidade, sem perguntar nada. Só o áudio em WAV, M4A, MP3 ou FLAC.
+- **Pronto para web** por padrão (H.264 + AAC): o vídeo vai direto para o WhatsApp e as redes.
+- Escolha qualidade, legenda, miniatura, um trecho, vários links ou uma playlist; entre no Instagram, X e outros para posts privados.
+- Mande um vídeo baixado direto para o Cortador.
+
+Português, inglês e mais 8 idiomas; temas Estúdio, escuro, claro e OLED.
 
 > Builds de teste. Veja o [plano](ROADMAP.md) e as [novidades](CHANGELOG.md).
 
@@ -49,4 +61,4 @@ Coloque `?lang=pt` no endereço para ver em português.
 ## Créditos
 
 Inspirado no [Shutter Encoder](https://github.com/paulpacifico/shutter-encoder), de Paul Pacifico. O Mec Encoder é um app novo e não usa código dele.
-Inclui o [FFmpeg](https://ffmpeg.org) (build GPL do BtbN). Fonte Inter (SIL Open Font License). Por [@hugoeditor_](https://x.com/hugoeditor_).
+Inclui o [FFmpeg](https://ffmpeg.org) (build GPL do BtbN). Fontes Inter e JetBrains Mono (SIL Open Font License). Por [@hugoeditor_](https://x.com/hugoeditor_).

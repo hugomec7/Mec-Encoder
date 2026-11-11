@@ -3,6 +3,8 @@ name: Build
 on:
   push:
     branches: [main]
+    # só documentação (README, imagens, notas) não gera build nem release
+    paths-ignore: ["README*.md", "docs/screenshots/**", "docs/prints/**", ".github/workflows/build.yml"]
   workflow_dispatch:
 
 permissions:
