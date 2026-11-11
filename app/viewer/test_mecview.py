@@ -1,5 +1,6 @@
 """Confere o motor do player (mecview): para vários vídeos e tempos, o quadro tem de ser idêntico ao do
-FFmpeg com -ss no mesmo tempo e o mesmo filtro. Uso: python test_mecview.py <mecview> <ffmpeg> <pasta temporária>"""
+FFmpeg lendo o arquivo do começo (select do quadro n) com o mesmo filtro. Não usa -ss na referência: em
+HEVC com GOP aberto, o -ss do FFmpeg entrega o quadro-chave no lugar dos 1-3 quadros antes dele. Uso: python test_mecview.py <mecview> <ffmpeg> <pasta temporária>"""
 import os, subprocess, sys, time
 
 exe, ffmpeg, tmp = sys.argv[1], sys.argv[2], sys.argv[3]
@@ -23,6 +24,9 @@ clips = [
 ]
 
 p = subprocess.Popen([exe], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+def reference(path, n, vf):
+    return subprocess.run([ffmpeg, '-v', 'error', '-i', path, '-vf', f'select=eq(n\\,{n}),{vf},format=rgba', '-frames:v', '1', '-f', 'rawvideo', '-'], capture_output=True).stdout
+
 def ask(line):
     p.stdin.write((line + '\n').encode('utf-8')); p.stdin.flush()
     head = p.stdout.readline().decode().strip()
@@ -38,7 +42,7 @@ for i, (path, fps, vf) in enumerate(clips):
     for n in [0, 75, 76, 30, 100, 100, 3]:
         t = n / fps
         t0 = time.time(); head, data = ask(f'frame {i} {t:.6f} {vf}'); ms = (time.time() - t0) * 1000
-        ref = subprocess.run([ffmpeg, '-v', 'error', '-ss', f'{t:.6f}', '-i', path, '-frames:v', '1', '-vf', vf + ',format=rgba', '-f', 'rawvideo', '-'], capture_output=True).stdout
+        ref = reference(path, n, vf)
         if not ref:
             # sem referência só pode ser depois do fim (e o motor entrega o último quadro)
             ok = n / fps >= dur[i] - 0.5 / fps and head.startswith('img')
@@ -51,5 +55,19 @@ for i, (path, fps, vf) in enumerate(clips):
         elif not same: d = -1
         print(f'  t={t:.3f} {"ok " if same else "DIFERENTE"} {head} ({ms:.0f} ms, diferença média {d:.2f})')
         bad += not same
+# memória de quadros: depois de um clique e um tempo parado, os vizinhos (para frente e para trás)
+# saem da memória, na hora, e continuam idênticos ao FFmpeg
+for i, (path, fps, vf) in enumerate(clips[:2]):
+    n0 = 60
+    ask(f'frame {i} {n0 / fps:.6f} {vf}')
+    time.sleep(6)
+    for dn in [1, 2, -1, -3, -20, 10, 40]:
+        t = (n0 + dn) / fps
+        t0 = time.time(); head, data = ask(f'frame {i} {t:.6f} {vf}'); ms = (time.time() - t0) * 1000
+        ref = reference(path, n0 + dn, vf)
+        hit = head.split()[-1] == '1'
+        same = data == ref or (data and len(data) == len(ref) and sum(abs(a - b) for a, b in zip(data[::7], ref[::7])) / len(data[::7]) < 1.0)
+        print(f'  memória {os.path.basename(path)} {dn:+d} quadros: {"da memória" if hit else "LIDO DO ARQUIVO"} {"igual" if same else "DIFERENTE"} ({ms:.0f} ms)')
+        bad += (not hit) + (not same)
 p.stdin.write(b'quit\n'); p.stdin.flush(); p.wait(10)
 sys.exit(1 if bad else 0)

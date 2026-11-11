@@ -404,9 +404,9 @@
     // clicar de novo na mesma caixa fecha o menu
     if (at instanceof Element && menuOwner === at && menu.classList.contains('show')) { closeMenu(); return; }
     menuOwner = at instanceof Element ? at : null;
-    menu.innerHTML = items.map((it, i) => it.sep ? '<hr>' : `<button data-i="${i}" class="${it.sel ? 'sel' : ''} ${it.danger ? 'danger' : ''}">${it.color ? `<i style="--c:${it.color}"></i>` : it.icon ? it.icon : ''}<span>${esc(it.label)}</span>${it.sel ? ICONS.check : ''}</button>`).join('');
+    menu.innerHTML = items.map((it, i) => it.sep ? '<hr>' : it.head ? `<div class="mhead">${esc(it.head)}</div>` : `<button data-i="${i}" class="${it.sel ? 'sel' : ''} ${it.danger ? 'danger' : ''}">${it.color ? `<i style="--c:${it.color}"></i>` : it.icon ? it.icon : ''}<span>${esc(it.label)}</span>${it.sel ? ICONS.check : ''}</button>`).join('');
     const r = at instanceof Element ? at.getBoundingClientRect() : { left: at.x, right: at.x, top: at.y, bottom: at.y };
-    const h = items.reduce((a, it) => a + (it.sep ? 9 : 32), 12);
+    const h = items.reduce((a, it) => a + (it.sep ? 9 : it.head ? 26 : 32), 12);
     const up = r.bottom + 6 + h > innerHeight;
     menu.style.left = clamp(r.left, 8, innerWidth - 310) + 'px';
     menu.style.top = (up ? Math.max(8, r.top - 6 - h) : r.bottom + (at instanceof Element ? 6 : 2)) + 'px';
@@ -1115,7 +1115,7 @@
   function requestPreview(q, out) {
     if (!REAL) return;
     const side = out ? 'out' : 'in'; const st = pvSt[side]; const fr = $(out ? '#frame' : '#frameIn');
-    const t = fullDur(q) * S.t; const max = pzMax(); const key = JSON.stringify([q.id, out, Math.round(t * 30), out ? q.cfg : 0, max]);
+    const t = fullDur(q) * S.t; const max = viewMax(q); const key = JSON.stringify([q.id, out, Math.round(t * 30), out ? q.cfg : 0, max]);
     if (key === st.key) return; st.key = key;
     // Cortador: motor do player (sem espera, sem FFmpeg novo a cada clique)
     if (out && S.cutter && !VW.off && !q.src.isImage) { clearTimeout(st.timer); st.seq++; viewRequest(q, t, max); return; }
@@ -1153,10 +1153,10 @@
         if (!cv) { cv = document.createElement('canvas'); cv.className = 'pv-cv'; const v = fr.querySelector('video.pv-vid'); fr.insertBefore(cv, v || null); applyPz(); }
         if (cv.width !== fw || cv.height !== fh) { cv.width = fw; cv.height = fh; }
         cv.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(buf, 48, fw * fh * 4), fw, fh), 0, 0);
-        const ms = performance.now() - t0; const hw = dv.getUint32(44, true); const n = dv.getUint32(20, true);
+        const ms = performance.now() - t0; const fl = dv.getUint32(44, true); const hw = fl & 1; const mem = fl & 2; const n = dv.getUint32(20, true);
         const st = $('#pvStat');
-        if (st) { st.hidden = false; st.textContent = `${L.viewEngine} · ${Math.round(ms)} ms · ${hw ? L.viewGpu : L.viewCpu}${n ? ` · ${L.viewFrames(n)}` : ''}`; }
-        viewNote(`motor | ${w.q.name} t=${w.t.toFixed(3)} | ${Math.round(ms)} ms até aparecer (motor ${Math.round(dv.getFloat32(36, true))} ms, ${n} quadros, ${hw ? 'placa' : 'CPU'})`);
+        if (st) { st.hidden = false; st.textContent = `${L.viewEngine} · ${Math.round(ms)} ms · ${mem ? L.viewMem : `${hw ? L.viewGpu : L.viewCpu}${n ? ` · ${L.viewFrames(n)}` : ''}`} · ${fw}×${fh}`; }
+        viewNote(`motor | ${w.q.name} t=${w.t.toFixed(3)} | ${Math.round(ms)} ms até aparecer (motor ${Math.round(dv.getFloat32(36, true))} ms, ${mem ? 'da memória' : `${n} quadros, ${hw ? 'placa' : 'CPU'}`}, ${fw}x${fh})`);
       }
     } catch (e) {
       const msg = String(e && e.message || e);
@@ -1701,7 +1701,16 @@
      'cut' = um trecho, do primeiro ao último quadro. */
   const stage = $('.stage');
   const LIVE_H = [1080, 720, 540, 360];
-  const playQ = () => String(S.set.playQ || 'auto');
+  /* Qualidade do preview, como no Premiere: pausado e tocando, em Automática, Completa, 1/2, 1/4 ou 1/8.
+     Pausado = tamanho do quadro que o motor (ou a prévia por imagem) entrega; tocando = altura da conversão ao vivo. */
+  const QDIV = ['auto', '1', '2', '4', '8'];
+  const qPause = () => (QDIV.includes(String(S.set.viewPause)) ? String(S.set.viewPause) : 'auto');
+  const qPlay = () => (QDIV.includes(String(S.set.viewPlay)) ? String(S.set.viewPlay) : 'auto');
+  const qTxt = (d) => (d === 'auto' ? L.qualAuto : d === '1' ? L.qualFull : `1/${d}`);
+  // pausado: lado maior do quadro (Automática = o tamanho da tela, e maior com zoom)
+  const viewMax = (q) => { const d = qPause(); if (d === 'auto' || !q || !q.src || !q.src.w) return pzMax(); const o = outDims(q.src, q.cfg); return clamp(Math.round(Math.max(o.w, o.h) / +d), 120, 3840); };
+  // tocando: altura em pixels ('auto' = a conversão escolhe e baixa sozinha quando o PC não acompanha)
+  const playQ = () => { const d = qPlay(); if (d === 'auto') return 'auto'; const q = PL.q || selItem(); const sh = q && q.src && q.src.w ? Math.min(q.src.w, q.src.h) : 1080; return String(clamp(Math.round(sh / +d / 2) * 2, 240, 2160)); };
   const liveH = (q) => (playQ() === 'auto' ? (q.liveH || 720) : +playQ());
   const playable = (q) => !!q && !q.src.isImage;
   const RATES = [0.25, 0.5, 1, 1.5, 2, 4];
@@ -1964,7 +1973,7 @@
     const rb = $('#bRate'); rb.textContent = rateTxt(PL.rate); rb.classList.toggle('on', PL.rate !== 1); rb.title = L.speedTip;
     const box = $('#prepBox'); box.hidden = !prep;
     if (prep) box.innerHTML = `<b>${esc(L.preparing(Math.round(PL.prep * 100)))}</b><span>${esc(L.preparingSub)}</span><i style="--p:${(PL.prep * 100).toFixed(1)}%"></i>`;
-    renderPlayRows();
+    renderPlayRows(); renderQual();
   }
   // linhas da lista de trechos: a que está tocando mostra o andamento
   function renderPlayRows() {
@@ -1996,6 +2005,19 @@
     renderPlayUi();
   }
   $('#bSkip').onclick = toggleSkip;
+  // menu de qualidade do preview (pausado e tocando)
+  function renderQual() { const b = $('#bQual'); if (!b) return; b.textContent = qPause() === 'auto' ? 'Auto' : qTxt(qPause()); b.title = L.qualTip; b.classList.toggle('on', qPause() !== 'auto' || qPlay() !== 'auto'); }
+  $('#bQual').onclick = (e) => {
+    const items = [{ head: L.qualPaused }, ...QDIV.map((d) => ({ label: qTxt(d), value: 'p' + d, sel: qPause() === d })),
+      { sep: true }, { head: L.qualPlaying }, ...QDIV.map((d) => ({ label: qTxt(d), value: 'l' + d, sel: qPlay() === d }))];
+    openMenu(e.currentTarget, items, (v) => {
+      const d = String(v).slice(1);
+      if (v[0] === 'p') { S.set.viewPause = d; pvSt.out.key = ''; pvSt.in.key = ''; const q = selItem(); if (q && !PL.on) requestFrames(q); }
+      else { S.set.viewPlay = d; S.queue.forEach((q) => { delete q.liveH; }); if (PL.on) playStart(PL.plan && PL.plan.kind === 'cut' ? { kind: 'cut', cut: PL.plan.cut } : { kind: PL.plan && PL.plan.kind === 'all' ? 'all' : 'auto' }); }
+      saveSettings(); renderQual();
+    });
+  };
+  renderQual();
   $('#bRate').onclick = (e) => openMenu(e.currentTarget, RATES.map((r) => ({ label: rateTxt(r), value: r, sel: r === PL.rate })), (v) => setRate(+v));
   $('#bVol').onclick = () => { S.set.muted = !S.set.muted; saveSettings(); applyVol(); };
   $('#volR').addEventListener('input', (e) => { S.set.vol = +e.target.value / 100; S.set.muted = false; applyVol(); });
@@ -2323,7 +2345,7 @@
       </div>
       <div class="sec-label">${L.playback}</div>
       <div class="group">
-        ${row(L.playQ, segH('playQ', playQ(), [['auto', 'Auto'], ['360', '360p'], ['540', '540p'], ['720', '720p'], ['1080', '1080p']]), L.playQSub)}
+        ${row(L.playQ, segH('viewPlay', qPlay(), QDIV.map((d) => [d, d === 'auto' ? 'Auto' : qTxt(d)])), L.playQSub)}
         ${row(L.previewsSaved, `<span class="val tnum" id="prevSize">…</span><button class="field pick" id="bClearPrev">${L.clearPreviews}</button>`, L.previewsSub)}
         ${row(L.previewsAge, segH('previewDays', String(prevDays()), [['1', L.days(1)], ['7', L.days(7)], ['30', L.days(30)], ['0', L.never]]), L.previewsAgeSub)}
         ${row(L.previewsLimit, segH('previewGB', String(+S.set.previewGB || 5), [['2', '2 GB'], ['5', '5 GB'], ['10', '10 GB'], ['20', '20 GB']]))}
@@ -2359,7 +2381,7 @@
     $$('#sheetBody .seg').forEach((s) => seg(s, (v) => {
       if (s.dataset.k === 'theme') { setTheme(v); return; }
       if (s.dataset.k === 'parallel') { S.set.parallel = +v; saveSettings(); return; }
-      if (s.dataset.k === 'playQ') { S.set.playQ = v; S.queue.forEach((q) => { delete q.liveH; }); saveSettings(); return; }
+      if (s.dataset.k === 'viewPlay') { S.set.viewPlay = v; S.queue.forEach((q) => { delete q.liveH; }); saveSettings(); renderQual(); return; }
       if (s.dataset.k === 'previewGB') { S.set.previewGB = +v; saveSettings(); return; }
       if (s.dataset.k === 'previewDays') { S.set.previewDays = +v; saveSettings(); prunePreviews(); return; }
     }));

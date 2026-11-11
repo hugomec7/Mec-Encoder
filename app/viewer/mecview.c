@@ -10,8 +10,14 @@
  *   frame <id> <t> <filtro>        → "img <w> <h> <bytes> <t do quadro> <pulou 0|1> <quadros lidos>
  *                                      <ms ler+decodificar> <ms copiar da placa> <ms filtro> <ms total> <hw 0|1>\n"
  *                                    seguido de <bytes> de RGBA (w*h*4)                  ou "err <motivo>\n"
+ *                                    (+ " <da memória 0|1>" no fim da linha)
+ *   cache <MB>                     → "ok\n"   (quanto de RAM a memória de quadros pode usar)
  *   close <id>                     → "ok\n"
  *   quit
+ *
+ * Memória de quadros: depois de entregar um quadro, enquanto não chega outro pedido, o motor lê em
+ * segundo plano os quadros em volta (um pouco para frente, depois para trás, depois mais para frente)
+ * e guarda prontos (já filtrados). Clicar ou andar com as setas ali perto sai da memória, na hora.
  * <t> é em segundos a partir do começo do arquivo (como o -ss do FFmpeg).
  */
 #include <libavformat/avformat.h>
@@ -30,6 +36,10 @@
 #ifdef _WIN32
 #include <fcntl.h>
 #include <io.h>
+#include <windows.h>
+#else
+#include <poll.h>
+#include <unistd.h>
 #endif
 
 #define MAX_CLIPS 4
@@ -48,7 +58,7 @@ typedef struct Clip {
     int64_t start;          /* começo do arquivo na base de tempo da faixa */
     int64_t half;           /* meio quadro na base da faixa */
     int64_t last_ts;        /* tempo do último quadro que saiu do decodificador (AV_NOPTS_VALUE = nenhum) */
-    int eof;
+    int eof, sent_eof;
     AVFrame *last;          /* último quadro entregue (já na memória do PC), para repetir sem ler de novo */
     int64_t last_pick;
     int last_hw;
@@ -91,8 +101,10 @@ static void free_graph(Clip *c) {
     av_freep(&c->graph_desc);
 }
 
+static void cache_forget(long long id);
 static void close_clip(Clip *c) {
     if (!c->used) return;
+    cache_forget(c->id);
     free_graph(c);
     av_frame_free(&c->last);
     avcodec_free_context(&c->dec);
@@ -178,35 +190,50 @@ static void cmd_open(long long id, int hw, const char *path) {
     fflush(stdout);
 }
 
+/* Pula para o quadro-chave antes de `ts` e limpa o decodificador. */
+static void do_seek(Clip *c, int64_t ts) {
+    if (av_seek_frame(c->fmt, c->vs, ts, AVSEEK_FLAG_BACKWARD) < 0)
+        av_seek_frame(c->fmt, c->vs, ts, AVSEEK_FLAG_BACKWARD | AVSEEK_FLAG_ANY);
+    avcodec_flush_buffers(c->dec);
+    c->eof = c->sent_eof = 0;
+    c->last_ts = AV_NOPTS_VALUE;
+}
+
+/* Próximo quadro do decodificador (na placa ou na CPU). 0 = saiu um; AVERROR_EOF = acabou o arquivo. */
+static int decode_next(Clip *c, AVFrame *f) {
+    for (;;) {
+        int r = avcodec_receive_frame(c->dec, f);
+        if (r == 0) {
+            int64_t ts = f->best_effort_timestamp != AV_NOPTS_VALUE ? f->best_effort_timestamp : f->pts;
+            if (ts == AV_NOPTS_VALUE) ts = c->last_ts != AV_NOPTS_VALUE ? c->last_ts + 2 * c->half : c->start;
+            f->best_effort_timestamp = ts;
+            c->last_ts = ts;
+            return 0;
+        }
+        if (r == AVERROR_EOF) { c->eof = 1; return r; }
+        if (r != AVERROR(EAGAIN)) return r;
+        if (c->sent_eof) { c->eof = 1; return AVERROR_EOF; }
+        r = av_read_frame(c->fmt, pkt);
+        if (r == AVERROR_EOF) { avcodec_send_packet(c->dec, NULL); c->sent_eof = 1; continue; }
+        if (r < 0) return r;
+        if (pkt->stream_index == c->vs) avcodec_send_packet(c->dec, pkt);
+        av_packet_unref(pkt);
+    }
+}
+
 /* Lê até sair o quadro que cobre `target`. Devolve o quadro (na placa ou na CPU) em `out`. */
 static int decode_to(Clip *c, int64_t target, AVFrame *out, int *ndec) {
-    AVFrame *f = av_frame_alloc();
-    int r = 0, found = 0, sent_eof = 0;
-    AVFrame *prev = av_frame_alloc(); int have_prev = 0;
+    AVFrame *f = av_frame_alloc(), *prev = av_frame_alloc();
+    int r = 0, found = 0, have_prev = 0;
     while (!found) {
-        r = avcodec_receive_frame(c->dec, f);
-        if (r == AVERROR(EAGAIN)) {
-            if (sent_eof) break;
-            r = av_read_frame(c->fmt, pkt);
-            if (r == AVERROR_EOF) { avcodec_send_packet(c->dec, NULL); sent_eof = 1; continue; }
-            if (r < 0) break;
-            if (pkt->stream_index == c->vs) avcodec_send_packet(c->dec, pkt);
-            av_packet_unref(pkt);
-            continue;
-        }
-        if (r == AVERROR_EOF) { c->eof = 1; break; }
+        r = decode_next(c, f);
         if (r < 0) break;
         (*ndec)++;
-        int64_t ts = f->best_effort_timestamp != AV_NOPTS_VALUE ? f->best_effort_timestamp : f->pts;
-        if (ts == AV_NOPTS_VALUE) ts = c->last_ts != AV_NOPTS_VALUE ? c->last_ts + 2 * c->half : c->start;
-        c->last_ts = ts;
+        int64_t ts = f->best_effort_timestamp;
         if (ts >= target - c->half) {
             /* passou do alvo sem cair nele (quadro faltando): fica com o anterior, se estava mais perto */
-            if (have_prev && ts > target + c->half && target - prev->best_effort_timestamp < ts - target) {
-                av_frame_move_ref(out, prev);
-            } else {
-                av_frame_move_ref(out, f);
-            }
+            if (have_prev && ts > target + c->half && target - prev->best_effort_timestamp < ts - target) av_frame_move_ref(out, prev);
+            else av_frame_move_ref(out, f);
             found = 1;
             break;
         }
@@ -216,6 +243,45 @@ static int decode_to(Clip *c, int64_t target, AVFrame *out, int *ndec) {
     if (!found && have_prev) { av_frame_move_ref(out, prev); found = 1; }
     av_frame_free(&f); av_frame_free(&prev);
     return found ? 0 : (r < 0 ? r : AVERROR_EOF);
+}
+
+/* ---------- memória de quadros ---------- */
+typedef struct Ent { long long id; uint32_t key; int64_t ts; int w, h; uint8_t *data; size_t size; unsigned long long used; } Ent;
+static Ent *ents; static int nents, capents;
+static size_t cache_bytes, cache_limit = (size_t)1536 << 20;
+
+static uint32_t hash_str(const char *s) { uint32_t h = 2166136261u; while (*s) { h ^= (uint8_t)*s++; h *= 16777619u; } return h; }
+
+static Ent *cache_find(long long id, uint32_t key, int64_t target, int64_t half) {
+    Ent *best = NULL;
+    for (int i = 0; i < nents; i++) {
+        Ent *e = &ents[i];
+        if (e->id != id || e->key != key || e->ts < target - half || e->ts > target + half) continue;
+        if (!best || llabs(e->ts - target) < llabs(best->ts - target)) best = e;
+    }
+    if (best) best->used = ++tick;
+    return best;
+}
+static void cache_drop(int i) { cache_bytes -= ents[i].size; av_free(ents[i].data); ents[i] = ents[--nents]; }
+static void cache_trim(size_t need) {
+    while (nents && cache_bytes + need > cache_limit) {
+        int o = 0;
+        for (int i = 1; i < nents; i++) if (ents[i].used < ents[o].used) o = i;
+        cache_drop(o);
+    }
+}
+static void cache_forget(long long id) { for (int i = nents - 1; i >= 0; i--) if (ents[i].id == id) cache_drop(i); }
+static void cache_put(long long id, uint32_t key, int64_t ts, const AVFrame *rgb) {
+    size_t row = (size_t)rgb->width * 4, size = row * rgb->height;
+    if (size > cache_limit / 4) return;
+    for (int i = 0; i < nents; i++) if (ents[i].id == id && ents[i].key == key && ents[i].ts == ts) { ents[i].used = ++tick; return; }
+    cache_trim(size);
+    if (nents == capents) { capents = capents ? capents * 2 : 256; ents = av_realloc_array(ents, capents, sizeof *ents); }
+    uint8_t *d = av_malloc(size);
+    if (!d) return;
+    for (int y = 0; y < rgb->height; y++) memcpy(d + y * row, rgb->data[0] + (size_t)y * rgb->linesize[0], row);
+    ents[nents++] = (Ent){ id, key, ts, rgb->width, rgb->height, d, size, ++tick };
+    cache_bytes += size;
 }
 
 static int build_graph(Clip *c, const AVFrame *f, const char *desc) {
@@ -250,39 +316,138 @@ static int build_graph(Clip *c, const AVFrame *f, const char *desc) {
     return 0;
 }
 
+/* Quadro da CPU → filtro da prévia → RGBA em `rgb`. */
+static int filter_frame(Clip *c, AVFrame *sw, const char *desc, AVFrame *rgb) {
+    int r;
+    if (!c->graph || c->gw != sw->width || c->gh != sw->height || c->gfmt != sw->format || strcmp(c->graph_desc ? c->graph_desc : "", desc)) {
+        if ((r = build_graph(c, sw, desc)) < 0) { free_graph(c); return r; }
+    }
+    r = av_buffersrc_add_frame_flags(c->src, sw, AV_BUFFERSRC_FLAG_KEEP_REF);
+    if (r >= 0) r = av_buffersink_get_frame(c->sink, rgb);
+    if (r < 0) free_graph(c);
+    return r;
+}
+
+/* Quadro na placa → memória do PC (na CPU já está). */
+static int to_cpu(AVFrame *dst, AVFrame *src) {
+    if (!src->hw_frames_ctx) return av_frame_ref(dst, src);
+    int r = av_hwframe_transfer_data(dst, src, 0);
+    if (r >= 0) av_frame_copy_props(dst, src);
+    return r;
+}
+
+static void send_rgba(int w, int h, const uint8_t *data, int stride) {
+    for (int y = 0; y < h; y++) fwrite(data + (size_t)y * stride, 1, (size_t)w * 4, stdout);
+    fflush(stdout);
+}
+
+/* Deixa o leitor pronto para chegar em `t`: continua lendo se está logo antes (até 3 s, sem quadro-chave
+   no meio); senão pula para o quadro-chave antes de `t`. 1 = pulou. */
+static int position(Clip *c, int64_t t) {
+    int key_ahead = 0;
+    if (c->last_ts != AV_NOPTS_VALUE) {
+        const AVIndexEntry *k = avformat_index_get_entry_from_timestamp(c->fmt->streams[c->vs], t, AVSEEK_FLAG_BACKWARD);
+        key_ahead = k && k->timestamp > c->last_ts + c->half;
+    }
+    if (c->last_ts == AV_NOPTS_VALUE || c->eof || t <= c->last_ts || t - c->last_ts > (int64_t)(3.0 / av_q2d(c->tb)) || key_ahead) { do_seek(c, t); return 1; }
+    return 0;
+}
+
+/* ---------- leitura em segundo plano (prefetch) ---------- */
+enum { PF_IDLE, PF_FWD1, PF_BACK, PF_FWD2 };
+static struct { int stage; Clip *c; long long id; uint32_t key; char *desc; int64_t center, fwd1_end, back_from, fwd2_end; int seeked; } pf;
+
+static void pf_start(Clip *c, uint32_t key, const char *desc, int64_t center, size_t frame_bytes) {
+    av_freep(&pf.desc);
+    /* quantos quadros cabem: até 1/3 s para frente, 1 s para trás e 2 s para frente, se a memória deixar */
+    int64_t fd = 2 * c->half; if (fd < 1) fd = 1;
+    double fit = frame_bytes ? (double)cache_limit * 0.7 / frame_bytes : 300;
+    int64_t span = (int64_t)(fit * fd);
+    int64_t one = (int64_t)(1.0 / av_q2d(c->tb));
+    int64_t back = FFMIN(one, span / 3), fwd = FFMIN(2 * one, span - back);
+    pf = (typeof(pf)){ PF_FWD1, c, c->id, key, av_strdup(desc), center,
+                       center + FFMIN(fwd, one / 3), FFMAX(c->start, center - back), center + fwd, 0 };
+}
+
+/* Um passo do prefetch (um quadro). 0 = nada a fazer. */
+static int pf_step(void) {
+    if (pf.stage == PF_IDLE) return 0;
+    Clip *c = pf.c;
+    if (!c->used || c->id != pf.id) { pf.stage = PF_IDLE; return 0; }
+    AVFrame *f = av_frame_alloc();
+    int r = 0, ok = 1;
+    if (pf.stage == PF_BACK && !pf.seeked) {
+        /* para trás: tudo já na memória? então pula esta parte */
+        int all = 1;
+        for (int64_t t = pf.back_from; t < pf.center - c->half && all; t += 2 * c->half) all = cache_find(c->id, pf.key, t, c->half) != NULL;
+        if (all) { pf.stage = PF_FWD2; pf.seeked = 0; av_frame_free(&f); return 1; }
+        do_seek(c, pf.back_from); pf.seeked = 1;
+    }
+    if ((pf.stage == PF_FWD1 || pf.stage == PF_FWD2) && !pf.seeked) {
+        /* para frente: começa no primeiro quadro que ainda não está guardado */
+        int64_t end = pf.stage == PF_FWD1 ? pf.fwd1_end : pf.fwd2_end;
+        int64_t t = pf.center + 2 * c->half;
+        while (t < end && cache_find(c->id, pf.key, t, c->half)) t += 2 * c->half;
+        if (t >= end) { pf.stage = pf.stage == PF_FWD1 ? PF_BACK : PF_IDLE; av_frame_free(&f); return 1; }
+        position(c, t);
+        pf.seeked = 1;
+    }
+    r = decode_next(c, f);
+    if (r < 0) ok = 0;
+    if (ok) {
+        int64_t ts = f->best_effort_timestamp;
+        int stop = 0, want = 0;
+        if (pf.stage == PF_FWD1) { want = ts > pf.center; stop = ts >= pf.fwd1_end; }
+        else if (pf.stage == PF_BACK) { want = ts >= pf.back_from - c->half && ts < pf.center - c->half; stop = ts >= pf.center - c->half; }
+        else { want = ts > pf.center; stop = ts >= pf.fwd2_end; }
+        if (want && !cache_find(c->id, pf.key, ts, c->half / 2 + 1)) {
+            AVFrame *sw = av_frame_alloc(), *rgb = av_frame_alloc();
+            if (to_cpu(sw, f) >= 0 && filter_frame(c, sw, pf.desc, rgb) >= 0) cache_put(c->id, pf.key, ts, rgb);
+            av_frame_free(&sw); av_frame_free(&rgb);
+        }
+        if (stop) {
+            if (pf.stage == PF_FWD1) pf.stage = PF_BACK;
+            else if (pf.stage == PF_BACK) pf.stage = PF_FWD2;
+            else pf.stage = PF_IDLE;
+            pf.seeked = 0;
+        }
+    } else {
+        /* fim do arquivo ou erro: passa para a próxima parte */
+        pf.stage = pf.stage == PF_FWD1 ? PF_BACK : pf.stage == PF_BACK ? PF_FWD2 : PF_IDLE;
+        pf.seeked = 0;
+    }
+    av_frame_free(&f);
+    return 1;
+}
+
 static void cmd_frame(long long id, double t, const char *desc) {
     int64_t t0 = av_gettime_relative();
     Clip *c = find_clip(id);
     if (!c) { reply_err("not open", 0); return; }
     c->touched = ++tick;
+    uint32_t key = hash_str(desc);
     int64_t target = c->start + (int64_t)(t / av_q2d(c->tb) + 0.5);
+    /* já está na memória */
+    Ent *e = cache_find(id, key, target, c->half);
+    if (e) {
+        printf("img %d %d %d %.6f 0 0 0.0 0.0 0.0 %.1f %d 1\n", e->w, e->h, e->w * e->h * 4, (e->ts - c->start) * av_q2d(c->tb), ms_since(t0), c->last_hw);
+        send_rgba(e->w, e->h, e->data, e->w * 4);
+        pf_start(c, key, desc, e->ts, e->size);
+        return;
+    }
     int seeked = 0, ndec = 0, r = 0;
     double t_dec = 0, t_xfer = 0, t_filt = 0;
-    int same = c->last_pick != AV_NOPTS_VALUE && c->last->format != -1 && c->last->data[0] &&
+    int same = c->last_pick != AV_NOPTS_VALUE && c->last->data[0] &&
                target >= c->last_pick - c->half && target < c->last_pick + c->half;
     if (!same) {
         AVFrame *raw = av_frame_alloc();
         int64_t td = av_gettime_relative();
-        /* pra frente e perto (até 3 s): continua lendo sem pular; senão pula para o quadro-chave antes */
-        int64_t near = (int64_t)(3.0 / av_q2d(c->tb));
-        /* se existe um quadro-chave entre onde o leitor está e o alvo, pular para ele é mais rápido */
-        int key_ahead = 0;
-        if (c->last_ts != AV_NOPTS_VALUE) {
-            const AVIndexEntry *k = avformat_index_get_entry_from_timestamp(c->fmt->streams[c->vs], target, AVSEEK_FLAG_BACKWARD);
-            key_ahead = k && k->timestamp > c->last_ts + c->half;
-        }
-        if (c->last_ts == AV_NOPTS_VALUE || c->eof || target <= c->last_ts || target - c->last_ts > near || key_ahead) {
-            r = av_seek_frame(c->fmt, c->vs, target, AVSEEK_FLAG_BACKWARD);
-            if (r < 0) r = av_seek_frame(c->fmt, c->vs, target, AVSEEK_FLAG_BACKWARD | AVSEEK_FLAG_ANY);
-            avcodec_flush_buffers(c->dec);
-            c->eof = 0; c->last_ts = AV_NOPTS_VALUE; seeked = 1;
-        }
+        seeked = position(c, target);
         r = decode_to(c, target, raw, &ndec);
         /* o pulo caiu depois do alvo (índice ruim): volta 2 s e tenta de novo */
-        if (r >= 0 && seeked && raw->best_effort_timestamp != AV_NOPTS_VALUE && raw->best_effort_timestamp > target + c->half) {
+        if (r >= 0 && seeked && raw->best_effort_timestamp > target + c->half) {
             av_frame_unref(raw);
-            av_seek_frame(c->fmt, c->vs, target - (int64_t)(2.0 / av_q2d(c->tb)), AVSEEK_FLAG_BACKWARD);
-            avcodec_flush_buffers(c->dec); c->eof = 0; c->last_ts = AV_NOPTS_VALUE;
+            do_seek(c, target - (int64_t)(2.0 / av_q2d(c->tb)));
             r = decode_to(c, target, raw, &ndec);
         }
         t_dec = ms_since(td);
@@ -290,48 +455,81 @@ static void cmd_frame(long long id, double t, const char *desc) {
         int64_t tx = av_gettime_relative();
         c->last_hw = raw->hw_frames_ctx != NULL;
         av_frame_unref(c->last);
-        if (raw->hw_frames_ctx) {
-            r = av_hwframe_transfer_data(c->last, raw, 0);
-            if (r >= 0) { av_frame_copy_props(c->last, raw); }
-        } else {
-            r = av_frame_ref(c->last, raw);
-        }
+        r = to_cpu(c->last, raw);
         av_frame_free(&raw);
         t_xfer = ms_since(tx);
         if (r < 0) { reply_err("transfer", r); return; }
         c->last_pick = c->last->best_effort_timestamp != AV_NOPTS_VALUE ? c->last->best_effort_timestamp : target;
     }
     int64_t tf = av_gettime_relative();
-    AVFrame *f = c->last;
-    if (!c->graph || c->gw != f->width || c->gh != f->height || c->gfmt != f->format || strcmp(c->graph_desc ? c->graph_desc : "", desc)) {
-        if ((r = build_graph(c, f, desc)) < 0) { free_graph(c); reply_err("filter", r); return; }
-    }
-    AVFrame *in = av_frame_alloc(), *rgb = av_frame_alloc();
-    av_frame_ref(in, f);
-    r = av_buffersrc_add_frame_flags(c->src, in, AV_BUFFERSRC_FLAG_KEEP_REF);
-    if (r >= 0) r = av_buffersink_get_frame(c->sink, rgb);
-    av_frame_free(&in);
+    AVFrame *rgb = av_frame_alloc();
+    r = filter_frame(c, c->last, desc, rgb);
     t_filt = ms_since(tf);
-    if (r < 0) { av_frame_free(&rgb); free_graph(c); reply_err("filter run", r); return; }
+    if (r < 0) { av_frame_free(&rgb); reply_err("filter", r); return; }
     int w = rgb->width, h = rgb->height;
     double pick = (c->last_pick - c->start) * av_q2d(c->tb);
-    printf("img %d %d %d %.6f %d %d %.1f %.1f %.1f %.1f %d\n", w, h, w * h * 4, pick, seeked, ndec, t_dec, t_xfer, t_filt, ms_since(t0), c->last_hw);
-    for (int y = 0; y < h; y++) fwrite(rgb->data[0] + (size_t)y * rgb->linesize[0], 1, (size_t)w * 4, stdout);
-    fflush(stdout);
+    printf("img %d %d %d %.6f %d %d %.1f %.1f %.1f %.1f %d 0\n", w, h, w * h * 4, pick, seeked, ndec, t_dec, t_xfer, t_filt, ms_since(t0), c->last_hw);
+    send_rgba(w, h, rgb->data[0], rgb->linesize[0]);
+    cache_put(id, key, c->last_pick, rgb);
+    pf_start(c, key, desc, c->last_pick, (size_t)w * h * 4);
     av_frame_free(&rgb);
+}
+
+/* ---------- entrada: linhas do app, sem travar enquanto o prefetch trabalha ---------- */
+static char inbuf[LINE_MAX_LEN * 2];
+static size_t inlen;
+
+static int has_line(void) { return memchr(inbuf, '\n', inlen) != NULL; }
+
+/* Lê o que já chegou (sem esperar, se `wait` = 0). 0 = fim da entrada. */
+static int fill(int wait) {
+    if (inlen >= sizeof inbuf - 1) return 1;
+#ifdef _WIN32
+    HANDLE h = GetStdHandle(STD_INPUT_HANDLE);
+    DWORD avail = 0, got = 0;
+    if (!wait) { if (!PeekNamedPipe(h, NULL, 0, NULL, &avail, NULL)) return 0; if (!avail) return 1; }
+    DWORD want = (DWORD)(sizeof inbuf - 1 - inlen);
+    if (!wait && avail < want) want = avail;
+    if (!ReadFile(h, inbuf + inlen, want, &got, NULL) || !got) return 0;
+    inlen += got;
+#else
+    if (!wait) { struct pollfd pfd = { 0, POLLIN, 0 }; if (poll(&pfd, 1, 0) <= 0) return 1; }
+    ssize_t got = read(0, inbuf + inlen, sizeof inbuf - 1 - inlen);
+    if (got <= 0) return 0;
+    inlen += (size_t)got;
+#endif
+    return 1;
+}
+
+static int take_line(char *line, size_t cap) {
+    char *nl = memchr(inbuf, '\n', inlen);
+    if (!nl) return 0;
+    size_t n = (size_t)(nl - inbuf);
+    size_t m = n < cap - 1 ? n : cap - 1;
+    memcpy(line, inbuf, m); line[m] = 0;
+    memmove(inbuf, nl + 1, inlen - n - 1); inlen -= n + 1;
+    while (m && line[m - 1] == '\r') line[--m] = 0;
+    return 1;
 }
 
 int main(void) {
 #ifdef _WIN32
-    _setmode(_fileno(stdin), _O_BINARY);
     _setmode(_fileno(stdout), _O_BINARY);
 #endif
     av_log_set_level(AV_LOG_ERROR);
     pkt = av_packet_alloc();
     static char line[LINE_MAX_LEN];
-    while (fgets(line, sizeof line, stdin)) {
-        size_t n = strlen(line);
-        while (n && (line[n - 1] == '\n' || line[n - 1] == '\r')) line[--n] = 0;
+    for (;;) {
+        /* pedido novo tem prioridade; sem pedido, um passo do prefetch; sem nada, espera */
+        if (!has_line()) {
+            if (!fill(0)) break;
+            if (!has_line()) {
+                if (pf_step()) continue;
+                if (!fill(1)) break;
+                if (!has_line()) continue;
+            }
+        }
+        take_line(line, sizeof line);
         char cmd[16] = ""; long long id = 0; int off = 0;
         if (sscanf(line, "%15s%n", cmd, &off) < 1) continue;
         char *rest = line + off;
@@ -339,19 +537,25 @@ int main(void) {
         if (!strcmp(cmd, "open")) {
             int hw = 0, o2 = 0;
             if (sscanf(rest, "%lld %d %n", &id, &hw, &o2) < 2) { reply_err("bad open", 0); continue; }
+            pf.stage = PF_IDLE;
             cmd_open(id, hw, rest + o2);
         } else if (!strcmp(cmd, "frame")) {
             double t = 0; int o2 = 0;
             if (sscanf(rest, "%lld %lf %n", &id, &t, &o2) < 2) { reply_err("bad frame", 0); continue; }
             cmd_frame(id, t, o2 ? rest + o2 : "");
+        } else if (!strcmp(cmd, "cache")) {
+            long long mb = 0; sscanf(rest, "%lld", &mb);
+            if (mb >= 64) { cache_limit = (size_t)mb << 20; cache_trim(0); }
+            printf("ok\n"); fflush(stdout);
         } else if (!strcmp(cmd, "close")) {
             sscanf(rest, "%lld", &id);
-            Clip *c = find_clip(id); if (c) close_clip(c);
+            Clip *c = find_clip(id); if (c) { if (pf.c == c) pf.stage = PF_IDLE; close_clip(c); }
             printf("ok\n"); fflush(stdout);
         } else {
             reply_err("unknown", 0);
         }
     }
+    pf.stage = PF_IDLE;
     for (int i = 0; i < MAX_CLIPS; i++) close_clip(&clips[i]);
     av_packet_free(&pkt);
     return 0;

@@ -39,12 +39,14 @@ pub struct Frame {
     pub ms_engine: f32,
     pub ms_total: f32,
     pub hw: bool,
+    /// saiu da memória de quadros (sem ler o arquivo)
+    pub cached: bool,
     pub rgba: Vec<u8>,
 }
 
 impl Frame {
     /// Cabeçalho de 48 bytes (little endian) + RGBA: w, h, pick (f64), pulou, quadros lidos,
-    /// ms ler, ms copiar, ms filtro, ms motor, ms total, placa.
+    /// ms ler, ms copiar, ms filtro, ms motor, ms total, bits (1 = placa, 2 = da memória).
     pub fn into_bytes(self) -> Vec<u8> {
         let mut b = Vec::with_capacity(48 + self.rgba.len());
         b.extend(self.width.to_le_bytes());
@@ -53,7 +55,7 @@ impl Frame {
         b.extend((self.seeked as u32).to_le_bytes());
         b.extend(self.decoded.to_le_bytes());
         for v in [self.ms_decode, self.ms_copy, self.ms_filter, self.ms_engine, self.ms_total] { b.extend(v.to_le_bytes()); }
-        b.extend((self.hw as u32).to_le_bytes());
+        b.extend((self.hw as u32 | (self.cached as u32) << 1).to_le_bytes());
         b.extend(self.rgba);
         b
     }
@@ -116,7 +118,7 @@ impl Viewer {
         Ok(Frame {
             width: w, height: h, pick: num(4), seeked: num(5) > 0.0, decoded: num(6) as u32,
             ms_decode: num(7) as f32, ms_copy: num(8) as f32, ms_filter: num(9) as f32, ms_engine: num(10) as f32,
-            ms_total: 0.0, hw: num(11) > 0.0, rgba,
+            ms_total: 0.0, hw: num(11) > 0.0, cached: f.get(12).map_or(false, |x| *x == "1"), rgba,
         })
     }
 

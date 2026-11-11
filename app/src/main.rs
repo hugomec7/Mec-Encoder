@@ -457,9 +457,10 @@ async fn view_frame(app: AppHandle, state: State<'_, AppState>, id: u64, cfg: Pr
     let f = tauri::async_runtime::spawn_blocking(move || {
         let r = v.frame(&exe, id, &info, &cfg, t, output, max.clamp(120, 3840), hw);
         match &r {
-            Ok(f) => view_log(&app, &format!("{} | t={t:.3} {}x{} {} quadros {} | ler {:.0} copiar {:.0} filtro {:.0} motor {:.0} total {:.0} ms",
-                info.path.file_name().map(|n| n.to_string_lossy()).unwrap_or_default(), f.width, f.height, f.decoded,
-                if f.hw { "placa" } else { "CPU" }, f.ms_decode, f.ms_copy, f.ms_filter, f.ms_engine, f.ms_total)),
+            Ok(f) => view_log(&app, &format!("{} | t={t:.3} {}x{} {} | ler {:.0} copiar {:.0} filtro {:.0} motor {:.0} total {:.0} ms",
+                info.path.file_name().map(|n| n.to_string_lossy()).unwrap_or_default(), f.width, f.height,
+                if f.cached { "da memória".to_string() } else { format!("{} quadros {}", f.decoded, if f.hw { "placa" } else { "CPU" }) },
+                f.ms_decode, f.ms_copy, f.ms_filter, f.ms_engine, f.ms_total)),
             Err(e) => view_log(&app, &format!("{} | t={t:.3} erro: {e}", info.path.display())),
         }
         r
