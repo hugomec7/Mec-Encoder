@@ -75,7 +75,7 @@ jobs:
         shell: bash
         run: |
           set -e
-          export PATH="/c/mingw64/bin:/c/msys64/mingw64/bin:$PATH"
+          export PATH="/c/mingw64/bin:/c/msys64/mingw64/bin:$PATH" PYTHONIOENCODING=utf-8
           which gcc && gcc --version | head -1
           ROOT=$(dirname "$(dirname "$(find ff -name ffmpeg.exe | head -1)")")
           ls "$ROOT/include" "$ROOT/lib" | head -40
