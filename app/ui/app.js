@@ -2692,7 +2692,6 @@
   // teclas configuradas viram keycaps nos botões
   const dlKeycaps = (a) => { const k = keyOf(a); return k ? k.split('+').map((p) => `<kbd>${esc(keyLabel(p))}</kbd>`).join('') : ''; };
   const dlKf = (str) => esc(String(str)).replace(/\{(dlv|dla)\}/g, (m, k) => dlKeycaps(k === 'dlv' ? 'dlVideo' : 'dlAudio'));
-  function dlPathShort(p) { const parts = String(p || '').split(/[\\/]/).filter(Boolean); return parts.length > 2 ? parts.slice(-2).join('\\') : String(p || ''); }
   function dlRenderSide() {
     const set = dlSet();
     $('#lDlCap').textContent = L.dlCap; $('#lDlVideo').textContent = L.dlVideo; $('#lDlAudio').textContent = L.dlAudio;
@@ -2705,9 +2704,10 @@
     $('#dlSet').innerHTML = `
       <div class="row"><div class="lbl">${esc(L.dlWeb)}<small>${esc(L.dlWebSub)}</small></div><span class="switch ${set.web ? 'on' : ''}" id="dlWeb"></span></div>
       <div class="row"><div class="lbl">${esc(L.dlAudioFmt)}</div>${segH('dlAudioFmt', set.audio, [['wav', 'WAV'], ['m4a', 'M4A'], ['mp3', 'MP3'], ['flac', 'FLAC']])}</div>
-      <div class="row"><div class="lbl">${esc(L.dlSaveIn)}</div><div class="dk-path"><code title="${esc(dir)}">${esc(dlPathShort(dir))}</code><button id="bDlDir">${esc(L.dlChange)}</button></div></div>`;
+      <div class="row"><div class="lbl">${esc(L.dlSaveIn)}<button class="dk-pathfull" id="bDlDirOpen" title="${esc(L.dlOpen)}">${esc(dir)}</button></div><button class="dk-change" id="bDlDir">${esc(L.dlChange)}</button></div>`;
     $('#dlWeb').onclick = () => { set.web = !set.web; saveSettings(); $('#dlWeb').classList.toggle('on', set.web); };
     seg($('#dlSet .seg'), (v) => { set.audio = v; saveSettings(); });
+    $('#bDlDirOpen').onclick = () => $('#bDlOpen').click();
     $('#bDlDir').onclick = async () => {
       let d = null;
       if (REAL) { try { d = await inv('pick_dir', { start: dir || null }); } catch (e) { toast(String(e)); } } else d = 'D:\\Referencias';
