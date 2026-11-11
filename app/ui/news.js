@@ -1,6 +1,45 @@
 // Gerado por docs/release-notes/make_news.py — não edite à mão.
 window.MEC_NEWS = [
  {
+  "version": "0.3.0",
+  "en": [
+   "**New Download tab** (Ctrl+2): copy a video link from YouTube, TikTok, X, Facebook, Reddit and hundreds of other sites, and click **Download video** or **Download audio**. It downloads right away in the best quality, without asking anything. Shortcuts in the tab: **Ctrl+V** (video) and **Ctrl+Shift+V** (audio). The link in Ctrl+C shows under the buttons.",
+   "**Several links at once**: paste one per line. Up to 3 downloads at the same time.",
+   "**Ready for web** (on by default): the video comes out as H.264 + AAC in .mp4, which opens in WhatsApp, Instagram and the browser. If the site already sent it that way, it only reorganizes the file; if not (VP9, AV1, HEVC, Opus), it converts on the graphics card in seconds. Turn it off to keep the file exactly as the site sent it.",
+   "**Audio saved as** WAV, M4A, MP3 or FLAC, chosen once.",
+   "**Save to**: Downloads\\Mec Encoder by default, with the full path shown. Click it to open the folder.",
+   "Done downloads: **▶ plays in the Windows player** (or double-click the row), click the **name to rename** the file, send it to the converter queue or show it in the folder.",
+   "First time only, the app downloads yt-dlp and Deno (about 60 MB). yt-dlp updates itself once a day; if a site changes, it updates and tries again.",
+   "Not yet: Instagram and age-restricted videos need a login, which comes in a next version. Netflix, Spotify and other DRM-protected services can't be downloaded.",
+   "**8 new languages**: Spanish, French, German, Italian, Russian, Japanese, Korean and Simplified Chinese. The first time, the app opens in the Windows language.",
+   "**Studio is the default theme** for new installs (your current theme stays).",
+   "**New versions show up by themselves**: the app checks when it opens, every 3 hours and when you come back to it, and shows a notice in the corner. Option in Settings › Updates.",
+   "**Settings reorganized**: shortcuts have their own page (Edit button), GPU is under Performance, Playback comes before the folders.",
+   "**Saved previews unused for 7 days are deleted** by themselves (option: 1, 7, 30 days or never).",
+   "**Fix**: a single cut no longer stutters at the start in MPC, nor plays the audio out of sync in Films & TV and Windows Media Player. The audio is now rewritten in the same format as the original, starting together with the video.",
+   "**Fix**: \"Delete the original\" now also works for cut videos (it goes to the Recycle Bin after all cuts are done and checked).",
+   "**Fix**: the icon of the selected item in menus no longer disappears on the blue highlight."
+  ],
+  "pt": [
+   "**Nova aba Baixar** (Ctrl+2): copie o link de um vídeo do YouTube, TikTok, X, Facebook, Reddit e centenas de outros sites e clique em **Baixar vídeo** ou **Baixar áudio**. Baixa na hora, na maior qualidade, sem perguntar nada. Atalhos na aba: **Ctrl+V** (vídeo) e **Ctrl+Shift+V** (áudio). O link que está no Ctrl+C aparece embaixo dos botões.",
+   "**Vários links de uma vez**: cole um por linha. Até 3 downloads ao mesmo tempo.",
+   "**Pronto para web** (ligado por padrão): o vídeo sai em H.264 + AAC em .mp4, que abre no WhatsApp, Instagram e navegador. Se o site já mandou assim, só reorganiza o arquivo; se não (VP9, AV1, HEVC, Opus), converte na placa de vídeo em segundos. Desligado, guarda o arquivo exatamente como o site mandou.",
+   "**Áudio sai em** WAV, M4A, MP3 ou FLAC, escolhido uma vez.",
+   "**Salvar em**: Downloads\\Mec Encoder por padrão, com o caminho completo à vista. Clique nele para abrir a pasta.",
+   "Downloads prontos: **▶ assiste no player do Windows** (ou dois cliques na linha), clique no **nome para renomear** o arquivo, mande para a fila do conversor ou mostre na pasta.",
+   "Só na primeira vez, o app baixa o yt-dlp e o Deno (cerca de 60 MB). O yt-dlp se atualiza sozinho uma vez por dia; se um site mudar, ele atualiza e tenta de novo.",
+   "Ainda não: Instagram e vídeos com restrição de idade pedem login, que chega numa próxima versão. Netflix, Spotify e outros serviços com DRM não podem ser baixados.",
+   "**8 idiomas novos**: espanhol, francês, alemão, italiano, russo, japonês, coreano e chinês simplificado. Na primeira vez, o app abre no idioma do Windows.",
+   "**Estúdio é o tema padrão** para quem instala agora (quem já usa continua com o seu).",
+   "**Versões novas aparecem sozinhas**: o app procura ao abrir, a cada 3 horas e ao voltar para ele, e mostra um aviso no canto. Opção em Configurações › Atualizações.",
+   "**Configurações reorganizadas**: atalhos numa página própria (botão Editar), GPU em Desempenho, Reprodução antes das pastas.",
+   "**Prévias guardadas sem uso há 7 dias são apagadas** sozinhas (opção: 1, 7, 30 dias ou nunca).",
+   "**Correção**: um corte só não trava mais no começo no MPC, nem toca o áudio fora de sincronia no Filmes e TV e no Reprodutor Multimídia. O áudio agora é regravado no mesmo formato do original, começando junto com o vídeo.",
+   "**Correção**: \"Apagar o original\" também vale para vídeos cortados (vai para a Lixeira depois que todos os cortes saem e são conferidos).",
+   "**Correção**: o ícone do item marcado nos menus não some mais sobre o azul."
+  ]
+ },
+ {
   "version": "0.2.11",
   "en": [
    "**Everything from the test versions 0.2.7 to 0.2.10** comes in this update: several cuts per video, the Cutter, timeline zoom, play with sound (plays the result, skipping the cuts), timecode ruler, magnet and configurable shortcuts. See them in What's new.",
@@ -138,27 +177,6 @@ window.MEC_NEWS = [
   ],
   "pt": [
    "**Atualizar** não abre mais uma janela preta de comando durante a instalação. Só aparece a barrinha de progresso do instalador do Windows, e o app abre de novo sozinho. (Esta atualização ainda pode mostrar a janela uma última vez.)"
-  ]
- },
- {
-  "version": "0.2.4",
-  "en": [
-   "**Save to**: each preset can save to the original's folder or to a **fixed folder** (e.g. D:\\Renders). With **Keep folders**, files from a dragged folder go into the same subfolders inside it.",
-   "**Name tags**: the **{ }** button next to Suffix inserts {date}, {time}, {res}, {fps}, {bits}, {n} (number in queue), {codec} and {preset}. The final file name shows next to \"Output\". Subfolder accepts tags too (e.g. {date} = one folder per day).",
-   "**Clear error messages**: a failed video says what happened and what to do (disk full, file open in another program, drive disconnected, damaged file, graphics card busy…). **Try again** and **Copy error details** are on the video and in the right-click menu.",
-   "**Queue is saved**: closing the app (or a crash) no longer loses the queue. What was rendering comes back ready, and the half-written file is deleted.",
-   "**Trim**: mark **In** and **Out** on the timeline (I and O keys, or the buttons) and only that part is converted. Drag the edges to adjust; Duplicate lets you cut several parts of the same video. The camera timecode follows the start of the part. The original is never deleted when trimming.",
-   "**When finished: Nothing · Sleep · Shut down**, next to the totals. You get 60 seconds to cancel, it only happens if the queue finished without errors, and it goes back to \"Nothing\" after use.",
-   "**What's new** window after an update (also in the Mec Encoder menu)."
-  ],
-  "pt": [
-   "**Salvar em**: cada preset pode salvar na pasta do original ou numa **pasta fixa** (ex.: D:\\Renders). Com **Manter pastas**, os arquivos de uma pasta arrastada vão para as mesmas subpastas lá dentro.",
-   "**Etiquetas no nome**: o botão **{ }** ao lado do Sufixo insere {data}, {hora}, {res}, {fps}, {bits}, {n} (número na fila), {codec} e {preset}. O nome final aparece ao lado de \"Saída\". A Subpasta também aceita etiquetas (ex.: {data} = uma pasta por dia).",
-   "**Mensagens de erro claras**: um vídeo que falhou diz o que aconteceu e o que fazer (disco cheio, arquivo aberto em outro programa, disco desconectado, arquivo corrompido, placa de vídeo ocupada…). **Tentar de novo** e **Copiar detalhes do erro** ficam no vídeo e no botão direito.",
-   "**Fila salva**: fechar o app (ou ele travar) não perde mais a fila. O que estava renderizando volta como pronto, e o arquivo pela metade é apagado.",
-   "**Cortar trecho**: marque **Início** e **Fim** na linha do tempo (teclas I e O, ou os botões) e só esse pedaço é convertido. Arraste as bordas para ajustar; com Duplicar dá para tirar vários trechos do mesmo vídeo. O timecode da câmera acompanha o início do trecho. O original nunca é apagado quando você corta.",
-   "**Ao terminar: Nada · Suspender · Desligar**, ao lado dos totais. Você tem 60 segundos para cancelar, só acontece se a fila terminou sem erro, e volta para \"Nada\" depois de usar.",
-   "Janela de **Novidades** depois de atualizar (também no menu Mec Encoder)."
   ]
  }
 ];
