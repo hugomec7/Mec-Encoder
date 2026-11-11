@@ -1,5 +1,25 @@
 # Changelog · Novidades
 
+## 0.3.2
+
+**English**
+- **Three tabs at the top: Convert · Cut · Download** (Ctrl+1, Ctrl+2, Ctrl+3). Note: Download moved from Ctrl+2 to Ctrl+3.
+- **Cut tab**: opens the Cutter on the selected video. With no video, drag one there or click **Open video…** and it goes straight into the Cutter.
+- **Export in the Cutter**: finishes and starts rendering that video with the cuts right away. **Finish** still just keeps the cuts and goes back to the queue.
+- **Cleaner Download tab**: only **Quick download** (Ctrl+V, best quality), **Audio** (Ctrl+Shift+V, just the sound), **Download…** and **Save to**. Ready for web, audio format and Accounts moved to **Options**.
+- **Download…** opens with the link from Ctrl+C in a field at the top. Paste several links there, one per line, to pick which ones to download. **Ready for web** is also in this window, in sync with Options.
+- **Downloading and Done tabs** in the list: finished downloads move to Done by themselves.
+- In Done: **▶ on the thumbnail** plays the video, and the new **✂ Cut** button sends a downloaded video straight to the Cutter. Download, cut and export without leaving the app.
+
+**Português**
+- **Três abas no topo: Converter · Cortar · Baixar** (Ctrl+1, Ctrl+2, Ctrl+3). Atenção: Baixar passou do Ctrl+2 para o Ctrl+3.
+- **Aba Cortar**: abre o Cortador no vídeo selecionado. Sem vídeo, arraste um para lá ou clique em **Abrir vídeo…**, e ele entra direto no Cortador.
+- **Exportar no Cortador**: conclui e já começa a renderizar o vídeo com os cortes. **Concluir** continua só guardando os cortes e voltando para a fila.
+- **Aba Baixar mais enxuta**: só **Baixar rápido** (Ctrl+V, maior qualidade), **Áudio** (Ctrl+Shift+V, só o som), **Baixar…** e **Salvar em**. Pronto para web, formato do áudio e Contas foram para **Opções**.
+- **Baixar…** abre com o link do Ctrl+C num campo no topo. Cole vários links ali, um por linha, para escolher quais baixar. O **Pronto para web** também está nessa janela, junto com o das Opções.
+- **Abas Baixando e Concluídos** na lista: o que termina passa sozinho para Concluídos.
+- Em Concluídos: o **▶ na miniatura** assiste ao vídeo, e o novo botão **✂ Cortar** manda o vídeo baixado direto para o Cortador. Baixe, corte e exporte sem sair do app.
+
 ## 0.3.1
 
 **English**

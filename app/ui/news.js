@@ -1,6 +1,27 @@
 // Gerado por docs/release-notes/make_news.py — não edite à mão.
 window.MEC_NEWS = [
  {
+  "version": "0.3.2",
+  "en": [
+   "**Three tabs at the top: Convert · Cut · Download** (Ctrl+1, Ctrl+2, Ctrl+3). Note: Download moved from Ctrl+2 to Ctrl+3.",
+   "**Cut tab**: opens the Cutter on the selected video. With no video, drag one there or click **Open video…** and it goes straight into the Cutter.",
+   "**Export in the Cutter**: finishes and starts rendering that video with the cuts right away. **Finish** still just keeps the cuts and goes back to the queue.",
+   "**Cleaner Download tab**: only **Quick download** (Ctrl+V, best quality), **Audio** (Ctrl+Shift+V, just the sound), **Download…** and **Save to**. Ready for web, audio format and Accounts moved to **Options**.",
+   "**Download…** opens with the link from Ctrl+C in a field at the top. Paste several links there, one per line, to pick which ones to download. **Ready for web** is also in this window, in sync with Options.",
+   "**Downloading and Done tabs** in the list: finished downloads move to Done by themselves.",
+   "In Done: **▶ on the thumbnail** plays the video, and the new **✂ Cut** button sends a downloaded video straight to the Cutter. Download, cut and export without leaving the app."
+  ],
+  "pt": [
+   "**Três abas no topo: Converter · Cortar · Baixar** (Ctrl+1, Ctrl+2, Ctrl+3). Atenção: Baixar passou do Ctrl+2 para o Ctrl+3.",
+   "**Aba Cortar**: abre o Cortador no vídeo selecionado. Sem vídeo, arraste um para lá ou clique em **Abrir vídeo…**, e ele entra direto no Cortador.",
+   "**Exportar no Cortador**: conclui e já começa a renderizar o vídeo com os cortes. **Concluir** continua só guardando os cortes e voltando para a fila.",
+   "**Aba Baixar mais enxuta**: só **Baixar rápido** (Ctrl+V, maior qualidade), **Áudio** (Ctrl+Shift+V, só o som), **Baixar…** e **Salvar em**. Pronto para web, formato do áudio e Contas foram para **Opções**.",
+   "**Baixar…** abre com o link do Ctrl+C num campo no topo. Cole vários links ali, um por linha, para escolher quais baixar. O **Pronto para web** também está nessa janela, junto com o das Opções.",
+   "**Abas Baixando e Concluídos** na lista: o que termina passa sozinho para Concluídos.",
+   "Em Concluídos: o **▶ na miniatura** assiste ao vídeo, e o novo botão **✂ Cortar** manda o vídeo baixado direto para o Cortador. Baixe, corte e exporte sem sair do app."
+  ]
+ },
+ {
   "version": "0.3.1",
   "en": [
    "**Accounts** in the Download tab: Instagram, YouTube, X, Facebook and TikTok. **Sign in** opens the site's own login page in a private window; as soon as you are in, the app saves the session and closes the window. The session stays only on this PC and is used by every download from that site. **Sign out** deletes it.",
@@ -174,21 +195,6 @@ window.MEC_NEWS = [
    "**Tema Estúdio** (Configurações › Aparência): grafite, cores mais calmas, números técnicos em fonte mono. Os outros temas não mudaram.",
    "**Correções**: prévia e miniatura de imagem (JPG saía vazio); a cor do preset muda na hora, também editando o preset.",
    "Linha de comando: `--trim` pode repetir para vários trechos, e `--join` junta. Pasta de tarefas: `\"trim\"` aceita uma lista de trechos e `\"join\": true`."
-  ]
- },
- {
-  "version": "0.2.6",
-  "en": [
-   "**Watch folders** (Settings): pick a folder and a preset; new files that land there are converted by themselves. It waits for the copy to finish, looks only at the folder itself (not subfolders), and files that were already there are left alone. Files that arrive while the app is closed are converted when it opens. Each folder can be turned on/off.",
-   "**Jobs folder (automation)**: with Mec Encoder open, drop a .json with the files and the preset into the jobs folder (Settings › Automation › Open) and it goes into the queue and renders by itself. Progress goes to `<name>.status.json` (state, progress, output and error of each file). Output folder, suffix, subfolder and trim can be set in the job. Format in jobs\\README.txt.",
-   "**Command line: mec.exe** (in the app's bin folder): `mec convert <files or folders> --preset RAW`, with `--out`, `--suffix`, `--trim`, `--parallel`, `--dry-run` and `--json` (one line per event). Also `mec presets`, `mec probe` and `mec engine`. Same presets and same engine as the app. Settings › Automation › Copy path.",
-   "The render engine now lives in the core, shared by the app and mec.exe."
-  ],
-  "pt": [
-   "**Pastas vigiadas** (Configurações): escolha uma pasta e um preset; arquivo novo que cair lá é convertido sozinho. Espera a cópia terminar, olha só a própria pasta (sem as subpastas) e o que já estava lá fica como está. Arquivos que chegarem com o app fechado são convertidos quando ele abrir. Cada pasta pode ser ligada/desligada.",
-   "**Pasta de tarefas (automação)**: com o Mec Encoder aberto, coloque um .json com os arquivos e o preset na pasta de tarefas (Configurações › Automação › Abrir) e ele entra na fila e renderiza sozinho. O andamento vai para `<nome>.status.json` (situação, progresso, saída e erro de cada arquivo). Dá para pedir pasta de saída, sufixo, subpasta e trecho. O formato está em jobs\\README.txt.",
-   "**Linha de comando: mec.exe** (na pasta bin do app): `mec convert <arquivos ou pastas> --preset RAW`, com `--out`, `--suffix`, `--trim`, `--parallel`, `--dry-run` e `--json` (uma linha por evento). Também `mec presets`, `mec probe` e `mec engine`. Mesmos presets e mesmo motor do app. Configurações › Automação › Copiar caminho.",
-   "O motor de render agora fica no núcleo, o mesmo para o app e o mec.exe."
   ]
  }
 ];
