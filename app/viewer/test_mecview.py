@@ -12,7 +12,7 @@ def make(name, args):
 
 clips = [
     (make('hdr.mov', ['-f', 'lavfi', '-i', 'testsrc2=s=1920x1080:r=60000/1001,format=yuv420p10le', '-t', '4', '-c:v', 'libx265', '-preset', 'ultrafast',
-                      '-x265-params', 'keyint=60:log-level=error', '-color_primaries', 'bt2020', '-color_trc', 'arib-std-b67', '-colorspace', 'bt2020nc', '-tag:v', 'hvc1']),
+                      '-x265-params', 'keyint=60:log-level=error:colorprim=bt2020:transfer=arib-std-b67:colormatrix=bt2020nc:range=limited', '-color_range', 'tv', '-color_primaries', 'bt2020', '-color_trc', 'arib-std-b67', '-colorspace', 'bt2020nc', '-tag:v', 'hvc1']),
      60000 / 1001,
      'scale=w=640:h=640:force_original_aspect_ratio=decrease:flags=bilinear,zscale=tin=arib-std-b67:pin=bt2020:min=bt2020nc:rin=tv:t=linear:npl=100,'
      'format=gbrpf32le,tonemap=tonemap=hable:desat=0:peak=10,zscale=p=bt709:t=bt709:m=bt709:r=tv'),
@@ -29,6 +29,7 @@ def ask(line):
     data = p.stdout.read(int(head.split()[3])) if head.startswith('img') else None
     return head, data
 
+dur = [4, 4, 3]
 bad = 0
 for i, (path, fps, vf) in enumerate(clips):
     head, _ = ask(f'open {i} 1 {path}')
@@ -38,7 +39,10 @@ for i, (path, fps, vf) in enumerate(clips):
         t = n / fps
         t0 = time.time(); head, data = ask(f'frame {i} {t:.6f} {vf}'); ms = (time.time() - t0) * 1000
         ref = subprocess.run([ffmpeg, '-v', 'error', '-ss', f'{t:.6f}', '-i', path, '-frames:v', '1', '-vf', vf + ',format=rgba', '-f', 'rawvideo', '-'], capture_output=True).stdout
-        if not ref: print(f'  t={t:.3f} {head} (sem referência: depois do fim)'); continue
+        if not ref:
+            # sem referência só pode ser depois do fim (e o motor entrega o último quadro)
+            ok = n / fps >= dur[i] - 0.5 / fps and head.startswith('img')
+            print(f'  t={t:.3f} {"ok " if ok else "FALHOU"} {head} (depois do fim)'); bad += not ok; continue
         same = data == ref
         if not same and data and len(data) == len(ref):
             d = sum(abs(a - b) for a, b in zip(data[::101], ref[::101])) / len(data[::101])
