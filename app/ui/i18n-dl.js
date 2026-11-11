@@ -2,6 +2,7 @@
 (() => {
   const T = {
     en: {
+      tabCut: 'Cut', cutExport: 'Export', cutExportTip: 'Finish and render this video now, with the cuts', cutBlankT: 'Choose a video to cut', cutBlankS: 'Drag a video here or open a file. Then mark the cuts and click Export.', cutOpenFile: 'Open video…', dlToCutter: 'Cut in the Cutter',
       dlTabActive: 'Downloading', dlTabDone: 'Done', dlActiveEmpty: 'Nothing downloading now', dlDoneEmpty: 'Nothing finished yet', dlClearList: 'Clear list', dlClearFailed: 'Clear failed',
       dlQuickSub2: (f) => `Takes the link in Ctrl+C and downloads it in the best quality. Audio: just the sound, in ${f}`,
       dlQuick: 'Quick download', dlQuickSub: 'Takes the link in Ctrl+C and downloads it in the best quality', dlPickBtn: 'Download…', dlPickSub: 'Choose quality, audio only, subtitles, a section or several links', dlOptions: 'Options', dlPasteOne: 'Paste one or more links', dlPasteHint: 'Paste the link of a video, playlist or profile. One per line to download several.', dlLinksN: (n) => `${n} links`,
@@ -38,6 +39,7 @@
       },
     },
     pt: {
+      tabCut: 'Cortar', cutExport: 'Exportar', cutExportTip: 'Concluir e renderizar este vídeo agora, com os cortes', cutBlankT: 'Escolha um vídeo para cortar', cutBlankS: 'Arraste um vídeo aqui ou abra um arquivo. Depois marque os cortes e clique em Exportar.', cutOpenFile: 'Abrir vídeo…', dlToCutter: 'Cortar no Cortador',
       dlTabActive: 'Baixando', dlTabDone: 'Concluídos', dlActiveEmpty: 'Nada baixando agora', dlDoneEmpty: 'Nada concluído ainda', dlClearList: 'Limpar lista', dlClearFailed: 'Limpar falhas',
       dlQuickSub2: (f) => `Pega o link do Ctrl+C e baixa na maior qualidade. Áudio: só o som, em ${f}`,
       dlQuick: 'Baixar rápido', dlQuickSub: 'Pega o link do Ctrl+C e baixa na maior qualidade', dlPickBtn: 'Baixar…', dlPickSub: 'Escolha qualidade, só áudio, legenda, trecho ou vários links', dlOptions: 'Opções', dlPasteOne: 'Cole um ou mais links', dlPasteHint: 'Cole o link de um vídeo, playlist ou perfil. Um por linha para baixar vários.', dlLinksN: (n) => `${n} links`,
@@ -74,6 +76,7 @@
       },
     },
     es: {
+      tabCut: 'Cortar', cutExport: 'Exportar', cutExportTip: 'Terminar y renderizar este video ahora, con los cortes', cutBlankT: 'Elige un video para cortar', cutBlankS: 'Arrastra un video aquí o abre un archivo. Luego marca los cortes y haz clic en Exportar.', cutOpenFile: 'Abrir video…', dlToCutter: 'Cortar en el Cortador',
       dlTabActive: 'Descargando', dlTabDone: 'Terminadas', dlActiveEmpty: 'Nada descargando ahora', dlDoneEmpty: 'Nada terminado todavía', dlClearList: 'Vaciar lista', dlClearFailed: 'Quitar fallidas',
       dlQuickSub2: (f) => `Toma el enlace del Ctrl+C y lo descarga en la mejor calidad. Audio: solo el sonido, en ${f}`,
       dlQuick: 'Descarga rápida', dlQuickSub: 'Toma el enlace del Ctrl+C y lo descarga en la mejor calidad', dlPickBtn: 'Descargar…', dlPickSub: 'Elige calidad, solo audio, subtítulos, un fragmento o varios enlaces', dlOptions: 'Opciones', dlPasteOne: 'Pega uno o más enlaces', dlPasteHint: 'Pega el enlace de un video, lista o perfil. Uno por línea para descargar varios.', dlLinksN: (n) => `${n} enlaces`,
@@ -110,6 +113,7 @@
       },
     },
     fr: {
+      tabCut: 'Couper', cutExport: 'Exporter', cutExportTip: 'Terminer et rendre cette vidéo maintenant, avec les coupes', cutBlankT: 'Choisissez une vidéo à couper', cutBlankS: 'Glissez une vidéo ici ou ouvrez un fichier. Puis marquez les coupes et cliquez sur Exporter.', cutOpenFile: 'Ouvrir une vidéo…', dlToCutter: 'Couper dans le Cutter',
       dlTabActive: 'En cours', dlTabDone: 'Terminés', dlActiveEmpty: 'Rien en cours', dlDoneEmpty: 'Rien de terminé', dlClearList: 'Vider la liste', dlClearFailed: 'Retirer les échecs',
       dlQuickSub2: (f) => `Prend le lien du Ctrl+C et le télécharge en meilleure qualité. Audio : juste le son, en ${f}`,
       dlQuick: 'Téléchargement rapide', dlQuickSub: 'Prend le lien du Ctrl+C et le télécharge en meilleure qualité', dlPickBtn: 'Télécharger…', dlPickSub: 'Choisir la qualité, l’audio seul, les sous-titres, un extrait ou plusieurs liens', dlOptions: 'Options', dlPasteOne: 'Collez un ou plusieurs liens', dlPasteHint: 'Collez le lien d’une vidéo, playlist ou profil. Un par ligne pour en télécharger plusieurs.', dlLinksN: (n) => `${n} liens`,
@@ -146,6 +150,7 @@
       },
     },
     de: {
+      tabCut: 'Schneiden', cutExport: 'Exportieren', cutExportTip: 'Fertig und dieses Video jetzt mit den Schnitten rendern', cutBlankT: 'Video zum Schneiden wählen', cutBlankS: 'Ziehe ein Video hierher oder öffne eine Datei. Dann Schnitte setzen und auf Exportieren klicken.', cutOpenFile: 'Video öffnen…', dlToCutter: 'Im Cutter schneiden',
       dlTabActive: 'Lädt', dlTabDone: 'Fertig', dlActiveEmpty: 'Gerade lädt nichts', dlDoneEmpty: 'Noch nichts fertig', dlClearList: 'Liste leeren', dlClearFailed: 'Fehler entfernen',
       dlQuickSub2: (f) => `Nimmt den Link aus Strg+C und lädt ihn in bester Qualität. Audio: nur der Ton, als ${f}`,
       dlQuick: 'Schnell laden', dlQuickSub: 'Nimmt den Link aus Strg+C und lädt ihn in bester Qualität', dlPickBtn: 'Laden…', dlPickSub: 'Qualität, nur Audio, Untertitel, Ausschnitt oder mehrere Links wählen', dlOptions: 'Optionen', dlPasteOne: 'Einen oder mehrere Links einfügen', dlPasteHint: 'Link eines Videos, einer Playlist oder eines Profils einfügen. Einer pro Zeile für mehrere.', dlLinksN: (n) => `${n} Links`,
@@ -182,6 +187,7 @@
       },
     },
     it: {
+      tabCut: 'Taglia', cutExport: 'Esporta', cutExportTip: 'Concludi e renderizza ora questo video, con i tagli', cutBlankT: 'Scegli un video da tagliare', cutBlankS: 'Trascina qui un video o apri un file. Poi segna i tagli e clicca su Esporta.', cutOpenFile: 'Apri video…', dlToCutter: 'Taglia nel Cutter',
       dlTabActive: 'In corso', dlTabDone: 'Completati', dlActiveEmpty: 'Nessun download in corso', dlDoneEmpty: 'Ancora niente di completato', dlClearList: 'Svuota lista', dlClearFailed: 'Togli i falliti',
       dlQuickSub2: (f) => `Prende il link del Ctrl+C e lo scarica nella qualità migliore. Audio: solo il suono, in ${f}`,
       dlQuick: 'Scarica subito', dlQuickSub: 'Prende il link del Ctrl+C e lo scarica nella qualità migliore', dlPickBtn: 'Scarica…', dlPickSub: 'Scegli qualità, solo audio, sottotitoli, un tratto o più link', dlOptions: 'Opzioni', dlPasteOne: 'Incolla uno o più link', dlPasteHint: 'Incolla il link di un video, playlist o profilo. Uno per riga per scaricarne più di uno.', dlLinksN: (n) => `${n} link`,
@@ -218,6 +224,7 @@
       },
     },
     ru: {
+      tabCut: 'Нарезка', cutExport: 'Экспорт', cutExportTip: 'Закончить и сразу отрендерить это видео с фрагментами', cutBlankT: 'Выберите видео для нарезки', cutBlankS: 'Перетащите видео сюда или откройте файл. Затем отметьте фрагменты и нажмите «Экспорт».', cutOpenFile: 'Открыть видео…', dlToCutter: 'Нарезать',
       dlTabActive: 'Загружаются', dlTabDone: 'Готовые', dlActiveEmpty: 'Сейчас ничего не загружается', dlDoneEmpty: 'Пока ничего не готово', dlClearList: 'Очистить список', dlClearFailed: 'Убрать ошибки',
       dlQuickSub2: (f) => `Берёт ссылку из Ctrl+C и скачивает в лучшем качестве. Аудио: только звук, в ${f}`,
       dlQuick: 'Быстро скачать', dlQuickSub: 'Берёт ссылку из Ctrl+C и скачивает в лучшем качестве', dlPickBtn: 'Скачать…', dlPickSub: 'Выбор качества, только аудио, субтитры, фрагмент или несколько ссылок', dlOptions: 'Настройки', dlPasteOne: 'Вставьте одну или несколько ссылок', dlPasteHint: 'Вставьте ссылку на видео, плейлист или профиль. По одной в строке, чтобы скачать несколько.', dlLinksN: (n) => `ссылок: ${n}`,
@@ -254,6 +261,7 @@
       },
     },
     ja: {
+      tabCut: 'カット', cutExport: '書き出し', cutExportTip: '完了してこの動画をカット付きで今すぐレンダリング', cutBlankT: 'カットする動画を選んでください', cutBlankS: 'ここに動画をドラッグするかファイルを開きます。カットを指定して書き出しを押します。', cutOpenFile: '動画を開く…', dlToCutter: 'カッターで切る',
       dlTabActive: 'ダウンロード中', dlTabDone: '完了', dlActiveEmpty: 'いまダウンロード中のものはありません', dlDoneEmpty: 'まだ完了したものはありません', dlClearList: 'リストを空にする', dlClearFailed: '失敗を削除',
       dlQuickSub2: (f) => `Ctrl+C のリンクを最高画質でダウンロード。音声: 音だけを ${f} で`,
       dlQuick: 'すぐにダウンロード', dlQuickSub: 'Ctrl+C のリンクを最高画質でダウンロード', dlPickBtn: 'ダウンロード…', dlPickSub: '画質、音声のみ、字幕、一部分、複数リンクを選ぶ', dlOptions: 'オプション', dlPasteOne: 'リンクを 1 つ以上貼り付け', dlPasteHint: '動画、プレイリスト、プロフィールのリンクを貼り付けます。複数は 1 行に 1 つ。', dlLinksN: (n) => `リンク ${n} 件`,
@@ -290,6 +298,7 @@
       },
     },
     ko: {
+      tabCut: '자르기', cutExport: '내보내기', cutExportTip: '완료하고 이 동영상을 컷과 함께 바로 렌더링', cutBlankT: '자를 동영상을 고르세요', cutBlankS: '여기로 동영상을 끌어오거나 파일을 여세요. 컷을 표시하고 내보내기를 누르세요.', cutOpenFile: '동영상 열기…', dlToCutter: '커터에서 자르기',
       dlTabActive: '다운로드 중', dlTabDone: '완료', dlActiveEmpty: '지금 다운로드 중인 항목이 없습니다', dlDoneEmpty: '아직 완료된 항목이 없습니다', dlClearList: '목록 비우기', dlClearFailed: '실패 항목 제거',
       dlQuickSub2: (f) => `Ctrl+C의 링크를 최고 화질로 다운로드. 오디오: 소리만 ${f}(으)로`,
       dlQuick: '빠른 다운로드', dlQuickSub: 'Ctrl+C의 링크를 최고 화질로 다운로드', dlPickBtn: '다운로드…', dlPickSub: '화질, 오디오만, 자막, 구간, 여러 링크 선택', dlOptions: '옵션', dlPasteOne: '링크를 하나 이상 붙여 넣으세요', dlPasteHint: '동영상, 재생목록, 프로필 링크를 붙여 넣으세요. 여러 개는 한 줄에 하나씩.', dlLinksN: (n) => `링크 ${n}개`,
@@ -326,6 +335,7 @@
       },
     },
     zh: {
+      tabCut: '剪切', cutExport: '导出', cutExportTip: '完成并立即按片段渲染此视频', cutBlankT: '选择要剪切的视频', cutBlankS: '把视频拖到这里或打开文件。然后标记片段并点击导出。', cutOpenFile: '打开视频…', dlToCutter: '在剪切器中剪切',
       dlTabActive: '下载中', dlTabDone: '已完成', dlActiveEmpty: '现在没有正在下载的内容', dlDoneEmpty: '还没有完成的下载', dlClearList: '清空列表', dlClearFailed: '清除失败项',
       dlQuickSub2: (f) => `以最高画质下载 Ctrl+C 中的链接。音频：只要声音，保存为 ${f}`,
       dlQuick: '快速下载', dlQuickSub: '以最高画质下载 Ctrl+C 中的链接', dlPickBtn: '下载…', dlPickSub: '选择画质、仅音频、字幕、片段或多个链接', dlOptions: '选项', dlPasteOne: '粘贴一个或多个链接', dlPasteHint: '粘贴视频、播放列表或主页的链接。多个链接每行一个。', dlLinksN: (n) => `${n} 个链接`,

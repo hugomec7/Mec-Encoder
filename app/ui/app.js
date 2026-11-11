@@ -175,10 +175,12 @@
     $('#lIn').textContent = L.inLbl; $('#lOut').textContent = L.outLbl; $('#lNewCut').textContent = L.newCutLbl; $('#lOpenCut').textContent = L.openCutLbl;
     $('#bOpenCut').title = kf(L.openCutter); $('#lCutter').textContent = L.cutter; $('#lCuts').textContent = L.cutsTitle;
     $('#bCutCancel').textContent = L.cancel; $('#bCutDone').textContent = L.conclude; $('#bClearCuts').textContent = L.clearCuts;
+    $('#bCutExport').textContent = L.cutExport; $('#bCutExport').title = L.cutExportTip;
+    $('#lCutBlankT').textContent = L.cutBlankT; $('#lCutBlankS').textContent = L.cutBlankS; $('#bCutOpenFile').textContent = L.cutOpenFile;
     if (S.plReady) { renderPlayUi(); applyVol(); }
     $('#lCutSplit').textContent = L.cutSplitBtn; $('#lCutJoin').textContent = L.cutJoinBtn; $('#cutKeys').innerHTML = kf(L.cutKeysTxt); $('#tlHint').textContent = kf(L.tlHint);
     renderRenderBtn(); renderUpdateBtn(); if ($('#bAfter')) renderAfter();
-    $('#tConv').textContent = L.tabConvert; $('#tDl').textContent = L.tabDownload;
+    $('#tConv').textContent = L.tabConvert; $('#tCut').textContent = L.tabCut; $('#tDl').textContent = L.tabDownload;
     if (S.view === 'dl') { dlRenderSide(); dlRender(); }
   }
 
@@ -1508,6 +1510,9 @@
       $('#pvMeta').before($('.stage')); $('#pvMeta').after($('.transport'));
       root.classList.remove('cutter-open'); $('#cutter').hidden = true; S.cutter = null;
     }
+    if (!on && S.view === 'cut') { S.view = 'conv'; root.dataset.view = 'conv'; }
+    if (on && S.view !== 'cut') { S.view = 'cut'; root.dataset.view = 'cut'; }
+    if (typeof syncTabs === 'function') syncTabs();
     requestAnimationFrame(() => { fitFrames(); renderAll(); renderTimeline(); renderCutter(); });
   }
   function cancelCutter() {
@@ -1516,6 +1521,9 @@
     openCutter(false);
   }
   $('#bCutDone').onclick = () => openCutter(false);
+  // Exportar: fecha o Cortador e já renderiza este vídeo com os cortes
+  $('#bCutExport').onclick = () => { const id = S.cutter && S.cutter.id; openCutter(false); if (id != null) renderOne(id); };
+  $('#bCutOpenFile').onclick = () => { S.cutAfterAdd = { any: true }; if (REAL) inv('pick', { folder: false }).catch(() => {}); else { const q = S.queue.find((x) => cutterOk(x)); if (q) { S.cutAfterAdd = null; selectOnly(q.id); openCutter(true); } } };
   $('#bCutCancel').onclick = cancelCutter;
   $('#bOpenCut').onclick = () => openCutter(true);
   function renderCutter() {
@@ -2387,7 +2395,7 @@
     if (e.target.closest('input, textarea')) return;
     if (root.classList.contains('sheet-open')) return;
     // Ctrl+1 Converter · Ctrl+2 Baixar
-    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key === '1' || e.key === '2') && !S.cutter) { e.preventDefault(); setView(e.key === '2' ? 'dl' : 'conv'); return; }
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && ['1', '2', '3'].includes(e.key)) { e.preventDefault(); setView({ 1: 'conv', 2: 'cut', 3: 'dl' }[e.key]); return; }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'o' && !e.altKey && !KEYS.some(([x]) => keyOf(x) === keyName(e))) { e.preventDefault(); if (REAL) inv('pick', { folder: e.shiftKey }); return; }
     const k = keyName(e);
     if (k) {
@@ -2455,15 +2463,27 @@
     DL.seq = DL.list.reduce((m, it) => Math.max(m, it.id || 0), Date.now());
   }
 
+  // abas: Converter, Cortar (o Cortador do vídeo escolhido) e Baixar
   function setView(v, quiet) {
-    v = v === 'dl' ? 'dl' : 'conv';
-    if (v === 'dl' && S.cutter) openCutter(false);
+    v = ['dl', 'cut'].includes(v) ? v : 'conv';
+    // sair do Cortador pela aba = Concluir (os cortes ficam)
+    if (v !== 'cut' && S.cutter) openCutter(false);
     if (v === 'dl' && PL.on) playStop(null, true);
     S.view = v; root.dataset.view = v; closeMenu();
-    $$('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.view === v));
-    if (!quiet && S.set.view !== v) { S.set.view = v; saveSettings(); }
+    if (!quiet && v !== 'cut' && S.set.view !== v) { S.set.view = v; saveSettings(); }
+    if (v === 'cut') {
+      const sel = selItem();
+      const q = cutterOk(sel) ? sel : S.queue.find((x) => cutterOk(x));
+      if (q && !S.cutter) { if (q.id !== S.sel) { selectOnly(q.id); renderAll(); } openCutter(true); }
+    }
+    syncTabs();
     if (v === 'dl') dlEnter();
-    else requestAnimationFrame(() => { fitFrames(); drawWave(); });
+    else if (v === 'conv') requestAnimationFrame(() => { fitFrames(); drawWave(); });
+  }
+  function syncTabs() {
+    const on = S.cutter ? 'cut' : S.view;
+    $$('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.view === on));
+    $('#cutBlank').hidden = !(S.view === 'cut' && !S.cutter);
   }
   $$('#tabs button').forEach((b) => { b.onclick = () => setView(b.dataset.view); });
 
@@ -2618,9 +2638,10 @@
     }
     const rm = `<button class="dk-ib x hov" data-act="remove" title="${esc(L.dlRemove)}">${ICONS.x}</button>`;
     if (it.status === 'done') {
+      const toCut = it.kind !== 'thumb' ? `<button class="dk-ib" data-act="cut" title="${esc(L.dlToCutter)}">${ICONS.cut}</button>` : '';
       const toQ = it.kind !== 'thumb' ? `<button class="dk-ib" data-act="queue" title="${esc(L.dlToQueue)}">${DL_ICONS.queue}</button>` : '';
       const ex = (it.extras || []).map((x) => String(x).split('.').pop().toUpperCase()).filter((v, i, a) => a.indexOf(v) === i);
-      return `<div class="dk-done">${DL_ICONS.ok}${esc(L.dlReady)}<span class="dk-sz">${it.size ? dlBytes(it.size) : ''}${ex.length ? ' · +' + esc(ex.join(' +')) : ''}</span><span class="dk-acts">${toQ}<button class="dk-ib" data-act="show" title="${esc(L.showInFolder)}">${DL_ICONS.folder}</button>${rm}</span></div>`;
+      return `<div class="dk-done">${DL_ICONS.ok}${esc(L.dlReady)}<span class="dk-sz">${it.size ? dlBytes(it.size) : ''}${ex.length ? ' · +' + esc(ex.join(' +')) : ''}</span><span class="dk-acts">${toCut}${toQ}<button class="dk-ib" data-act="show" title="${esc(L.showInFolder)}">${DL_ICONS.folder}</button>${rm}</span></div>`;
     }
     const acts = `<div class="dk-err-acts"><button class="link" data-act="retry">${esc(L.dlRetry)}</button><button class="link" data-act="remove">${esc(L.dlRemove)}</button></div>`;
     if (it.status === 'cancel') return `<span class="dk-muted">${esc(L.dlCancelled)}</span>${acts}`;
@@ -2731,6 +2752,11 @@
     const a = b.dataset.act;
     if (a === 'cancel') dlCancel(it);
     else if (a === 'play') dlPlay(it);
+    else if (a === 'cut') {
+      const f = (it.files || [])[0]; if (!f) return;
+      if (REAL) { S.cutAfterAdd = { path: f }; inv('add', { paths: [f] }).catch((er) => { S.cutAfterAdd = null; toast(String(er)); }); setView('conv', true); }
+      else { const q = S.queue.find((x) => cutterOk(x)); setView('conv', true); if (q) { selectOnly(q.id); renderAll(); openCutter(true); } }
+    }
     else if (a === 'login') { const acc = dlAccOf(it); if (acc) dlLogin(acc.id); }
     else if (a === 'retry') dlRetry(it);
     else if (a === 'remove') dlRemove(it);
@@ -3412,6 +3438,12 @@
         if (S.sel == null && firstNew != null) { selectOnly(firstNew); S.t = 0.15; }
         firstNew = null; renderAll(true, ids);
         setTimeout(() => $('#queue').smoothTo(1e6), 60);
+        const want = S.cutAfterAdd || (S.view === 'cut' && !S.cutter ? { any: true } : null);
+        if (want) {
+          const norm = (x) => String(x || '').replace(/\\/g, '/').toLowerCase();
+          const q = ids.map(itemOf).find((x) => cutterOk(x) && (want.any || norm(x.path) === norm(want.path))) || (ids.length === 1 && cutterOk(itemOf(ids[0])) ? itemOf(ids[0]) : null);
+          if (q) { S.cutAfterAdd = null; if (S.view === 'dl') setView('conv', true); selectOnly(q.id); renderAll(); openCutter(true); }
+        }
       }, 60);
     });
     on('item-thumb', (p) => { const q = itemOf(p.id); if (!q) return; q.thumb = p.thumb; patchItem(q);

@@ -752,7 +752,6 @@
   transition:color .16s var(--ease),background-color .16s var(--ease)}
 .tabs button:hover{color:var(--text)}
 .tabs button.on{background:var(--seg-pill);color:var(--text)}
-.cutter-open .tabs{visibility:hidden}
 [data-view="dl"] .main{display:none}
 .dlv{display:none;flex:1;min-height:0;grid-template-columns:340px minmax(0,1fr)}
 [data-view="dl"] .dlv{display:grid}
@@ -981,3 +980,9 @@
 .dk-tabs button.on{background:var(--seg-pill);color:var(--text)}
 .dk-tabs button span{font:400 11px var(--mono);color:var(--text-3)}
 .dk-tabs button.on span{color:var(--text-2)}
+
+.cut-blank{display:grid;place-items:stretch}
+.cut-blank[hidden]{display:none}
+.cut-blank .dk-empty svg{width:30px;height:30px}
+.cut-blank .dk-btn{width:auto;padding:0 16px;margin-top:6px}
+[data-view="cut"] .main{visibility:hidden}

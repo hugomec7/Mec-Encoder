@@ -19,7 +19,7 @@
       Mec Encoder
       <svg class="chev" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 4.5L6 7l2.5-2.5"/></svg>
     </button>
-    <div class="tabs" id="tabs"><button data-view="conv" id="tConv"></button><button data-view="dl" id="tDl"></button></div>
+    <div class="tabs" id="tabs"><button data-view="conv" id="tConv"></button><button data-view="cut" id="tCut"></button><button data-view="dl" id="tDl"></button></div>
     <div class="tb-actions">
       <button class="update-pill" id="bUpdate" hidden><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.5v8M4.5 7L8 10.5 11.5 7M3 13.5h10"/></svg><span></span></button>
 <span class="tb-sep"></span>
@@ -154,11 +154,16 @@
   <div class="sheet-body smooth" id="sheetScroll"><div class="sc" id="sheetBody"></div></div>
 </div>
 
+<!-- aba Cortar sem vídeo: abrir ou arrastar -->
+<section class="cutter cut-blank" id="cutBlank" hidden><div class="dk-empty"><div>
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="4.2" cy="11.8" r="2"/><circle cx="11.8" cy="11.8" r="2"/><path d="M5.6 10.4L12 2.5M10.4 10.4L4 2.5"/></svg>
+  <b id="lCutBlankT"></b><span id="lCutBlankS"></span><button class="dk-btn dk-sec" id="bCutOpenFile"></button></div></div></section>
+
 <!-- CORTADOR: página própria (a prévia e a linha do tempo vêm para cá) -->
 <section class="cutter" id="cutter" hidden>
   <header class="cut-head">
     <div class="cut-title"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="4.2" cy="11.8" r="2"/><circle cx="11.8" cy="11.8" r="2"/><path d="M5.6 10.4L12 2.5M10.4 10.4L4 2.5"/></svg><h2 id="lCutter"></h2><b id="cutFile"></b><small id="cutInfo"></small></div>
-    <div class="cut-actions"><button class="btn small ghost" id="bCutCancel"></button><button class="btn small" id="bCutDone"></button></div>
+    <div class="cut-actions"><button class="btn small ghost" id="bCutCancel"></button><button class="btn small ghost" id="bCutDone"></button><button class="btn small" id="bCutExport"></button></div>
   </header>
   <div class="cut-body">
     <div class="cut-main"><div class="cut-stage" id="cutStageSlot"></div><div class="cut-transport" id="cutTransportSlot"></div></div>
