@@ -24,6 +24,8 @@ struct Proc {
 #[derive(Default)]
 pub struct Viewer {
     proc: Mutex<Option<Proc>>,
+    /// porta e senha da transmissão do play (motor atual)
+    serve: Mutex<Option<(u16, String)>>,
 }
 
 pub struct Frame {
@@ -61,6 +63,11 @@ impl Frame {
     }
 }
 
+/// Codifica para a URL (tudo que não é letra, número ou -_.~).
+fn enc(s: &str) -> String {
+    s.bytes().map(|b| if b.is_ascii_alphanumeric() || b"-_.~".contains(&b) { (b as char).to_string() } else { format!("%{b:02X}") }).collect()
+}
+
 /// mecview(.exe) na pasta do ffmpeg.
 pub fn exe_next_to(ffmpeg: &Path) -> Option<PathBuf> {
     let name = if cfg!(windows) { "mecview.exe" } else { "mecview" };
@@ -86,7 +93,7 @@ impl Viewer {
         let mut guard = self.proc.lock().unwrap();
         // uma tentativa de novo se o motor tiver caído
         for attempt in 0..2 {
-            if guard.is_none() { *guard = Some(Self::spawn(exe)?); }
+            if guard.is_none() { *guard = Some(Self::spawn(exe)?); *self.serve.lock().unwrap() = None; }
             let p = guard.as_mut().unwrap();
             match Self::ask(p, id, info, &vf, t, hw) {
                 Ok(mut f) => { f.ms_total = started.elapsed().as_secs_f32() * 1000.0; return Ok(f); }
@@ -129,8 +136,45 @@ impl Viewer {
         Ok(s.trim_end().to_string())
     }
 
+    /// Endereço do play pelo motor: o motor transmite imagem (I420) e som já sem os cortes (`parts`),
+    /// na velocidade `rate`, para frente ou para trás (`dir` = -1, sem som). Ver viewer/play.c.
+    pub fn play_url(&self, exe: &Path, info: &MediaInfo, cfg: &Preset, parts: &[(f64, f64)], max: u32, rate: f64, dir: i32, hw: bool) -> Result<String, String> {
+        let vf = command::view_filters(info, cfg, true, max);
+        let mut guard = self.proc.lock().unwrap();
+        let mut serve = self.serve.lock().unwrap();
+        for attempt in 0..2 {
+            if guard.is_none() { *guard = Some(Self::spawn(exe)?); *serve = None; }
+            if serve.is_none() {
+                let p = guard.as_mut().unwrap();
+                let r = (|| -> Result<(u16, String), String> {
+                    writeln!(p.stdin, "serve").map_err(|e| format!("io: {e}"))?;
+                    p.stdin.flush().map_err(|e| format!("io: {e}"))?;
+                    let line = Self::line(&mut p.out)?;
+                    let f: Vec<&str> = line.split_whitespace().collect();
+                    if f.len() < 3 || f[0] != "ok" { return Err(format!("viewer {line}")); }
+                    Ok((f[1].parse().map_err(|_| "bad port".to_string())?, f[2].to_string()))
+                })();
+                match r {
+                    Ok(v) => *serve = Some(v),
+                    Err(e) if e.starts_with("io:") && attempt == 0 => { let mut dead = guard.take().unwrap(); let _ = dead.child.kill(); let _ = dead.child.wait(); continue; }
+                    Err(e) => return Err(e),
+                }
+            }
+            break;
+        }
+        let (port, token) = serve.clone().ok_or("viewer serve")?;
+        let parts: Vec<String> = parts.iter().map(|(a, b)| format!("{a:.6}-{b:.6}")).collect();
+        let q = [
+            ("token", token), ("path", info.path.to_string_lossy().into_owned()), ("parts", parts.join(",")), ("vf", vf),
+            ("hw", (hw as u8).to_string()), ("rate", format!("{rate}")), ("dir", dir.to_string()), ("audio", "1".into()),
+        ];
+        let qs: Vec<String> = q.iter().map(|(k, v)| format!("{k}={}", enc(v))).collect();
+        Ok(format!("http://127.0.0.1:{port}/play?{}", qs.join("&")))
+    }
+
     /// Fecha o motor (sair do app).
     pub fn stop(&self) {
+        *self.serve.lock().unwrap() = None;
         if let Some(mut p) = self.proc.lock().unwrap().take() {
             let _ = writeln!(p.stdin, "quit");
             let _ = p.stdin.flush();

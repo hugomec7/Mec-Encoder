@@ -468,6 +468,18 @@ async fn view_frame(app: AppHandle, state: State<'_, AppState>, id: u64, cfg: Pr
     Ok(tauri::ipc::Response::new(f.into_bytes()))
 }
 
+/// Endereço do play pelo motor (a tela lê a transmissão direto do motor). "no-viewer" = sem motor.
+#[tauri::command]
+async fn view_play(state: State<'_, AppState>, id: u64, cfg: Preset, parts: Vec<(f64, f64)>, max: u32, rate: f64, dir: i32) -> Result<String, String> {
+    let info = item(&state, id)?;
+    let exe = viewer::exe_next_to(&state.engine.ffmpeg()?).ok_or("no-viewer")?;
+    let blackwell = state.engine.gpu.lock().unwrap().as_deref().map_or(false, command::gpu_reads_422);
+    let hw = info.video.as_ref().map_or(false, |v| command::nvdec_supported(v, blackwell));
+    let v = state.viewer.clone();
+    tauri::async_runtime::spawn_blocking(move || v.play_url(&exe, &info, &cfg, &parts, max.clamp(240, 3840), rate.clamp(0.1, 16.0), if dir < 0 { -1 } else { 1 }, hw))
+        .await.map_err(|e| e.to_string())?
+}
+
 /// Linha no player.log (tempos do motor e da tela, para comparar com a prévia por imagem).
 #[tauri::command]
 fn view_note(app: AppHandle, line: String) { view_log(&app, &line); }
@@ -1018,7 +1030,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             pick, add, pick_dir, save_queue, restore_queue, power, set_watch, job_status, open_jobs_dir, automation_info, forget, duplicate, preview, waveform, render, stop, get_state, save_presets, save_settings,
-            default_presets, view_frame, view_note, play_file, play_live, play_stop, play_proxy, previews_size, previews_clear, previews_prune, import_enc, export_presets, import_presets, reveal, open_data_dir, open_log, open_url, notify, ready, check_update, install_update,
+            default_presets, view_frame, view_play, view_note, play_file, play_live, play_stop, play_proxy, previews_size, previews_clear, previews_prune, import_enc, export_presets, import_presets, reveal, open_data_dir, open_log, open_url, notify, ready, check_update, install_update,
             downloader::dl_status, downloader::dl_install, downloader::dl_update, downloader::dl_start, downloader::dl_cancel, downloader::dl_open_dir, downloader::dl_clipboard, downloader::dl_play, downloader::dl_rename, downloader::dl_accounts, downloader::dl_login, downloader::dl_logout, downloader::dl_info
         ])
         .build(tauri::generate_context!())

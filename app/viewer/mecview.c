@@ -11,6 +11,8 @@
  *                                      <ms ler+decodificar> <ms copiar da placa> <ms filtro> <ms total> <hw 0|1>\n"
  *                                    seguido de <bytes> de RGBA (w*h*4)                  ou "err <motivo>\n"
  *                                    (+ " <da memória 0|1>" no fim da linha)
+ *   serve                          → "ok <porta> <senha>"  (transmissão do play, ver play.c)
+ *   pstop                          → "ok\n"   (para a transmissão)
  *   cache <MB>                     → "ok\n"   (quanto de RAM a memória de quadros pode usar)
  *   close <id>                     → "ok\n"
  *   quit
@@ -68,6 +70,9 @@ typedef struct Clip {
     char *graph_desc;
     int gw, gh, gfmt;
 } Clip;
+
+void play_serve(void);
+void play_stop(void);
 
 static Clip clips[MAX_CLIPS];
 static unsigned long long tick = 0;
@@ -543,6 +548,11 @@ int main(void) {
             double t = 0; int o2 = 0;
             if (sscanf(rest, "%lld %lf %n", &id, &t, &o2) < 2) { reply_err("bad frame", 0); continue; }
             cmd_frame(id, t, o2 ? rest + o2 : "");
+        } else if (!strcmp(cmd, "serve")) {
+            play_serve();
+        } else if (!strcmp(cmd, "pstop")) {
+            play_stop();
+            printf("ok\n"); fflush(stdout);
         } else if (!strcmp(cmd, "cache")) {
             long long mb = 0; sscanf(rest, "%lld", &mb);
             if (mb >= 64) { cache_limit = (size_t)mb << 20; cache_trim(0); }

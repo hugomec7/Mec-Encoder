@@ -1076,7 +1076,7 @@
     const { z, x, y } = S.pz; const tf = z > 1.001 ? `scale(${z}) translate(${-x * 100}%, ${-y * 100}%)` : '';
     $$('.stage .frame').forEach((f) => {
       f.classList.toggle('pz', z > 1.001);
-      f.querySelectorAll('img.pv-img, canvas.pv-cv, video.pv-vid, svg.scene, .grade').forEach((el) => { el.style.transformOrigin = '0 0'; el.style.transform = tf; });
+      f.querySelectorAll('img.pv-img, canvas.pv-cv, canvas.pv-gl, video.pv-vid, svg.scene, .grade').forEach((el) => { el.style.transformOrigin = '0 0'; el.style.transform = tf; });
     });
     const st = $('.stage'); if (z > 1.001) st.dataset.zoom = `${z < 10 ? z.toFixed(1).replace('.', decComma() ? ',' : '.') : Math.round(z)}×`; else delete st.dataset.zoom;
   }
@@ -1713,12 +1713,26 @@
   const playQ = () => { const d = qPlay(); if (d === 'auto') return 'auto'; const q = PL.q || selItem(); const sh = q && q.src && q.src.w ? Math.min(q.src.w, q.src.h) : 1080; return String(clamp(Math.round(sh / +d / 2) * 2, 240, 2160)); };
   const liveH = (q) => (playQ() === 'auto' ? (q.liveH || 720) : +playQ());
   const playable = (q) => !!q && !q.src.isImage;
+  /* Play pelo motor (etapa 3): o motor transmite imagem e som já sem os cortes; a tela desenha com WebGL e
+     segue o relógio do som. Se o motor falhar, volta para o player de antes (direto/ao vivo). */
+  const glc = document.createElement('canvas'); glc.className = 'pv-vid pv-gl';
+  let EP = null;
+  const engOk = (q) => REAL && !VW.off && !!window.MecEnginePlayer && !q.src.audioOnly && !q.src.isImage && !(q.play && q.play.noEngine);
+  // tocando: lado maior do quadro (Automática = o tamanho da tela; com zoom, maior)
+  const playMax = (q) => { const d = qPlay(); if (d === 'auto' || !q.src.w) return pzMax(); const o = outDims(q.src, q.cfg); return clamp(Math.round(Math.max(o.w, o.h) / +d), 240, 3840); };
   const RATES = [0.25, 0.5, 1, 1.5, 2, 4];
   const rateTxt = (r) => `${fpsTxt(String(r))}×`;
   function planFor(q, o) {
     const d = fullDur(q); const fr = frOf(q); const cs = cutsOf(q) || [];
     if (o.kind === 'cut' && cs[o.cut]) return { kind: 'cut', cut: o.cut, parts: [cs[o.cut].slice()] };
     let t0 = o.from != null ? o.from : snapT(q, d * S.t);
+    // para trás (J): da agulha até o começo (com cortes e "Pulando cortes", só os trechos)
+    if (o.kind === 'back') {
+      const end = t0 > 1.5 / fr ? t0 : d;
+      const src = S.set.skipCuts !== false && cs.length ? cs : [[0, d]];
+      const parts = src.filter(([a]) => a < end - 0.5 / fr).map(([a, b]) => [a, Math.min(b, end)]);
+      return { kind: 'back', dir: -1, parts: parts.length ? parts : [[0, end]] };
+    }
     // com trechos o play mostra o resultado: da agulha em diante, pulando o que foi cortado
     // (agulha entre trechos: começa no próximo; depois do último: volta ao primeiro)
     // botão "Pular cortes" desligado: o play normal toca o original
@@ -1742,26 +1756,29 @@
     const m = PL.map; let k = 0; while (k < m.length - 1 && ct >= m[k + 1].o - 1e-6) k++;
     return Math.min(m[k].b, m[k].a + Math.max(0, ct - m[k].o));
   }
-  const curSrc = () => srcOf(vid.currentTime);
+  const curSrc = () => (PL.mode === 'engine' ? (PL.engT != null ? PL.engT : PL.cur ? PL.cur[0][PL.dir < 0 ? 1 : 0] : 0) : srcOf(vid.currentTime));
 
   async function playStart(o) {
     const q = selItem(); if (!playable(q)) return;
     if (PL.on) playStop(null, true);
     const plan = planFor(q, o || { kind: 'auto' });
     const seq = ++PL.seq;
-    Object.assign(PL, { on: true, q, plan, i: 0, hw: true, slow: 0, stalls: [], started: false, prep: null, mode: '' });
+    Object.assign(PL, { on: true, q, plan, i: 0, hw: true, slow: 0, stalls: [], started: false, prep: null, mode: '', engT: null, dir: plan.dir || 1 });
     if (S.cmp) { S.cmpHold = true; S.cmp = false; renderPreview(); }
     clearTimeout(PL.badgeT); $('#playBadge').classList.remove('fade'); $('#playBadge').hidden = true;
     stage.classList.add('playing'); stage.classList.toggle('buffering', REAL);
     renderPlayUi(); renderPlayInfo(plan.parts[0][0]);
     if (!REAL) { PL.mode = 'demo'; PL.cur = plan.parts; PL.dt = plan.parts[0][0]; PL.last = performance.now(); plLoop(seq); return; }
-    $('#frame').append(vid);
+    glc.remove(); $('#frame').append(vid);
     audioGraph();
+    // para trás só pelo motor
+    if (plan.dir < 0 && !engOk(q)) { playStop(null, true); return; }
     await plLoad(seq, plan.parts);
   }
   // escolhe o degrau: direto, ao vivo ou a prévia leve guardada
   async function plMode(q) {
     const p = q.play = q.play || {};
+    if (engOk(q)) return 'engine';
     if (p.useProxy) {
       const key = JSON.stringify([q.cfg.rotate, q.cfg.aspect, q.cfg.aspectMode, q.cfg.hdrToSdr, frOf(q)]);
       if (!p.proxy || p.proxyKey !== key) await makeProxy(q, key);
@@ -1787,6 +1804,23 @@
       mode = await plMode(q); if (seq !== PL.seq) return;
       Object.assign(PL, { cur: parts, mode, i: 0, started: false });
       stage.classList.add('buffering');
+      if (mode === 'engine') {
+        const url = await inv('view_play', { id: q.id, cfg: q.cfg, parts, max: playMax(q), rate: PL.rate, dir: PL.dir || 1 });
+        if (seq !== PL.seq) return;
+        vid.pause(); vid.remove(); $('#frame').append(glc); applyPz();
+        if (!EP) EP = new MecEnginePlayer(glc, actx, engIn || null);
+        EP.start(url, {
+          onTime: (ts) => {
+            if (seq !== PL.seq || !PL.on) return;
+            if (!PL.started) { PL.started = true; PL.t0 = performance.now(); stage.classList.remove('buffering'); }
+            PL.engT = ts; setT(ts / fullDur(q), true); renderPlayInfo(ts); meterTick();
+          },
+          onEnd: () => { if (seq === PL.seq && PL.on) plFinish(); },
+          onStall: (on) => { if (seq === PL.seq) stage.classList.toggle('buffering', on); },
+          onError: (m) => { if (seq === PL.seq && PL.on) plFail('engine', m); },
+        });
+        return;
+      }
       if (mode === 'live') {
         PL.h = liveH(q);
         const r = await inv('play_live', { id: q.id, cfg: q.cfg, parts, output: true, height: PL.h, fps: String(frOf(q)), hw: PL.hw });
@@ -1815,13 +1849,17 @@
     if (!PL.on) return;
     const q = PL.q; const t = PL.started ? curSrc() : PL.cur ? PL.cur[0][0] : 0;
     if (mode === 'direct') { q.play.noDirect = true; plRestartAt(t); return; }
+    if (mode === 'engine') { console.warn('engine play', msg); q.play.noEngine = true; if (EP) EP.stop(); glc.remove(); $('#frame').append(vid); if (PL.dir < 0) { playStop(null); return; } plRestartAt(t); return; }
     if (mode === 'live' && PL.hw) { PL.hw = false; plRestartAt(t); return; }
     console.warn('play', msg); toast(L.playFail); playStop(null);
   }
   function plRestartAt(t) {
     const seq = ++PL.seq; vid.pause();
     if (PL.mode === 'live') inv('play_stop').catch(() => {});
-    const parts = partsFrom(PL.plan.parts, t); if (!parts.length) { playStop(null); return; }
+    if (PL.mode === 'engine' && EP) EP.stop(true);
+    PL.engT = null;
+    const parts = PL.dir < 0 ? PL.plan.parts.filter(([a]) => a < t - 1e-6).map(([a, b]) => [a, Math.min(b, t)]) : partsFrom(PL.plan.parts, t);
+    if (!parts.length) { playStop(null); return; }
     plLoad(seq, parts);
   }
   // o PC não acompanha a conversão: baixa a qualidade (720 → 540 → 360); depois disso, prévia leve guardada
@@ -1833,6 +1871,7 @@
   }
   function plFinish() {
     const p = PL.plan; const fr = frOf(PL.q);
+    if (p.kind === 'back') { playStop(p.parts[0][0]); return; }
     if (S.set.loop) { playStart(p.kind === 'all' ? { kind: 'all', from: 0 } : p.kind === 'cuts' ? { kind: 'cuts', from: p.all[0][0] } : p); return; }
     playStop(p.parts[p.parts.length - 1][1] - 1 / fr);
   }
@@ -1846,6 +1885,8 @@
     PL.on = false; PL.seq++; PL.prep = null;
     vid.pause();
     if (REAL && PL.mode === 'live') inv('play_stop').catch(() => {});
+    // fechar a leitura já encerra a transmissão no motor
+    if (REAL && PL.mode === 'engine' && EP) EP.stop(true);
     if (q && selItem() === q) setT(t / fullDur(q), quiet);
     const hide = () => {
       if (PL.on) return;
@@ -1911,10 +1952,14 @@
     });
     on('play-proxy', (e) => { if (PL.on && PL.q && PL.q.id === e.id && PL.prep != null) { PL.prep = e.p; renderPlayUi(); } });
   }
-  function setRate(r) { PL.rate = r; vid.playbackRate = r; renderPlayUi(); }
+  function setRate(r) {
+    const was = PL.rate; PL.rate = r; vid.playbackRate = r; renderPlayUi();
+    // o motor já manda na velocidade certa: recomeça dali
+    if (PL.on && PL.mode === 'engine' && was !== r) plRestartAt(curSrc());
+  }
 
   /* som: volume e medidor (o áudio passa pelo Web Audio; precisa do CORS do servidor local) */
-  let actx = null; let gainN = null; let anL = null; let anR = null;
+  let actx = null; let gainN = null; let anL = null; let anR = null; let engIn = null;
   function audioGraph() {
     if (actx) { if (actx.state === 'suspended') actx.resume(); return; }
     try {
@@ -1924,6 +1969,8 @@
       const sp = actx.createChannelSplitter(2); src.connect(sp);
       anL = actx.createAnalyser(); anR = actx.createAnalyser(); anL.fftSize = anR.fftSize = 1024;
       sp.connect(anL, 0); sp.connect(anR, 1);
+      // som do motor entra no mesmo volume e medidor
+      engIn = actx.createGain(); engIn.connect(gainN); engIn.connect(sp);
     } catch { actx = null; gainN = null; }
     applyVol();
   }
@@ -1984,7 +2031,7 @@
   // em cima da prévia: "Trecho 2 · 00:00:03:12 / 00:00:07:00" (quanto já tocou do trecho e quanto ele dura)
   function renderPlayInfo(t) {
     const bd = $('#playBadge'); const p = PL.on && PL.plan; const q = PL.q;
-    if (!p || p.kind === 'all') { if (!bd.classList.contains('fade')) bd.hidden = true; return; }
+    if (!p || p.kind === 'all' || p.kind === 'back') { if (!bd.classList.contains('fade')) bd.hidden = true; return; }
     // no resultado conta em cima de todos os trechos (onde o play está no arquivo que vai sair)
     const P = p.all || p.parts; const fr = frOf(q); let el = 0; let k = P.length - 1;
     for (let i = 0; i < P.length; i++) { const [a, b] = P[i]; if (t < b - 1e-6) { el += Math.max(0, t - a); k = i; break; } el += b - a; }
@@ -2475,9 +2522,17 @@
       case 'prevEdit': if (playable(q)) { jumpEdit(-1); return true; } return false;
       case 'nextEdit': if (playable(q)) { jumpEdit(1); return true; } return false;
       // J K L como no Premiere: L toca (de novo: 2×, 4×), K pausa, J volta 1 s (ou desacelera)
-      case 'shuttleFwd': if (playable(q)) { if (!PL.on) { setRate(1); playStart({ kind: 'auto' }); } else setRate(PL.rate < 1 ? 1 : Math.min(4, PL.rate * 2)); return true; } return false;
+      case 'shuttleFwd': if (playable(q)) {
+        if (PL.on && PL.dir < 0) { if (PL.rate > 1) setRate(PL.rate / 2); else { const t = curSrc(); PL.rate = 1; playStart({ kind: 'auto', from: snapT(q, t) }); } return true; }
+        if (!PL.on) { setRate(1); playStart({ kind: 'auto' }); } else setRate(PL.rate < 1 ? 1 : Math.min(4, PL.rate * 2)); return true; } return false;
       case 'shuttleStop': if (PL.on) { playStop(); return true; } return false;
       case 'shuttleBack': if (playable(q)) {
+        // com o motor, J toca para trás de verdade (de novo: 2×, 4×)
+        if (engOk(q)) {
+          if (PL.on && PL.dir < 0) { setRate(Math.min(4, PL.rate * 2)); return true; }
+          if (PL.on && PL.rate > 1) { setRate(PL.rate / 2); return true; }
+          const t = PL.on ? curSrc() : fullDur(q) * S.t; PL.rate = 1; playStart({ kind: 'back', from: snapT(q, t) }); return true;
+        }
         if (PL.on && PL.rate > 1) { setRate(PL.rate / 2); return true; }
         const t = Math.max(0, (PL.on ? curSrc() : fullDur(q) * S.t) - 1);
         if (PL.on) playStart({ kind: PL.plan && PL.plan.kind === 'all' ? 'all' : 'auto', from: snapT(q, t) }); else setT(t / fullDur(q));

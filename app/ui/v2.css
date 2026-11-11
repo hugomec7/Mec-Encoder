@@ -589,7 +589,7 @@
 .stage{position:relative}
 #menu .mhead{padding:8px 10px 4px;font-size:11px;font-weight:500;color:var(--t3, rgba(255,255,255,.5));letter-spacing:0}
 .pv-stat{position:absolute;left:12px;top:10px;z-index:3;font:500 11px/1 var(--mono, ui-monospace, monospace);color:var(--t3, rgba(255,255,255,.55));background:rgba(0,0,0,.45);padding:5px 7px;border-radius:6px;pointer-events:none;font-variant-numeric:tabular-nums}
-:root:not(.cutter-open) .pv-stat{display:none}
+:root:not(.cutter-open) .pv-stat,.stage.playing .pv-stat{display:none}
 .stage.playing #frame .pv-vid{opacity:1}
 .frame.audio-card .pv-vid{display:none}
 .stage.playing.buffering #frame .pv-spin{opacity:1;transition-delay:.15s}
