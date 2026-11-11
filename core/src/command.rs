@@ -836,6 +836,15 @@ pub fn preview_args(info: &MediaInfo, p: &Preset, t: f64, output: bool, max: u32
     a
 }
 
+/// Filtro do motor de quadros do player (mecview): o mesmo da prévia, sem o JPEG no fim
+/// (o motor entrega RGBA). `max` = lado maior em pixels.
+pub fn view_filters(info: &MediaInfo, p: &Preset, output: bool, max: u32) -> String {
+    let p = &resolve(info, p);
+    let mut f = video_filters(info, p, &Encoder::Cpu { preset: "ultrafast".into() }, Some((output, max)));
+    if f.last().map_or(false, |x| x == "format=yuvj420p") { f.pop(); }
+    f.join(",")
+}
+
 /// Confere o arquivo convertido antes de apagar o original.
 pub fn verify(src: &MediaInfo, out: &MediaInfo) -> Result<(), String> {
     if src.video.is_some() && out.video.is_none() && out.audio.is_empty() { return Err("output has no video".into()); }

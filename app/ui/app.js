@@ -1076,7 +1076,7 @@
     const { z, x, y } = S.pz; const tf = z > 1.001 ? `scale(${z}) translate(${-x * 100}%, ${-y * 100}%)` : '';
     $$('.stage .frame').forEach((f) => {
       f.classList.toggle('pz', z > 1.001);
-      f.querySelectorAll('img.pv-img, video.pv-vid, svg.scene, .grade').forEach((el) => { el.style.transformOrigin = '0 0'; el.style.transform = tf; });
+      f.querySelectorAll('img.pv-img, canvas.pv-cv, video.pv-vid, svg.scene, .grade').forEach((el) => { el.style.transformOrigin = '0 0'; el.style.transform = tf; });
     });
     const st = $('.stage'); if (z > 1.001) st.dataset.zoom = `${z < 10 ? z.toFixed(1).replace('.', decComma() ? ',' : '.') : Math.round(z)}×`; else delete st.dataset.zoom;
   }
@@ -1117,17 +1117,58 @@
     const side = out ? 'out' : 'in'; const st = pvSt[side]; const fr = $(out ? '#frame' : '#frameIn');
     const t = fullDur(q) * S.t; const max = pzMax(); const key = JSON.stringify([q.id, out, Math.round(t * 30), out ? q.cfg : 0, max]);
     if (key === st.key) return; st.key = key;
+    // Cortador: motor do player (sem espera, sem FFmpeg novo a cada clique)
+    if (out && S.cutter && !VW.off && !q.src.isImage) { clearTimeout(st.timer); st.seq++; viewRequest(q, t, max); return; }
+    const cv = fr.querySelector('canvas.pv-cv'); if (cv) cv.remove();
     clearTimeout(st.timer); st.busy = true;
     st.timer = setTimeout(() => {
-      const seq = ++st.seq; fr.classList.add('loading');
+      const seq = ++st.seq; fr.classList.add('loading'); const t0 = performance.now();
       const done = () => { if (seq !== st.seq) return; fr.classList.remove('loading'); st.busy = false; if (out) flushStill(); };
       inv('preview', { id: q.id, cfg: q.cfg, t, output: out, max }).then((img) => {
         if (seq !== st.seq) return;
         const el = fr.querySelector('img');
         // troca quando a imagem nova já está decodificada (sem piscar ao pausar)
-        if (el) { const im = new Image(); im.onload = im.onerror = () => { if (seq === st.seq) { el.src = img; done(); } }; im.src = img; } else done();
+        if (el) { const im = new Image(); im.onload = im.onerror = () => { if (seq === st.seq) { el.src = img; done(); if (out) viewNote(`imagem (FFmpeg) | ${q.name} t=${t.toFixed(3)} | ${Math.round(performance.now() - t0)} ms até aparecer`); } }; im.src = img; } else done();
       }).catch(done);
     }, 70);
+  }
+  /* Motor do player (etapa 1, só no Cortador): cada clique ou arraste pede o quadro ao motor, que mantém o
+     vídeo aberto e pula direto até ele. Enquanto um quadro está a caminho, guarda só o último pedido. */
+  const VW = { busy: false, want: null, off: false, n: 0 };
+  const viewNote = (line) => { inv('view_note', { line }).catch(() => {}); };
+  function viewRequest(q, t, max) {
+    VW.want = { q, t, max }; pvSt.out.busy = true;
+    if (!VW.busy) viewPump();
+  }
+  async function viewPump() {
+    const w = VW.want; VW.want = null;
+    if (!w) return;
+    VW.busy = true; const t0 = performance.now();
+    try {
+      const buf = await inv('view_frame', { id: w.q.id, cfg: w.q.cfg, t: w.t, output: true, max: w.max });
+      const dv = new DataView(buf); const fw = dv.getUint32(0, true); const fh = dv.getUint32(4, true);
+      const fr = $('#frame');
+      if (selItem() === w.q && S.cutter && fr.dataset.id === String(w.q.id) && fw && fh) {
+        let cv = fr.querySelector('canvas.pv-cv');
+        if (!cv) { cv = document.createElement('canvas'); cv.className = 'pv-cv'; const v = fr.querySelector('video.pv-vid'); fr.insertBefore(cv, v || null); applyPz(); }
+        if (cv.width !== fw || cv.height !== fh) { cv.width = fw; cv.height = fh; }
+        cv.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(buf, 48, fw * fh * 4), fw, fh), 0, 0);
+        const ms = performance.now() - t0; const hw = dv.getUint32(44, true); const n = dv.getUint32(20, true);
+        const st = $('#pvStat');
+        if (st) { st.hidden = false; st.textContent = `${L.viewEngine} · ${Math.round(ms)} ms · ${hw ? L.viewGpu : L.viewCpu}${n ? ` · ${L.viewFrames(n)}` : ''}`; }
+        viewNote(`motor | ${w.q.name} t=${w.t.toFixed(3)} | ${Math.round(ms)} ms até aparecer (motor ${Math.round(dv.getFloat32(36, true))} ms, ${n} quadros, ${hw ? 'placa' : 'CPU'})`);
+      }
+    } catch (e) {
+      const msg = String(e && e.message || e);
+      console.warn('view', msg);
+      // sem o motor (ou erro nele): volta para a prévia por imagem
+      if (msg.includes('no-viewer') || ++VW.n >= 3) VW.off = true;
+      pvSt.out.key = ''; VW.busy = false; VW.want = null; pvSt.out.busy = false;
+      const q = selItem(); if (q) requestPreview(q, true);
+      return;
+    }
+    VW.busy = false;
+    if (VW.want) viewPump(); else { pvSt.out.busy = false; flushStill(); }
   }
   // tocando: o vídeo já mostra a imagem; a prévia de quadros volta ao pausar
   const requestFrames = (q) => { if (q.src.audioOnly || PL.on) return; requestPreview(q, true); if (S.cmp) requestPreview(q, false); };
@@ -1538,6 +1579,8 @@
       $('#pvMeta').before($('.stage')); $('#pvMeta').after($('.transport'));
       root.classList.remove('cutter-open'); $('#cutter').hidden = true; S.cutter = null;
     }
+    // o quadro do motor fica só no Cortador; abrir já acorda o motor
+    pvSt.out.key = ''; if (!on) { const cv = $('#frame canvas.pv-cv'); if (cv) cv.remove(); }
     if (!on && S.view === 'cut') { S.view = 'conv'; root.dataset.view = 'conv'; }
     if (on && S.view !== 'cut') { S.view = 'cut'; root.dataset.view = 'cut'; }
     if (typeof syncTabs === 'function') syncTabs();

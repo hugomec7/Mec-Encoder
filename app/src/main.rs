@@ -4,6 +4,7 @@
 mod downloader;
 mod store;
 mod update;
+mod viewer;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -63,6 +64,8 @@ pub struct AppState {
     proxy_children: Children,
     /// Aba Baixar: downloads rodando.
     downloads: Arc<downloader::Downloads>,
+    /// Motor de quadros do player (mecview), aberto no primeiro quadro pedido.
+    viewer: Arc<viewer::Viewer>,
 }
 
 #[derive(Clone, Debug, serde::Deserialize, Serialize)]
@@ -440,6 +443,40 @@ async fn preview(state: State<'_, AppState>, id: u64, cfg: Preset, t: f64, outpu
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+/// Quadro pelo motor do player: sem abrir um FFmpeg novo, lendo na placa quando dá. Resposta binária
+/// (cabeçalho de 48 bytes + RGBA; ver viewer::Frame). "no-viewer" = motor ausente (usa a prévia por imagem).
+#[tauri::command]
+async fn view_frame(app: AppHandle, state: State<'_, AppState>, id: u64, cfg: Preset, t: f64, output: bool, max: u32) -> Result<tauri::ipc::Response, String> {
+    let info = item(&state, id)?;
+    let exe = viewer::exe_next_to(&state.engine.ffmpeg()?).ok_or("no-viewer")?;
+    let blackwell = state.engine.gpu.lock().unwrap().as_deref().map_or(false, command::gpu_reads_422);
+    let hw = info.video.as_ref().map_or(false, |v| command::nvdec_supported(v, blackwell));
+    let v = state.viewer.clone();
+    let f = tauri::async_runtime::spawn_blocking(move || {
+        let r = v.frame(&exe, id, &info, &cfg, t, output, max.clamp(120, 3840), hw);
+        match &r {
+            Ok(f) => view_log(&app, &format!("{} | t={t:.3} {}x{} {} quadros {} | ler {:.0} copiar {:.0} filtro {:.0} motor {:.0} total {:.0} ms",
+                info.path.file_name().map(|n| n.to_string_lossy()).unwrap_or_default(), f.width, f.height, f.decoded,
+                if f.hw { "placa" } else { "CPU" }, f.ms_decode, f.ms_copy, f.ms_filter, f.ms_engine, f.ms_total)),
+            Err(e) => view_log(&app, &format!("{} | t={t:.3} erro: {e}", info.path.display())),
+        }
+        r
+    }).await.map_err(|e| e.to_string())??;
+    Ok(tauri::ipc::Response::new(f.into_bytes()))
+}
+
+/// Linha no player.log (tempos do motor e da tela, para comparar com a prévia por imagem).
+#[tauri::command]
+fn view_note(app: AppHandle, line: String) { view_log(&app, &line); }
+
+fn view_log(app: &AppHandle, text: &str) {
+    use std::io::Write;
+    let path = store::dir(app).join("player.log");
+    if std::fs::metadata(&path).map_or(false, |m| m.len() > 2_000_000) { let _ = std::fs::rename(&path, path.with_extension("old.log")); }
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis());
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&path) { let _ = writeln!(f, "[{now}] {text}"); }
 }
 
 /// Forma de onda da primeira faixa de áudio: `bars` valores de 0 a 255.
@@ -928,6 +965,7 @@ fn main() {
                 proxy_job: Mutex::new(None),
                 proxy_children: Arc::new(Mutex::new(HashMap::new())),
                 downloads: Arc::new(downloader::Downloads::default()),
+                viewer: Arc::new(viewer::Viewer::default()),
             });
             downloader::clean_work(&handle);
             clean_partial(&handle);
@@ -979,7 +1017,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             pick, add, pick_dir, save_queue, restore_queue, power, set_watch, job_status, open_jobs_dir, automation_info, forget, duplicate, preview, waveform, render, stop, get_state, save_presets, save_settings,
-            default_presets, play_file, play_live, play_stop, play_proxy, previews_size, previews_clear, previews_prune, import_enc, export_presets, import_presets, reveal, open_data_dir, open_log, open_url, notify, ready, check_update, install_update,
+            default_presets, view_frame, view_note, play_file, play_live, play_stop, play_proxy, previews_size, previews_clear, previews_prune, import_enc, export_presets, import_presets, reveal, open_data_dir, open_log, open_url, notify, ready, check_update, install_update,
             downloader::dl_status, downloader::dl_install, downloader::dl_update, downloader::dl_start, downloader::dl_cancel, downloader::dl_open_dir, downloader::dl_clipboard, downloader::dl_play, downloader::dl_rename, downloader::dl_accounts, downloader::dl_login, downloader::dl_logout, downloader::dl_info
         ])
         .build(tauri::generate_context!())
@@ -991,6 +1029,7 @@ fn main() {
                     kill_all(&state.children);
                     kill_all(&state.proxy_children);
                     state.downloads.stop_all();
+                    state.viewer.stop();
                     if let Some(s) = state.player.lock().unwrap().take() { s.stop_all(); }
                     // espera o ffmpeg soltar o arquivo e apaga o que ficou pela metade
                     for c in state.children.lock().unwrap().values_mut() { let _ = c.wait(); }

@@ -25,6 +25,11 @@ jobs:
       - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
       - name: yt-dlp (Downloader test)
         run: sudo curl -sSL -o /usr/local/bin/yt-dlp https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp && sudo chmod +x /usr/local/bin/yt-dlp && yt-dlp --version
+      - name: Player engine (mecview) vs FFmpeg
+        run: |
+          sudo apt-get install -y -qq libavformat-dev libavcodec-dev libavfilter-dev libavutil-dev
+          gcc -O2 -Wall -Wno-deprecated-declarations app/viewer/mecview.c $(pkg-config --cflags --libs libavformat libavcodec libavfilter libavutil) -o mecview
+          python3 app/viewer/test_mecview.py ./mecview ffmpeg "$RUNNER_TEMP/mv"
       - name: Unit + end-to-end tests
         run: cargo test -p mec-core --features serde
       - name: Command line (mec)
@@ -62,6 +67,19 @@ jobs:
           ls -la app/bin
           app/bin/ffmpeg.exe -hide_banner -version | head -1
           app/bin/ffmpeg.exe -hide_banner -filters | grep -E " zscale | tonemap "
+
+      - name: Player engine (mecview.exe, MinGW against the FFmpeg DLLs)
+        shell: bash
+        run: |
+          set -e
+          export PATH="/c/mingw64/bin:/c/msys64/mingw64/bin:$PATH"
+          which gcc && gcc --version | head -1
+          ROOT=$(dirname "$(dirname "$(find ff -name ffmpeg.exe | head -1)")")
+          ls "$ROOT/include" "$ROOT/lib" | head -40
+          gcc -O2 -Wall -Wno-deprecated-declarations -I"$ROOT/include" app/viewer/mecview.c \
+            -L"$ROOT/lib" -lavformat -lavcodec -lavfilter -lavutil -static-libgcc -o app/bin/mecview.exe
+          objdump -p app/bin/mecview.exe | grep "DLL Name"
+          python app/viewer/test_mecview.py app/bin/mecview.exe app/bin/ffmpeg.exe "$RUNNER_TEMP/mv"
 
       - name: Engine tests with the bundled FFmpeg (Windows)
         shell: bash
