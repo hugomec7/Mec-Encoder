@@ -56,6 +56,8 @@ pub struct Tools {
     pub encoder: Encoder,
     /// Cache do yt-dlp (acelera o YouTube).
     pub cache: Option<PathBuf>,
+    /// Sessões das contas (Instagram, YouTube...) no formato cookies.txt.
+    pub cookies: Option<PathBuf>,
 }
 
 /// O que o site informa antes de baixar.
@@ -128,6 +130,7 @@ pub fn ytdlp_args(job: &Job, t: &Tools, work: &Path) -> Vec<String> {
         .iter().map(|s| s.to_string()).collect();
     a.extend(["--ffmpeg-location".into(), t.ffmpeg.to_string_lossy().into_owned()]);
     if let Some(d) = &t.deno { a.extend(["--js-runtimes".into(), format!("deno:{}", d.display())]); }
+    if let Some(c) = &t.cookies { a.extend(["--cookies".into(), c.to_string_lossy().into_owned()]); }
     match &t.cache { Some(c) => a.extend(["--cache-dir".into(), c.to_string_lossy().into_owned()]), None => a.push("--no-cache-dir".into()) }
     a.extend(["-P".into(), work.to_string_lossy().into_owned(), "-o".into(), "%(title).150B.%(ext)s".into()]);
     match job.kind {
@@ -221,6 +224,45 @@ pub fn classify(err: &str) -> &'static str {
              "unable to download api page", "http error 403", "requested format is not available", "unable to download json",
              "n challenge solving failed", "challenge"]) { return "dl-broken"; }
     "unknown"
+}
+
+/// Um cookie de uma sessão (lido da janela de login).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Cookie {
+    pub name: String,
+    pub value: String,
+    /// Domínio (sem o ponto do começo); vazio = só o endereço da página.
+    pub domain: String,
+    pub path: String,
+    pub secure: bool,
+    pub http_only: bool,
+    /// Segundos desde 1970; None = cookie de sessão.
+    pub expires: Option<i64>,
+}
+
+/// Cookies no formato que o yt-dlp lê (Netscape cookies.txt). `host` vale para cookie sem domínio;
+/// cookie de sessão ganha validade de um ano (senão o yt-dlp descarta). Repetidos ficam uma vez só.
+pub fn netscape(cookies: &[Cookie], host: &str, now: i64) -> String {
+    let mut seen = std::collections::HashSet::new();
+    let mut out = String::new();
+    for c in cookies {
+        if c.name.is_empty() || c.value.contains(['\t', '\n', '\r']) || c.name.contains(['\t', '\n', '\r']) { continue; }
+        let d = c.domain.trim().trim_start_matches('.');
+        let (dom, sub) = if d.is_empty() { (host.to_string(), "FALSE") } else { (format!(".{d}"), "TRUE") };
+        let path = if c.path.is_empty() { "/" } else { c.path.as_str() };
+        if !seen.insert((dom.clone(), c.name.clone(), path.to_string())) { continue; }
+        let exp = c.expires.filter(|e| *e > 0).unwrap_or(now + 365 * 86_400);
+        let pre = if c.http_only { "#HttpOnly_" } else { "" };
+        out.push_str(&format!("{pre}{dom}\t{sub}\t{path}\t{}\t{exp}\t{}\t{}\n", if c.secure { "TRUE" } else { "FALSE" }, c.name, c.value));
+    }
+    out
+}
+
+/// Junta os arquivos de sessão de cada conta num só (o yt-dlp aceita um arquivo).
+pub fn merge_cookie_files(files: &[PathBuf]) -> String {
+    let mut out = String::from("# Netscape HTTP Cookie File\n");
+    for f in files { if let Ok(t) = std::fs::read_to_string(f) { for l in t.lines().filter(|l| !l.trim().is_empty() && (!l.starts_with('#') || l.starts_with("#HttpOnly_"))) { out.push_str(l); out.push('\n'); } } }
+    out
 }
 
 /// Já está pronto para web (H.264 8-bit 4:2:0 + AAC, sem giro pendente)?
@@ -481,7 +523,7 @@ mod tests {
     fn job(kind: Kind, web: bool) -> Job { Job { url: "https://youtu.be/abc".into(), kind, web, audio: "wav".into(), dest: "/d".into() } }
     fn tools_() -> Tools {
         Tools { ytdlp: "/t/yt-dlp".into(), deno: Some("/t/deno".into()), ffmpeg: "/f/ffmpeg".into(), ffprobe: "/f/ffprobe".into(),
-                encoder: Encoder::Nvenc, cache: None }
+                encoder: Encoder::Nvenc, cache: None, cookies: None }
     }
 
     #[test]
@@ -547,6 +589,25 @@ mod tests {
         assert_eq!(classify("[TikTok] x: Unable to extract universal data for rehydration; please report this issue"), "dl-broken");
         assert_eq!(classify("[youtube] x: Unable to download API page: ('Unable to connect to proxy', OSError('Tunnel connection failed: 403 Forbidden')); please report this issue"), "dl-network");
         assert_eq!(classify("something new"), "unknown");
+    }
+
+    #[test]
+    fn cookies_file() {
+        let c = |name: &str, domain: &str, http_only: bool, expires: Option<i64>| Cookie { name: name.into(), value: "v1".into(), domain: domain.into(), path: "/".into(), secure: true, http_only, expires };
+        let t = netscape(&[c("sessionid", ".instagram.com", true, Some(2_000_000_000)), c("csrftoken", "instagram.com", false, None),
+                           c("sessionid", "instagram.com", true, Some(1)), c("host", "", false, None)], "www.instagram.com", 1_700_000_000);
+        let lines: Vec<&str> = t.lines().collect();
+        assert_eq!(lines.len(), 3, "{t}");
+        assert_eq!(lines[0], "#HttpOnly_.instagram.com\tTRUE\t/\tTRUE\t2000000000\tsessionid\tv1");
+        assert_eq!(lines[1], ".instagram.com\tTRUE\t/\tTRUE\t1731536000\tcsrftoken\tv1");
+        assert_eq!(lines[2], "www.instagram.com\tFALSE\t/\tTRUE\t1731536000\thost\tv1");
+        let d = std::env::temp_dir().join(format!("mec-ck-{}", std::process::id()));
+        std::fs::create_dir_all(&d).unwrap();
+        std::fs::write(d.join("a.txt"), "# Netscape HTTP Cookie File\n.a.com\tTRUE\t/\tTRUE\t1\tx\ty\n").unwrap();
+        std::fs::write(d.join("b.txt"), "#HttpOnly_.b.com\tTRUE\t/\tTRUE\t1\tx\ty\n").unwrap();
+        let m = merge_cookie_files(&[d.join("a.txt"), d.join("b.txt"), d.join("nao-existe.txt")]);
+        assert_eq!(m, "# Netscape HTTP Cookie File\n.a.com\tTRUE\t/\tTRUE\t1\tx\ty\n#HttpOnly_.b.com\tTRUE\t/\tTRUE\t1\tx\ty\n");
+        let _ = std::fs::remove_dir_all(&d);
     }
 
     #[test]

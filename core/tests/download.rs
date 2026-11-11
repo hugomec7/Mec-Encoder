@@ -27,7 +27,7 @@ fn make_webm(ff: &Path, d: &Path) -> PathBuf {
 
 fn setup() -> Option<(Tools, PathBuf)> {
     let (ff, fp, yt) = (tools::find("ffmpeg", &[])?, tools::find("ffprobe", &[])?, tools::find("yt-dlp", &[])?);
-    Some((Tools { ytdlp: yt, deno: None, ffmpeg: ff.clone(), ffprobe: fp, encoder: Encoder::Cpu { preset: "ultrafast".into() }, cache: None }, ff))
+    Some((Tools { ytdlp: yt, deno: None, ffmpeg: ff.clone(), ffprobe: fp, encoder: Encoder::Cpu { preset: "ultrafast".into() }, cache: None, cookies: None }, ff))
 }
 
 fn get(t: &Tools, job: &Job, work: &Path, events: &Mutex<Vec<Event>>) -> Result<download::Done, String> {
@@ -81,7 +81,12 @@ fn video_web_ready_and_audio() {
     let r3 = get(&t, &Job { url: srv.file("ok", &mp4), ..job.clone() }, &d.join("w3"), &ev).unwrap();
     assert_eq!(r3.web, "remux");
 
-    // só áudio em WAV
+    // só áudio em WAV, com um arquivo de sessão (o yt-dlp tem que aceitar o formato)
+    let ck = d.join("cookies.txt");
+    let sess = download::netscape(&[download::Cookie { name: "sessionid".into(), value: "abc".into(), domain: ".instagram.com".into(), path: "/".into(),
+        secure: true, http_only: true, expires: None }], "www.instagram.com", 1_700_000_000);
+    std::fs::write(&ck, download::merge_cookie_files(&[]) + &sess).unwrap();
+    let t = Tools { cookies: Some(ck), ..t };
     let ev = Mutex::new(Vec::new());
     let ra = get(&t, &Job { kind: Kind::Audio, audio: "wav".into(), ..job.clone() }, &d.join("w4"), &ev).unwrap();
     assert_eq!(ra.files[0].extension().unwrap(), "wav");

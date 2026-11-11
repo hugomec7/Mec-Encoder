@@ -2404,7 +2404,7 @@
   /* ---------- aba Baixar ----------
      Dois botões rápidos pegam o link do Ctrl+C e baixam na maior qualidade, sem perguntar nada.
      Até 3 downloads ao mesmo tempo; a lista fica guardada neste PC (só os que terminaram). */
-  const DL = { list: [], running: 0, tools: null, setup: null, clip: [], seq: 0, entered: false, updating: false };
+  const DL = { list: [], running: 0, tools: null, setup: null, clip: [], seq: 0, entered: false, updating: false, accounts: [], logging: null };
   const DL_MAX = 3;
   // sempre o mesmo objeto (o switch e os seletores mudam este, não uma cópia)
   const dlSet = () => { if (!S.set.dl || typeof S.set.dl !== 'object') S.set.dl = {};
@@ -2471,6 +2471,7 @@
   async function dlEnter() {
     dlRenderSide(); dlRender(); dlClipRead();
     if (DL.entered) return; DL.entered = true;
+    dlLoadAccounts();
     if (!REAL) { DL.tools = { ytdlp: '2026.11.03', deno: true }; dlRenderSide(); return; }
     try { DL.tools = await inv('dl_status'); } catch { DL.tools = { ytdlp: '', deno: false }; }
     dlRenderSide();
@@ -2605,6 +2606,9 @@
     }
     const acts = `<div class="dk-err-acts"><button class="link" data-act="retry">${esc(L.dlRetry)}</button><button class="link" data-act="remove">${esc(L.dlRemove)}</button></div>`;
     if (it.status === 'cancel') return `<span class="dk-muted">${esc(L.dlCancelled)}</span>${acts}`;
+    const acc = LOGIN_ERRS.includes(it.errCode) ? dlAccOf(it) : null;
+    if (acc && !acc.on) return `<span class="dk-err" title="${esc(it.err || '')}">${esc(dlErrText(it))}</span>
+      <div class="dk-err-acts"><button class="link dk-login" data-act="login">${esc(L.dlSignIn(acc.name))}</button><button class="link" data-act="remove">${esc(L.dlRemove)}</button></div>`;
     return `<span class="dk-err" title="${esc(it.err || '')}">${esc(dlErrText(it))}</span>${acts}`;
   }
   // nome mostrado: o do arquivo depois de pronto (muda ao renomear); antes, o título do site
@@ -2697,6 +2701,7 @@
     const a = b.dataset.act;
     if (a === 'cancel') dlCancel(it);
     else if (a === 'play') dlPlay(it);
+    else if (a === 'login') { const acc = dlAccOf(it); if (acc) dlLogin(acc.id); }
     else if (a === 'retry') dlRetry(it);
     else if (a === 'remove') dlRemove(it);
     else if (a === 'show') { if (REAL) inv('reveal', { path: (it.files || [])[0] }).catch(() => {}); else toast(L.revealToast); }
@@ -2756,13 +2761,58 @@
     $('#lDlTitle').textContent = L.dlTitle; $('#bDlClear').textContent = L.dlClear; $('#lDlOpen').textContent = L.dlOpen;
     const t = DL.tools;
     $('#dlFoot').innerHTML = t && t.ytdlp ? `<i></i>${esc(L.dlVer(t.ytdlp, dlWhen(S.set.dlUpdated)))}` : t ? `<i class="off"></i>${esc(L.dlNotReady)}` : '';
-    dlRenderClip();
+    dlRenderClip(); dlRenderAccounts();
   }
   function dlWhen(ms) {
     if (!ms) return '';
     const d0 = new Date(); d0.setHours(0, 0, 0, 0); const d1 = new Date(ms); d1.setHours(0, 0, 0, 0);
     const days = Math.round((d0 - d1) / 864e5);
     return days <= 0 ? L.dlToday : days === 1 ? L.dlYesterday : L.dlDaysAgo(days);
+  }
+
+  /* contas: entrar no site numa janela própria; a sessão fica só neste PC e vale para os downloads */
+  const ACC_HOSTS = { instagram: ['instagram.com'], youtube: ['youtube.com', 'youtu.be'], x: ['x.com', 'twitter.com'], facebook: ['facebook.com', 'fb.watch'], tiktok: ['tiktok.com'] };
+  function dlAccOf(it) {
+    let h = ''; try { h = new URL(it.url).hostname.toLowerCase(); } catch { return null; }
+    const id = Object.keys(ACC_HOSTS).find((k) => ACC_HOSTS[k].some((d) => h === d || h.endsWith('.' + d)));
+    return id ? DL.accounts.find((a) => a.id === id) || null : null;
+  }
+  const LOGIN_ERRS = ['dl-login', 'dl-age', 'dl-private'];
+  async function dlLoadAccounts() {
+    if (REAL) { try { DL.accounts = await inv('dl_accounts'); } catch { DL.accounts = []; } }
+    else if (!DL.accounts.length) DL.accounts = [['instagram', 'Instagram', false], ['youtube', 'YouTube', true], ['x', 'X', false], ['facebook', 'Facebook', false], ['tiktok', 'TikTok', false]].map(([id, name, on]) => ({ id, name, on }));
+    dlRenderAccounts(); dlRender();
+  }
+  function dlRenderAccounts() {
+    const el = $('#dlAcc'); if (!el) return;
+    el.innerHTML = `<p class="dk-cap">${esc(L.dlAccounts)}</p>
+      ${DL.accounts.map((a) => `<div class="dk-acc-row"><span class="dk-acc-name">${esc(a.name)}</span>
+        ${a.on ? `<span class="dk-acc-on"><i></i>${esc(L.dlConnected)}</span><button class="link" data-acc-out="${a.id}">${esc(L.dlSignOut)}</button>`
+          : `<button class="link dk-acc-in" data-acc-in="${a.id}" ${DL.logging === a.id ? 'disabled' : ''}>${esc(DL.logging === a.id ? L.dlSigningIn : L.dlSignInShort)}</button>`}</div>`).join('')}
+      <p class="dk-acc-sub">${esc(L.dlAccountsSub)}</p>`;
+    $$('[data-acc-in]', el).forEach((b) => { b.onclick = () => dlLogin(b.dataset.accIn); });
+    $$('[data-acc-out]', el).forEach((b) => { b.onclick = () => dlLogout(b.dataset.accOut); });
+  }
+  async function dlLogin(id) {
+    const a = DL.accounts.find((x) => x.id === id); if (!a) return;
+    DL.logging = id; dlRenderAccounts();
+    if (!REAL) { setTimeout(() => dlLoginDone({ site: id, ok: true }), 900); return; }
+    try { await inv('dl_login', { site: id, title: L.dlLoginTitle(a.name) }); } catch (e) { DL.logging = null; dlRenderAccounts(); toast(String(e)); }
+  }
+  async function dlLoginDone(p) {
+    if (DL.logging === p.site) DL.logging = null;
+    if (REAL) await dlLoadAccounts(); else { const a = DL.accounts.find((x) => x.id === p.site); if (a) a.on = !!p.ok; dlRenderAccounts(); }
+    if (!p.ok) { dlRenderAccounts(); return; }
+    const a = DL.accounts.find((x) => x.id === p.site);
+    toast(L.dlLoggedIn(a ? a.name : p.site), true);
+    // o que falhou por falta de login nesse site tenta de novo sozinho
+    DL.list.filter((it) => it.status === 'err' && LOGIN_ERRS.includes(it.errCode) && (dlAccOf(it) || {}).id === p.site).forEach(dlRetry);
+    dlRender();
+  }
+  function dlLogout(id) {
+    if (REAL) inv('dl_logout', { site: id }).catch(() => {});
+    const a = DL.accounts.find((x) => x.id === id); if (a) a.on = false;
+    dlRenderAccounts(); dlRender();
   }
 
   /* modo demonstração: andamento de mentira para ver a tela */
@@ -3162,6 +3212,7 @@
       if (p.step) it.step = p.step;
       dlPatch(it);
     });
+    on('dl-login', dlLoginDone);
     on('dl-setup', (p) => { if (DL.setup && !DL.setup.err) { DL.setup = { item: p.item, done: p.done, total: p.total }; dlRender(); } });
     on('update-progress', (p) => { if (p.total) { S.updating = Math.round(p.done / p.total * 100); renderUpdateBtn(); renderUpdCard(); } });
     setTimeout(() => { if (autoUpd()) checkUpdate(false); prunePreviews(); }, 4000);

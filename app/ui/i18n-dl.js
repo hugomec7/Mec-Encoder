@@ -2,6 +2,8 @@
 (() => {
   const T = {
     en: {
+      dlAccounts: 'Accounts', dlAccountsSub: 'For Instagram and videos that need a login. The session stays only on this PC', dlConnected: 'Connected', dlSignOut: 'Sign out', dlSignInShort: 'Sign in', dlSigningIn: 'Opening…',
+      dlSignIn: (s) => `Sign in to ${s}`, dlLoginTitle: (s) => `Sign in to ${s} · Mec Encoder`, dlLoggedIn: (s) => `Connected to ${s}`,
       dlPlay: 'Play', dlRename: 'Click to rename', dlNameTaken: 'There is already a file with this name',
       tabConvert: 'Convert', tabDownload: 'Download', kgDownload: 'Download',
       dlCap: 'Downloads the link in Ctrl+C right away, in the best quality', dlVideo: 'Download video', dlAudio: 'Download audio',
@@ -31,6 +33,8 @@
       },
     },
     pt: {
+      dlAccounts: 'Contas', dlAccountsSub: 'Para Instagram e vídeos que pedem login. A sessão fica só neste PC', dlConnected: 'Conectado', dlSignOut: 'Sair', dlSignInShort: 'Entrar', dlSigningIn: 'Abrindo…',
+      dlSignIn: (s) => `Entrar no ${s}`, dlLoginTitle: (s) => `Entrar no ${s} · Mec Encoder`, dlLoggedIn: (s) => `Conectado ao ${s}`,
       dlPlay: 'Assistir', dlRename: 'Clique para renomear', dlNameTaken: 'Já existe um arquivo com esse nome',
       tabConvert: 'Converter', tabDownload: 'Baixar', kgDownload: 'Baixar',
       dlCap: 'Baixa o link do Ctrl+C na hora, na maior qualidade', dlVideo: 'Baixar vídeo', dlAudio: 'Baixar áudio',
@@ -60,6 +64,8 @@
       },
     },
     es: {
+      dlAccounts: 'Cuentas', dlAccountsSub: 'Para Instagram y videos que piden iniciar sesión. La sesión queda solo en este PC', dlConnected: 'Conectado', dlSignOut: 'Cerrar sesión', dlSignInShort: 'Entrar', dlSigningIn: 'Abriendo…',
+      dlSignIn: (s) => `Entrar en ${s}`, dlLoginTitle: (s) => `Entrar en ${s} · Mec Encoder`, dlLoggedIn: (s) => `Conectado a ${s}`,
       dlPlay: 'Reproducir', dlRename: 'Haz clic para renombrar', dlNameTaken: 'Ya existe un archivo con ese nombre',
       tabConvert: 'Convertir', tabDownload: 'Descargar', kgDownload: 'Descargar',
       dlCap: 'Descarga al instante el enlace del Ctrl+C, en la mejor calidad', dlVideo: 'Descargar video', dlAudio: 'Descargar audio',
@@ -89,6 +95,8 @@
       },
     },
     fr: {
+      dlAccounts: 'Comptes', dlAccountsSub: 'Pour Instagram et les vidéos qui demandent une connexion. La session reste sur ce PC', dlConnected: 'Connecté', dlSignOut: 'Se déconnecter', dlSignInShort: 'Se connecter', dlSigningIn: 'Ouverture…',
+      dlSignIn: (s) => `Se connecter à ${s}`, dlLoginTitle: (s) => `Se connecter à ${s} · Mec Encoder`, dlLoggedIn: (s) => `Connecté à ${s}`,
       dlPlay: 'Lire', dlRename: 'Cliquez pour renommer', dlNameTaken: 'Un fichier porte déjà ce nom',
       tabConvert: 'Convertir', tabDownload: 'Télécharger', kgDownload: 'Télécharger',
       dlCap: 'Télécharge tout de suite le lien du Ctrl+C, en meilleure qualité', dlVideo: 'Télécharger la vidéo', dlAudio: 'Télécharger l’audio',
@@ -118,6 +126,8 @@
       },
     },
     de: {
+      dlAccounts: 'Konten', dlAccountsSub: 'Für Instagram und Videos mit Anmeldung. Die Sitzung bleibt nur auf diesem PC', dlConnected: 'Verbunden', dlSignOut: 'Abmelden', dlSignInShort: 'Anmelden', dlSigningIn: 'Wird geöffnet…',
+      dlSignIn: (s) => `Bei ${s} anmelden`, dlLoginTitle: (s) => `Bei ${s} anmelden · Mec Encoder`, dlLoggedIn: (s) => `Mit ${s} verbunden`,
       dlPlay: 'Abspielen', dlRename: 'Zum Umbenennen klicken', dlNameTaken: 'Es gibt schon eine Datei mit diesem Namen',
       tabConvert: 'Konvertieren', tabDownload: 'Herunterladen', kgDownload: 'Herunterladen',
       dlCap: 'Lädt den Link aus Strg+C sofort herunter, in bester Qualität', dlVideo: 'Video laden', dlAudio: 'Audio laden',
@@ -147,6 +157,8 @@
       },
     },
     it: {
+      dlAccounts: 'Account', dlAccountsSub: 'Per Instagram e i video che richiedono l’accesso. La sessione resta solo su questo PC', dlConnected: 'Connesso', dlSignOut: 'Esci', dlSignInShort: 'Accedi', dlSigningIn: 'Apertura…',
+      dlSignIn: (s) => `Accedi a ${s}`, dlLoginTitle: (s) => `Accedi a ${s} · Mec Encoder`, dlLoggedIn: (s) => `Connesso a ${s}`,
       dlPlay: 'Riproduci', dlRename: 'Clicca per rinominare', dlNameTaken: 'Esiste già un file con questo nome',
       tabConvert: 'Converti', tabDownload: 'Scarica', kgDownload: 'Scarica',
       dlCap: 'Scarica subito il link del Ctrl+C, nella qualità migliore', dlVideo: 'Scarica video', dlAudio: 'Scarica audio',
@@ -176,6 +188,8 @@
       },
     },
     ru: {
+      dlAccounts: 'Аккаунты', dlAccountsSub: 'Для Instagram и видео, где нужен вход. Сессия хранится только на этом ПК', dlConnected: 'Подключено', dlSignOut: 'Выйти', dlSignInShort: 'Войти', dlSigningIn: 'Открывается…',
+      dlSignIn: (s) => `Войти в ${s}`, dlLoginTitle: (s) => `Вход в ${s} · Mec Encoder`, dlLoggedIn: (s) => `Подключено: ${s}`,
       dlPlay: 'Воспроизвести', dlRename: 'Щёлкните, чтобы переименовать', dlNameTaken: 'Файл с таким именем уже есть',
       tabConvert: 'Конвертер', tabDownload: 'Загрузка', kgDownload: 'Загрузка',
       dlCap: 'Сразу скачивает ссылку из Ctrl+C в лучшем качестве', dlVideo: 'Скачать видео', dlAudio: 'Скачать аудио',
@@ -205,6 +219,8 @@
       },
     },
     ja: {
+      dlAccounts: 'アカウント', dlAccountsSub: 'Instagram やログインが必要な動画用。セッションはこの PC にだけ保存されます', dlConnected: '接続済み', dlSignOut: 'ログアウト', dlSignInShort: 'ログイン', dlSigningIn: '開いています…',
+      dlSignIn: (s) => `${s} にログイン`, dlLoginTitle: (s) => `${s} にログイン · Mec Encoder`, dlLoggedIn: (s) => `${s} に接続しました`,
       dlPlay: '再生', dlRename: 'クリックして名前を変更', dlNameTaken: '同じ名前のファイルがすでにあります',
       tabConvert: '変換', tabDownload: 'ダウンロード', kgDownload: 'ダウンロード',
       dlCap: 'Ctrl+C のリンクをすぐに最高画質でダウンロード', dlVideo: '動画をダウンロード', dlAudio: '音声をダウンロード',
@@ -234,6 +250,8 @@
       },
     },
     ko: {
+      dlAccounts: '계정', dlAccountsSub: 'Instagram과 로그인이 필요한 동영상용. 세션은 이 PC에만 저장됩니다', dlConnected: '연결됨', dlSignOut: '로그아웃', dlSignInShort: '로그인', dlSigningIn: '여는 중…',
+      dlSignIn: (s) => `${s} 로그인`, dlLoginTitle: (s) => `${s} 로그인 · Mec Encoder`, dlLoggedIn: (s) => `${s}에 연결됨`,
       dlPlay: '재생', dlRename: '클릭해서 이름 바꾸기', dlNameTaken: '같은 이름의 파일이 이미 있습니다',
       tabConvert: '변환', tabDownload: '다운로드', kgDownload: '다운로드',
       dlCap: 'Ctrl+C의 링크를 바로 최고 화질로 다운로드', dlVideo: '동영상 다운로드', dlAudio: '오디오 다운로드',
@@ -263,6 +281,8 @@
       },
     },
     zh: {
+      dlAccounts: '账户', dlAccountsSub: '用于 Instagram 和需要登录的视频。会话只保存在这台电脑上', dlConnected: '已连接', dlSignOut: '退出', dlSignInShort: '登录', dlSigningIn: '正在打开…',
+      dlSignIn: (s) => `登录 ${s}`, dlLoginTitle: (s) => `登录 ${s} · Mec Encoder`, dlLoggedIn: (s) => `已连接 ${s}`,
       dlPlay: '播放', dlRename: '点击重命名', dlNameTaken: '已有同名文件',
       tabConvert: '转换', tabDownload: '下载', kgDownload: '下载',
       dlCap: '立即以最高画质下载 Ctrl+C 中的链接', dlVideo: '下载视频', dlAudio: '下载音频',

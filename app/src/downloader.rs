@@ -166,8 +166,14 @@ pub async fn dl_start(app: AppHandle, state: State<'_, AppState>, id: u64, url: 
     if !yt.is_file() { return Err("dl-setup".into()); }
     let deno = Some(deno_path(&app)).filter(|d| d.is_file());
     let e = state.engine.clone();
+    // sessões das contas entradas: um arquivo só para este download (o yt-dlp regrava o arquivo no fim)
+    let cookies = account_files(&app);
+    let cookies = (!cookies.is_empty()).then(|| {
+        let f = accounts_dir(&app).join(format!("job-{id}.txt"));
+        std::fs::write(&f, download::merge_cookie_files(&cookies)).ok().map(|_| f)
+    }).flatten();
     let tools = Tools { ytdlp: yt.clone(), deno, ffmpeg: e.ffmpeg()?, ffprobe: e.ffprobe()?, encoder: e.encoder.lock().unwrap().clone(),
-                        cache: Some(tools_dir(&app).join("cache")) };
+                        cache: Some(tools_dir(&app).join("cache")), cookies };
     let dest = dest.filter(|d| !d.as_os_str().is_empty()).unwrap_or_else(|| default_dir(&app));
     let job = Job { url, kind: if kind == "audio" { Kind::Audio } else { Kind::Video }, web, audio, dest };
     let work = tools_dir(&app).join("work").join(id.to_string());
@@ -192,6 +198,7 @@ pub async fn dl_start(app: AppHandle, state: State<'_, AppState>, id: u64, url: 
             if updated.is_ok() { r = download::run(&job, &tools, &work, &h, &emit); }
         }
         dls.cancel.lock().unwrap().remove(&id);
+        if let Some(f) = &tools.cookies { let _ = std::fs::remove_file(f); }
         r
     }).await.map_err(|e| e.to_string())?;
     res.map_err(|e| if e.starts_with("dl-") || e == "cancelled" { e } else {
@@ -212,6 +219,88 @@ pub fn dl_open_dir(app: AppHandle, path: Option<PathBuf>) -> Result<(), String> 
     let dir = path.filter(|p| !p.as_os_str().is_empty()).unwrap_or_else(|| default_dir(&app));
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     std::process::Command::new(if cfg!(windows) { "explorer.exe" } else { "xdg-open" }).arg(dir).spawn().map(|_| ()).map_err(|e| e.to_string())
+}
+
+// ======================================================================
+// Contas: entrar no site numa janela própria (anônima) e guardar a sessão só neste PC
+// ======================================================================
+
+struct Site { id: &'static str, name: &'static str, login: &'static str, urls: &'static [&'static str], session: &'static [&'static str] }
+
+const SITES: &[Site] = &[
+    Site { id: "instagram", name: "Instagram", login: "https://www.instagram.com/accounts/login/", urls: &["https://www.instagram.com/"], session: &["sessionid"] },
+    Site { id: "youtube", name: "YouTube", login: "https://accounts.google.com/ServiceLogin?service=youtube&continue=https%3A%2F%2Fwww.youtube.com%2F",
+           urls: &["https://www.youtube.com/", "https://accounts.google.com/", "https://www.google.com/"], session: &["LOGIN_INFO", "__Secure-3PSID", "SID"] },
+    Site { id: "x", name: "X", login: "https://x.com/i/flow/login", urls: &["https://x.com/", "https://twitter.com/"], session: &["auth_token"] },
+    Site { id: "facebook", name: "Facebook", login: "https://www.facebook.com/login/", urls: &["https://www.facebook.com/"], session: &["c_user"] },
+    Site { id: "tiktok", name: "TikTok", login: "https://www.tiktok.com/login", urls: &["https://www.tiktok.com/"], session: &["sessionid"] },
+];
+
+fn accounts_dir(app: &AppHandle) -> PathBuf { tools_dir(app).join("accounts") }
+fn account_file(app: &AppHandle, id: &str) -> PathBuf { accounts_dir(app).join(format!("{id}.txt")) }
+fn account_files(app: &AppHandle) -> Vec<PathBuf> { SITES.iter().map(|s| account_file(app, s.id)).filter(|f| f.is_file()).collect() }
+
+/// Contas e se a sessão está guardada.
+#[tauri::command]
+pub fn dl_accounts(app: AppHandle) -> Value {
+    json!(SITES.iter().map(|s| json!({ "id": s.id, "name": s.name, "on": account_file(&app, s.id).is_file() })).collect::<Vec<_>>())
+}
+
+/// Sair: apaga a sessão guardada (a janela de login é anônima, então nada fica no navegador do app).
+#[tauri::command]
+pub fn dl_logout(app: AppHandle, site: String) {
+    let _ = std::fs::remove_file(account_file(&app, &site));
+}
+
+fn read_cookies(w: &tauri::WebviewWindow, url: &str) -> Vec<download::Cookie> {
+    let Ok(u) = url.parse::<tauri::Url>() else { return vec![] };
+    w.cookies_for_url(u).unwrap_or_default().into_iter().map(|c| download::Cookie {
+        name: c.name().to_string(), value: c.value().to_string(), domain: c.domain().unwrap_or("").to_string(),
+        path: c.path().unwrap_or("/").to_string(), secure: c.secure().unwrap_or(false), http_only: c.http_only().unwrap_or(false),
+        expires: c.expires_datetime().map(|t| t.unix_timestamp()),
+    }).collect()
+}
+
+/// Abre a página de login do site. Quando a sessão aparece, guarda e fecha a janela sozinha.
+/// Avisa pelo evento "dl-login" { site, ok } (ok = false: fechou sem entrar ou passou o tempo).
+#[tauri::command]
+pub async fn dl_login(app: AppHandle, site: String, title: String) -> Result<(), String> {
+    let s = SITES.iter().find(|s| s.id == site).ok_or("unknown site")?;
+    let label = format!("login-{}", s.id);
+    if let Some(w) = app.get_webview_window(&label) { let _ = w.set_focus(); return Ok(()); }
+    let url = s.login.parse::<tauri::Url>().map_err(|e| e.to_string())?;
+    let b = tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::External(url))
+        .title(title).inner_size(480.0, 760.0).center().incognito(true).focused(true);
+    let b = match app.get_webview_window("main") { Some(main) => b.parent(&main).map_err(|e| e.to_string())?, None => b };
+    let w = b.build().map_err(|e| e.to_string())?;
+    let app2 = app.clone();
+    let (id, urls, session) = (s.id, s.urls, s.session);
+    // lê os cookies numa thread própria (no Windows, ler no evento ou em comando síncrono trava)
+    std::thread::spawn(move || {
+        let started = std::time::Instant::now();
+        let ok = loop {
+            std::thread::sleep(Duration::from_millis(1500));
+            if app2.get_webview_window(&w.label().to_string()).is_none() { break false; }
+            if started.elapsed() > Duration::from_secs(20 * 60) { let _ = w.close(); break false; }
+            let first = read_cookies(&w, urls[0]);
+            if !first.iter().any(|c| session.contains(&c.name.as_str()) && !c.value.is_empty()) { continue; }
+            // entrou: espera a página terminar de gravar o resto e guarda todos os domínios do site
+            std::thread::sleep(Duration::from_millis(1500));
+            let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64);
+            let mut text = String::from("# Netscape HTTP Cookie File\n");
+            for u in urls {
+                let host = u.trim_start_matches("https://").trim_end_matches('/');
+                text.push_str(&download::netscape(&read_cookies(&w, u), host, now));
+            }
+            let _ = std::fs::create_dir_all(accounts_dir(&app2));
+            let saved = std::fs::write(account_file(&app2, id), text).is_ok();
+            let _ = w.close();
+            break saved;
+        };
+        log(&app2, &format!("downloader login | {id} | {}", if ok { "ok" } else { "closed" }));
+        let _ = app2.emit("dl-login", json!({ "site": id, "ok": ok }));
+    });
+    Ok(())
 }
 
 /// Abre o arquivo baixado no player padrão do Windows.

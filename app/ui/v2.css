@@ -873,3 +873,15 @@
 .dk-ttl.can-rename:hover{background:var(--fill)}
 .dk-rename{font:500 13px var(--font);color:var(--text);background:var(--stage);border:1px solid color-mix(in srgb,var(--blue) 60%,transparent);
   border-radius:6px;padding:2px 6px;margin:-3px -7px;outline:none;min-width:0;width:calc(100% + 14px)}
+
+/* contas */
+.dk-acc-row{display:flex;align-items:center;gap:10px;height:32px;font-size:12.5px}
+.dk-acc-name{flex:1;color:var(--text)}
+.dk-acc-on{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-2)}
+.dk-acc-on i{width:6px;height:6px;border-radius:50%;background:var(--green);opacity:.85}
+.dk-acc-row .link{font-size:12px;color:var(--text-3)}
+.dk-acc-row .link:hover{color:var(--text)}
+.dk-acc-row .dk-acc-in{color:var(--text-2)}
+.dk-acc-row .dk-acc-in:disabled{color:var(--text-3);cursor:default}
+.dk-acc-sub{font-size:11px;line-height:15px;color:var(--text-3);margin:6px 0 0}
+.dk-err-acts .dk-login{color:var(--blue)}
