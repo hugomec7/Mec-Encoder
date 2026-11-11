@@ -43,11 +43,13 @@ for i, (path, fps, vf) in enumerate(clips):
             # sem referência só pode ser depois do fim (e o motor entrega o último quadro)
             ok = n / fps >= dur[i] - 0.5 / fps and head.startswith('img')
             print(f'  t={t:.3f} {"ok " if ok else "FALHOU"} {head} (depois do fim)'); bad += not ok; continue
-        same = data == ref
+        same = data == ref; d = 0.0
         if not same and data and len(data) == len(ref):
-            d = sum(abs(a - b) for a, b in zip(data[::101], ref[::101])) / len(data[::101])
-            same = d < 0.5
-        print(f'  t={t:.3f} {"ok " if same else "DIFERENTE"} {head} ({ms:.0f} ms)')
+            # o tone mapping pode variar 1 nível de cor entre versões/threads; quadro errado dá diferença bem maior
+            d = sum(abs(a - b) for a, b in zip(data[::7], ref[::7])) / len(data[::7])
+            same = d < 1.0
+        elif not same: d = -1
+        print(f'  t={t:.3f} {"ok " if same else "DIFERENTE"} {head} ({ms:.0f} ms, diferença média {d:.2f})')
         bad += not same
 p.stdin.write(b'quit\n'); p.stdin.flush(); p.wait(10)
 sys.exit(1 if bad else 0)
