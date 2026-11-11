@@ -1,6 +1,8 @@
 name: Diag HDR preview chain
 on:
-  workflow_dispatch:
+  push:
+    branches: [player]
+    paths: [".github/workflows/diag.yml"]
 jobs:
   win:
     runs-on: windows-latest
