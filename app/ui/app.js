@@ -163,7 +163,7 @@
     // o que faltar no idioma escolhido vem do inglês
     const en = window.MEC_I18N.en; const tr = window.MEC_I18N[S.set.lang] || {};
     L = Object.assign({}, en, tr);
-    ['act', 'errs', 'colors', 'tagDesc', 'afterOn'].forEach((k) => { L[k] = Object.assign({}, en[k], tr[k]); });
+    ['act', 'errs', 'colors', 'tagDesc', 'afterOn', 'dlErrs'].forEach((k) => { L[k] = Object.assign({}, en[k], tr[k]); });
     root.lang = locale();
     const txt = { lQueue: L.queue, bClearDone: L.clearDone, lDropTitle: L.dropTitle, lDropSub: L.dropSub,
       lCompare: L.compare, lPresets: L.presets, bManage: L.manage, lModified: L.modified,
@@ -178,6 +178,8 @@
     if (S.plReady) { renderPlayUi(); applyVol(); }
     $('#lCutSplit').textContent = L.cutSplitBtn; $('#lCutJoin').textContent = L.cutJoinBtn; $('#cutKeys').innerHTML = kf(L.cutKeysTxt); $('#tlHint').textContent = kf(L.tlHint);
     renderRenderBtn(); renderUpdateBtn(); if ($('#bAfter')) renderAfter();
+    $('#tConv').textContent = L.tabConvert; $('#tDl').textContent = L.tabDownload;
+    if (S.view === 'dl') { dlRenderSide(); dlRender(); }
   }
 
   /* ---------- mídia ---------- */
@@ -2287,7 +2289,7 @@
   function renderKeysPage() {
     $('#sheetBody').innerHTML = `
       <div class="keys-top"><span>${L.shortcutsHint}</span><button class="link keys-reset" id="bKeysReset">${L.resetKeys}</button></div>
-      ${[['play', L.kgPlay], ['cutter', L.kgCutter], ['timeline', L.kgTimeline]].map(([g, t]) => `<div class="group keys-group"><div class="keys-title">${t}</div>${KEYS.filter((x) => x[2] === g).map(([a]) =>
+      ${[['download', L.kgDownload], ['play', L.kgPlay], ['cutter', L.kgCutter], ['timeline', L.kgTimeline]].map(([g, t]) => `<div class="group keys-group"><div class="keys-title">${t}</div>${KEYS.filter((x) => x[2] === g).map(([a]) =>
         row(L.act[a], `<button class="keycap ${S.keyCapture === a ? 'capturing' : ''} ${keyOf(a) ? '' : 'empty'}" data-key="${a}">${S.keyCapture === a ? L.pressKey : esc(keyLabel(keyOf(a)))}</button>`)).join('')}</div>`).join('')}
 `;
     $$('#sheetBody [data-key]').forEach((b) => { b.onclick = () => { S.keyCapture = S.keyCapture === b.dataset.key ? null : b.dataset.key; renderSheet(); }; });
@@ -2313,6 +2315,7 @@
     ['goIn', 'Shift+I', 'timeline'], ['goOut', 'Shift+O', 'timeline'], ['goStart', 'Home', 'timeline'], ['goEnd', 'End', 'timeline'],
     ['play', 'Space', 'play'], ['skipCuts', 'Shift+Space', 'play'], ['shuttleBack', 'J', 'play'], ['shuttleStop', 'K', 'play'], ['shuttleFwd', 'L', 'play'],
     ['loop', 'Ctrl+L', 'play'],
+    ['dlVideo', 'Ctrl+V', 'download'], ['dlAudio', 'Ctrl+Shift+V', 'download'],
   ];
   const keyOf = (a) => { const k = S.set.keys && S.set.keys[a]; return k != null ? k : (KEYS.find((x) => x[0] === a) || [])[1] || ''; };
   // tecla do evento → "Ctrl+Shift+X", "S", "ArrowLeft", "=" (símbolos já vêm com o Shift aplicado)
@@ -2329,6 +2332,9 @@
   const kf = (str) => String(str).replace(/\{(\w+)\}/g, (m, k) => (KF[k] ? esc(keyLabel(keyOf(KF[k]))) : m));
   function runKey(a, e) {
     const q = selItem(); const cut = !!S.cutter;
+    if (a === 'dlVideo' || a === 'dlAudio') { if (S.view !== 'dl') return false; dlQuick(a === 'dlVideo' ? 'video' : 'audio'); return true; }
+    // na aba Baixar, as teclas do conversor não mexem no vídeo escondido
+    if (S.view === 'dl') return false;
     switch (a) {
       case 'openCutter': if (!cut && q) { openCutter(true); return true; } return false;
       case 'markIn': if (cut) { markTrim('a'); return true; } return false;
@@ -2378,19 +2384,375 @@
     if (S.keyCapture) { captureKey(e); return; }
     if (S.cutter && !e.target.closest('input') && e.key === 'Escape' && !$('#menu').classList.contains('show')) { e.preventDefault(); openCutter(false); return; }
     if (e.key === 'Escape') { if (S.powerEnd) { S.powerEnd(); return; } openNews(false); openSheet(false); closeMenu(); if (S.picked.size > 1 && !e.target.closest('input')) { selectOnly(S.sel); renderAll(); } }
-    if (e.target.closest('input')) return;
+    if (e.target.closest('input, textarea')) return;
     if (root.classList.contains('sheet-open')) return;
+    // Ctrl+1 Converter · Ctrl+2 Baixar
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key === '1' || e.key === '2') && !S.cutter) { e.preventDefault(); setView(e.key === '2' ? 'dl' : 'conv'); return; }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'o' && !e.altKey && !KEYS.some(([x]) => keyOf(x) === keyName(e))) { e.preventDefault(); if (REAL) inv('pick', { folder: e.shiftKey }); return; }
     const k = keyName(e);
     if (k) {
       const hit = KEYS.find(([a]) => keyOf(a) === k) || (k === '+' && !KEYS.some(([a]) => keyOf(a) === '+') ? ['zoomIn'] : null);
       if (hit && runKey(hit[0], e)) { e.preventDefault(); return; }
     }
+    if (S.view === 'dl') return;
     if (e.key === 'Delete' && S.picked.size && !S.cutter) pickedItems().forEach((q) => removeItem(q.id));
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a' && S.queue.length && !S.cutter) {
       e.preventDefault(); S.picked = new Set(S.queue.map((q) => q.id)); if (S.sel == null) S.sel = S.queue[0].id; renderAll(true);
     }
   });
+
+  /* ---------- aba Baixar ----------
+     Dois botões rápidos pegam o link do Ctrl+C e baixam na maior qualidade, sem perguntar nada.
+     Até 3 downloads ao mesmo tempo; a lista fica guardada neste PC (só os que terminaram). */
+  const DL = { list: [], running: 0, tools: null, setup: null, clip: [], seq: 0, entered: false, updating: false };
+  const DL_MAX = 3;
+  const dlSet = () => { S.set.dl = Object.assign({ web: true, audio: 'wav', dir: '', multi: 'video' }, S.set.dl || {}); return S.set.dl; };
+  const DL_ICONS = {
+    folder: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M2 4.8A1.8 1.8 0 0 1 3.8 3h2.6l1.5 1.5h4.3A1.8 1.8 0 0 1 14 6.3v5A1.8 1.8 0 0 1 12.2 13H3.8A1.8 1.8 0 0 1 2 11.2z"/></svg>',
+    queue: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2l6 3.3-6 3.3-6-3.3z"/><path d="M2 8.7l6 3.3 6-3.3"/></svg>',
+    note: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 12V3.5l7-1.5V10.5"/><circle cx="4.2" cy="12" r="1.8"/><circle cx="11.2" cy="10.5" r="1.8"/></svg>',
+    film: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><rect x="2.5" y="3" width="11" height="10" rx="2"/><path d="M6.8 6.2v3.6L9.8 8z" fill="currentColor"/></svg>',
+    clip: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><rect x="3.5" y="2.5" width="9" height="11.5" rx="2"/><path d="M6 2.5h4v2H6z"/></svg>',
+    ok: '<svg class="dk-ok" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5l3 3 6-7"/></svg>',
+  };
+  // links de um texto: com https://, com www. ou "dominio.com/caminho" numa linha
+  function dlLinks(text) {
+    const out = [];
+    String(text || '').split(/\s+/).forEach((w) => {
+      let u = w.trim().replace(/^[<("'[]+|[>)"'\],.;]+$/g, '');
+      if (!u) return;
+      if (/^www\./i.test(u)) u = 'https://' + u;
+      else if (!/^https?:\/\//i.test(u)) { if (/^[\w-]+(\.[\w-]+)+\/\S+/.test(u)) u = 'https://' + u; else return; }
+      try { const x = new URL(u); if (!/^https?:$/.test(x.protocol) || !x.hostname.includes('.')) return; } catch { return; }
+      if (!out.includes(u)) out.push(u);
+    });
+    return out;
+  }
+  const dlShort = (u) => u.replace(/^https?:\/\/(www\.)?/i, '');
+  const SITE = { youtube: 'YouTube', tiktok: 'TikTok', twitter: 'X', instagram: 'Instagram', facebook: 'Facebook', reddit: 'Reddit', vimeo: 'Vimeo', twitch: 'Twitch', kwai: 'Kwai', pinterest: 'Pinterest', dailymotion: 'Dailymotion', soundcloud: 'SoundCloud', threads: 'Threads', bluesky: 'Bluesky', generic: '' };
+  function dlSite(it) {
+    const k = String((it.meta && it.meta.site) || '').toLowerCase();
+    const hit = Object.keys(SITE).find((s) => k.startsWith(s));
+    if (hit && SITE[hit]) return SITE[hit];
+    try { return new URL(it.url).hostname.replace(/^(www|m|mobile|vm|vt)\./, ''); } catch { return ''; }
+  }
+  const dlBytes = (b) => fmtMB(b / 1e6);
+  const dlDur = (s) => { s = Math.round(s || 0); const h = Math.floor(s / 3600); const m = Math.floor(s / 60) % 60; const x = String(s % 60).padStart(2, '0'); return h ? `${h}:${String(m).padStart(2, '0')}:${x}` : `${m}:${x}`; };
+  const dlEta = (s) => (s == null || !isFinite(s) ? '' : dlDur(s));
+  const CODEC = { h264: 'H.264', avc1: 'H.264', vp9: 'VP9', vp09: 'VP9', av01: 'AV1', av1: 'AV1', hevc: 'HEVC', h265: 'HEVC', hvc1: 'HEVC', hev1: 'HEVC' };
+  const dlCodec = (c) => { const k = String(c || '').toLowerCase().split('.')[0]; return CODEC[k] || (k && k !== 'none' ? k.toUpperCase() : ''); };
+
+  function dlSave() {
+    const keep = DL.list.filter((it) => ['done', 'err', 'cancel'].includes(it.status)).slice(0, 60)
+      .map(({ id, url, kind, status, meta, files, size, web, err, errCode, t }) => ({ id, url, kind, status, meta, files, size, web, err, errCode, t }));
+    store.set('mec.downloads', JSON.stringify(keep));
+  }
+  function dlLoad() {
+    try { DL.list = JSON.parse(store.get('mec.downloads') || '[]').filter((it) => it && it.url); } catch { DL.list = []; }
+    DL.seq = DL.list.reduce((m, it) => Math.max(m, it.id || 0), Date.now());
+  }
+
+  function setView(v, quiet) {
+    v = v === 'dl' ? 'dl' : 'conv';
+    if (v === 'dl' && S.cutter) openCutter(false);
+    if (v === 'dl' && PL.on) playStop(null, true);
+    S.view = v; root.dataset.view = v; closeMenu();
+    $$('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.view === v));
+    if (!quiet && S.set.view !== v) { S.set.view = v; saveSettings(); }
+    if (v === 'dl') dlEnter();
+    else requestAnimationFrame(() => { fitFrames(); drawWave(); });
+  }
+  $$('#tabs button').forEach((b) => { b.onclick = () => setView(b.dataset.view); });
+
+  // primeira vez na aba: confere o yt-dlp e o Deno; se faltar, baixa os dois sozinho
+  async function dlEnter() {
+    dlRenderSide(); dlRender(); dlClipRead();
+    if (DL.entered) return; DL.entered = true;
+    if (!REAL) { DL.tools = { ytdlp: '2026.11.03', deno: true }; dlRenderSide(); return; }
+    try { DL.tools = await inv('dl_status'); } catch { DL.tools = { ytdlp: '', deno: false }; }
+    if (!DL.tools.ytdlp || !DL.tools.deno) dlInstall(); else { dlRenderSide(); dlAutoUpdate(); dlPump(); }
+  }
+  async function dlInstall() {
+    DL.setup = { item: 'ytdlp', done: 0, total: 0, err: null }; dlRender();
+    try {
+      const v = await inv('dl_install'); DL.tools = { ytdlp: v, deno: true }; DL.setup = null;
+      S.set.dlUpdated = Date.now(); saveSettings();
+    } catch (e) { DL.setup = { err: String(e) }; }
+    dlRender(); dlRenderSide(); dlPump();
+  }
+  // o site muda, o yt-dlp acompanha: atualiza no máximo uma vez por dia, sem nada baixando
+  async function dlAutoUpdate() {
+    if (!REAL || DL.updating || !DL.tools || !DL.tools.ytdlp || DL.running) return;
+    if (Date.now() - (S.set.dlUpdated || 0) < 20 * 3600e3) return;
+    DL.updating = true;
+    try { const v = await inv('dl_update'); if (v) DL.tools.ytdlp = v; S.set.dlUpdated = Date.now(); saveSettings(); } catch {}
+    DL.updating = false; dlRenderSide(); dlPump();
+  }
+  setInterval(() => { if (S.view === 'dl') dlAutoUpdate(); }, 3600e3);
+
+  /* Ctrl+C: lido ao entrar na aba, ao voltar para o app e a cada 1,5 s com a aba aberta */
+  async function dlClipRead() {
+    let t = '';
+    if (REAL) { try { t = await inv('dl_clipboard'); } catch { try { t = await navigator.clipboard.readText(); } catch {} } }
+    else t = qs.get('clip') != null ? qs.get('clip') : 'https://www.tiktok.com/@frankiebruno/video/7431804219857';
+    const links = dlLinks(t);
+    if (links.join() !== DL.clip.join()) { DL.clip = links; dlRenderClip(); }
+  }
+  setInterval(() => { if (S.view === 'dl' && document.hasFocus()) dlClipRead(); }, 1500);
+  window.addEventListener('focus', () => { if (S.view === 'dl') dlClipRead(); });
+  function dlRenderClip() {
+    const c = DL.clip;
+    $('#dlClip').innerHTML = c.length
+      ? `${DL_ICONS.clip}<span>${esc(L.dlClip)}</span><code title="${esc(c.join('\n'))}">${esc(c.length > 1 ? L.dlClipN(c.length) : dlShort(c[0]))}</code>`
+      : `${DL_ICONS.clip}<span>${esc(L.dlClipNone)}</span>`;
+  }
+
+  async function dlQuick(kind) {
+    await dlClipRead();
+    if (!DL.clip.length) { toast(L.dlNoLink); return; }
+    dlAdd(DL.clip, kind);
+  }
+  function dlAdd(urls, kind) {
+    const now = Date.now();
+    urls.slice().reverse().forEach((url) => {
+      DL.list.unshift({ id: ++DL.seq, url, kind, status: 'wait', meta: null, step: null, t: now, web: '' });
+    });
+    dlRender(); dlPump();
+  }
+  function dlPump() {
+    if (!DL.tools || !DL.tools.ytdlp || DL.setup || DL.updating) return;
+    const waiting = DL.list.filter((it) => it.status === 'wait').reverse();
+    while (DL.running < DL_MAX && waiting.length) dlRun(waiting.shift());
+  }
+  async function dlRun(it) {
+    const set = dlSet();
+    it.status = 'run'; it.step = { stage: 'download', p: 0, done: 0, total: 0, speed: 0, eta: null }; it.err = null; it.errCode = null;
+    it.webOn = set.web; it.audioFmt = set.audio;
+    DL.running++; dlPatch(it);
+    if (!REAL) { dlDemoRun(it); return; }
+    try {
+      const d = await inv('dl_start', { id: it.id, url: it.url, kind: it.kind, web: !!set.web, audio: set.audio, dest: set.dir || null });
+      Object.assign(it, { status: 'done', files: d.files, size: d.size, web: d.web, meta: Object.assign({}, it.meta, d.meta.title ? d.meta : {}) });
+      notify(L.dlDone((it.meta && it.meta.title) || dlShort(it.url)));
+    } catch (e) {
+      const s = String(e);
+      if (s === 'cancelled') it.status = 'cancel';
+      else { const i = s.indexOf('|'); it.status = 'err'; it.errCode = i > 0 ? s.slice(0, i) : s.startsWith('dl-') ? s : 'unknown'; it.err = i > 0 ? s.slice(i + 1) : s; }
+      if (it.errCode === 'dl-setup') { DL.entered = false; dlEnter(); }
+    }
+    DL.running--; it.step = null;
+    dlPatch(it); dlSave(); dlRenderHead(); dlPump(); dlAutoUpdate();
+  }
+  function dlCancel(it) {
+    if (it.status === 'wait') { it.status = 'cancel'; dlPatch(it); dlSave(); return; }
+    if (REAL) inv('dl_cancel', { id: it.id }).catch(() => {}); else if (it.timer) { clearInterval(it.timer); it.status = 'cancel'; DL.running--; dlPatch(it); dlPump(); }
+  }
+  function dlRetry(it) { it.status = 'wait'; it.err = null; it.errCode = null; dlPatch(it); dlPump(); }
+  function dlRemove(it) { DL.list = DL.list.filter((x) => x !== it); dlSave(); dlRender(); }
+
+  function dlErrText(it) {
+    const c = it.errCode;
+    return (L.dlErrs && L.dlErrs[c]) || (L.errs && L.errs[c]) || L.dlErrs.unknown;
+  }
+  function dlThumb(it) {
+    if (it.kind === 'audio') return `<span class="dk-au">${DL_ICONS.note}</span>`;
+    const m = it.meta || {};
+    const o = m.width && m.height ? (m.height > m.width * 1.1 ? 'v' : m.width > m.height * 1.1 ? 'h' : 's') : 'v';
+    const ph = `<span class="dk-ph">${it.status === 'err' ? ICONS.x : DL_ICONS.film}</span>`;
+    return { o, html: m.thumbnail ? `<img src="${esc(m.thumbnail)}" referrerpolicy="no-referrer" alt="" loading="lazy" data-ph="1">` : ph };
+  }
+  function dlMetaLine(it) {
+    const m = it.meta || {}; const site = dlSite(it); const p = [];
+    if (it.kind === 'audio') { p.push(String(it.audioFmt || dlSet().audio).toUpperCase()); }
+    else {
+      if (m.width && m.height) p.push(`${m.width}×${m.height}`);
+      if (m.fps) p.push(`${num(m.fps, 2)} fps`);
+    }
+    if (m.duration) p.push(dlDur(m.duration));
+    if (it.status === 'run' && it.kind !== 'audio' && m.vcodec) { const c = dlCodec(m.vcodec); if (c) p.push(c); }
+    return `${site ? `<b>${esc(site)}</b>` : ''}${site && p.length ? ' · ' : ''}${esc(p.join(' · '))}`;
+  }
+  function dlStatus(it) {
+    const st = it.step || {}; const pct = (x) => `${Math.round(clamp(x || 0, 0, 1) * 100)}%`;
+    const xBtn = `<button class="dk-ib x" data-act="cancel" title="${esc(L.cancel)}">${ICONS.x}</button>`;
+    if (it.status === 'wait') return `<div class="dk-done"><span class="dk-muted">${esc(L.dlWait)}</span><span class="dk-acts">${xBtn}</span></div>`;
+    if (it.status === 'run') {
+      const stage = st.stage || 'download';
+      if (stage === 'download') {
+        const sub = [st.total ? L.dlOf(dlBytes(st.done), dlBytes(st.total)) : st.done ? dlBytes(st.done) : '', st.speed ? dlBytes(st.speed) + '/s' : '', dlEta(st.eta)].filter(Boolean).join(' · ');
+        return `<div class="dk-st-top"><span>${esc(L.dlDownloading)}</span><span class="dk-pct">${pct(st.p)}</span>${xBtn}</div>
+          <div class="dk-bar"><i style="--p:${clamp(st.p || 0, 0, 1)}"></i></div><div class="dk-st-sub">${esc(sub || ' ')}</div>`;
+      }
+      if (stage === 'web' || stage === 'remux') {
+        const m = it.meta || {}; const from = dlCodec(m.vcodec);
+        const eng = S.engine.status === 'nvenc' ? 'NVENC' : 'CPU';
+        const sub = stage === 'remux' ? 'H.264 · AAC' : [from && from !== 'H.264' ? `${from} → H.264` : 'H.264 · AAC', eng, st.speed ? num(st.speed, 1) + '×' : ''].filter(Boolean).join(' · ');
+        return `<div class="dk-st-top"><span>${esc(L.dlWebing)}</span><span class="dk-pct">${pct(st.p)}</span>${xBtn}</div>
+          <div class="dk-bar dk-web"><i style="--p:${clamp(st.p || 0, 0, 1)}"></i></div><div class="dk-st-sub">${esc(sub)}</div>`;
+      }
+      const label = stage === 'merge' ? L.dlMerging : stage === 'audio' ? L.dlConverting(String(it.audioFmt || dlSet().audio).toUpperCase()) : stage === 'update' ? L.dlUpdating : L.dlDownloading;
+      return `<div class="dk-st-top"><span>${esc(label)}</span>${xBtn}</div><div class="dk-bar dk-web"><i style="--p:1"></i></div><div class="dk-st-sub"> </div>`;
+    }
+    const rm = `<button class="dk-ib x hov" data-act="remove" title="${esc(L.dlRemove)}">${ICONS.x}</button>`;
+    if (it.status === 'done') {
+      const toQ = it.kind === 'video' || it.kind === 'audio' ? `<button class="dk-ib" data-act="queue" title="${esc(L.dlToQueue)}">${DL_ICONS.queue}</button>` : '';
+      return `<div class="dk-done">${DL_ICONS.ok}${esc(L.dlReady)}<span class="dk-sz">${it.size ? dlBytes(it.size) : ''}</span><span class="dk-acts">${toQ}<button class="dk-ib" data-act="show" title="${esc(L.showInFolder)}">${DL_ICONS.folder}</button>${rm}</span></div>`;
+    }
+    const acts = `<div class="dk-err-acts"><button class="link" data-act="retry">${esc(L.dlRetry)}</button><button class="link" data-act="remove">${esc(L.dlRemove)}</button></div>`;
+    if (it.status === 'cancel') return `<span class="dk-muted">${esc(L.dlCancelled)}</span>${acts}`;
+    return `<span class="dk-err" title="${esc(it.err || '')}">${esc(dlErrText(it))}</span>${acts}`;
+  }
+  function dlRowHtml(it) {
+    const th = dlThumb(it); const m = it.meta || {};
+    const thumb = typeof th === 'string' ? `<div class="dk-th">${th}</div>` : `<div class="dk-th ${th.o}">${th.html}</div>`;
+    return `<div class="dk-row" data-dl="${it.id}">${thumb}
+      <div class="dk-info"><div class="dk-ttl" title="${esc(it.url)}">${esc(m.title || dlShort(it.url))}</div><div class="dk-meta">${dlMetaLine(it)}</div></div>
+      <div class="dk-st">${dlStatus(it)}</div></div>`;
+  }
+  function dlFixImgs(scope) {
+    $$('img[data-ph]', scope).forEach((img) => { img.onerror = () => { const s = document.createElement('span'); s.className = 'dk-ph'; s.innerHTML = DL_ICONS.film; img.replaceWith(s); }; });
+  }
+  function dlRenderHead() {
+    const n = DL.list.length;
+    $('#dlCount').textContent = n ? n : '';
+    $('#bDlClear').hidden = !DL.list.some((it) => ['done', 'err', 'cancel'].includes(it.status));
+  }
+  function dlRender() {
+    dlRenderHead();
+    const rows = $('#dlRows');
+    let html = '';
+    if (DL.setup) {
+      const s = DL.setup;
+      if (s.err) html += `<div class="dk-setup"><b>${esc(L.dlSetupFail)}</b><div class="dk-err-row"><span class="dk-err" title="${esc(s.err)}">${esc(String(s.err).slice(0, 120))}</span><button class="link" id="bDlSetupRetry">${esc(L.dlRetry)}</button></div></div>`;
+      else {
+        const p = s.total ? s.done / s.total : 0;
+        const what = s.item === 'deno' ? 'Deno' : 'yt-dlp';
+        html += `<div class="dk-setup"><b>${esc(L.dlSetup)}</b><span>${esc(L.dlSetupSub)}</span>
+          <div class="dk-st-top"><span>${esc(what)}</span><span class="dk-pct">${s.total ? Math.round(p * 100) + '%' : s.done ? dlBytes(s.done) : ''}</span></div>
+          <div class="dk-bar"><i style="--p:${p}"></i></div></div>`;
+      }
+    }
+    if (!DL.list.length && !DL.setup) {
+      rows.classList.add('is-empty');
+      rows.innerHTML = `<div class="dk-empty"><div>${DL_ICONS.folder}<b>${esc(L.dlEmptyT)}</b><span>${dlKf(L.dlEmptyS)}</span></div></div>`;
+      return;
+    }
+    rows.classList.remove('is-empty');
+    rows.innerHTML = html + DL.list.map(dlRowHtml).join('');
+    dlFixImgs(rows);
+    const r = $('#bDlSetupRetry'); if (r) r.onclick = dlInstall;
+  }
+  function dlPatch(it) {
+    const row = $(`.dk-row[data-dl="${it.id}"]`);
+    if (!row) { dlRender(); return; }
+    const tmp = document.createElement('div'); tmp.innerHTML = dlRowHtml(it); const fresh = tmp.firstElementChild;
+    // troca só o que mudou (a miniatura não pisca)
+    const oldImg = row.querySelector('.dk-th img'); const newImg = fresh.querySelector('.dk-th img');
+    if (!(oldImg && newImg && oldImg.getAttribute('src') === newImg.getAttribute('src'))) { row.querySelector('.dk-th').replaceWith(fresh.querySelector('.dk-th')); dlFixImgs(row); }
+    row.querySelector('.dk-info').replaceWith(fresh.querySelector('.dk-info'));
+    const st = row.querySelector('.dk-st'); const nst = fresh.querySelector('.dk-st');
+    const bar = st.querySelector('.dk-bar i'); const nbar = nst.querySelector('.dk-bar i');
+    // mesma etapa: só move a barra e troca os números (a barra anima)
+    if (bar && nbar && st.querySelector('.dk-st-top span').textContent === nst.querySelector('.dk-st-top span').textContent && !!bar.closest('.dk-web') === !!nbar.closest('.dk-web')) {
+      bar.style.cssText = nbar.style.cssText;
+      st.querySelector('.dk-pct') && (st.querySelector('.dk-pct').textContent = (nst.querySelector('.dk-pct') || {}).textContent || '');
+      const a = st.querySelector('.dk-st-sub'); const b = nst.querySelector('.dk-st-sub'); if (a && b) a.textContent = b.textContent;
+    } else st.replaceWith(nst);
+    dlRenderHead();
+  }
+  $('#dlRows').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-act]'); if (!b) return;
+    const it = DL.list.find((x) => x.id === +b.closest('.dk-row').dataset.dl); if (!it) return;
+    const a = b.dataset.act;
+    if (a === 'cancel') dlCancel(it);
+    else if (a === 'retry') dlRetry(it);
+    else if (a === 'remove') dlRemove(it);
+    else if (a === 'show') { if (REAL) inv('reveal', { path: (it.files || [])[0] }).catch(() => {}); else toast(L.revealToast); }
+    else if (a === 'queue') {
+      if (REAL) inv('add', { paths: it.files || [] }).catch((er) => toast(String(er)));
+      toast(L.dlSent((it.files || [1]).length), true); setView('conv');
+    }
+  });
+  $('#dlRows').addEventListener('dblclick', (e) => {
+    const r = e.target.closest('.dk-row'); if (!r || e.target.closest('button')) return;
+    const it = DL.list.find((x) => x.id === +r.dataset.dl);
+    if (it && it.status === 'done' && REAL) inv('reveal', { path: (it.files || [])[0] }).catch(() => {});
+  });
+  $('#bDlClear').onclick = () => { DL.list = DL.list.filter((it) => !['done', 'err', 'cancel'].includes(it.status)); dlSave(); dlRender(); };
+  $('#bDlOpen').onclick = () => { if (REAL) inv('dl_open_dir', { path: dlSet().dir || null }).catch((e) => toast(String(e))); else toast(L.revealToast); };
+  $('#bDlVideo').onclick = () => dlQuick('video');
+  $('#bDlAudio').onclick = () => dlQuick('audio');
+  const dlTyped = () => dlLinks($('#dlLinks').value);
+  function dlRenderMultiBtn() { const n = dlTyped().length; const b = $('#bDlMulti'); b.textContent = n ? L.dlGoN(n) : L.dlGo; b.disabled = !n; }
+  $('#dlLinks').addEventListener('input', dlRenderMultiBtn);
+  $('#dlLinks').addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); $('#bDlMulti').click(); } });
+  $('#bDlMulti').onclick = () => { const links = dlTyped(); if (!links.length) return; dlAdd(links, dlSet().multi === 'audio' ? 'audio' : 'video'); $('#dlLinks').value = ''; dlRenderMultiBtn(); };
+
+  // teclas configuradas viram keycaps nos botões
+  const dlKeycaps = (a) => { const k = keyOf(a); return k ? k.split('+').map((p) => `<kbd>${esc(keyLabel(p))}</kbd>`).join('') : ''; };
+  const dlKf = (str) => esc(String(str)).replace(/\{(dlv|dla)\}/g, (m, k) => dlKeycaps(k === 'dlv' ? 'dlVideo' : 'dlAudio'));
+  function dlPathShort(p) { const parts = String(p || '').split(/[\\/]/).filter(Boolean); return parts.length > 2 ? parts.slice(-2).join('\\') : String(p || ''); }
+  function dlRenderSide() {
+    const set = dlSet();
+    $('#lDlCap').textContent = L.dlCap; $('#lDlVideo').textContent = L.dlVideo; $('#lDlAudio').textContent = L.dlAudio;
+    $('#kDlVideo').innerHTML = dlKeycaps('dlVideo'); $('#kDlAudio').innerHTML = dlKeycaps('dlAudio');
+    $('#lDlMulti').textContent = L.dlMulti; $('#dlLinks').placeholder = L.dlPaste;
+    $('#dlMultiSeg').innerHTML = segH('dlMulti', set.multi, [['video', L.dlVideoShort], ['audio', L.dlAudioShort]]);
+    seg($('#dlMultiSeg .seg'), (v) => { set.multi = v; saveSettings(); });
+    dlRenderMultiBtn();
+    const dir = set.dir || (DL.tools && DL.tools.defaultDir) || (REAL ? '' : 'C:\\Users\\Hugo\\Downloads\\Mec Encoder');
+    $('#dlSet').innerHTML = `
+      <div class="row"><div class="lbl">${esc(L.dlWeb)}<small>${esc(L.dlWebSub)}</small></div><span class="switch ${set.web ? 'on' : ''}" id="dlWeb"></span></div>
+      <div class="row"><div class="lbl">${esc(L.dlAudioFmt)}</div>${segH('dlAudioFmt', set.audio, [['wav', 'WAV'], ['m4a', 'M4A'], ['mp3', 'MP3'], ['flac', 'FLAC']])}</div>
+      <div class="row"><div class="lbl">${esc(L.dlSaveIn)}</div><div class="dk-path"><code title="${esc(dir)}">${esc(dlPathShort(dir))}</code><button id="bDlDir">${esc(L.dlChange)}</button></div></div>`;
+    $('#dlWeb').onclick = () => { set.web = !set.web; saveSettings(); $('#dlWeb').classList.toggle('on', set.web); };
+    seg($('#dlSet .seg'), (v) => { set.audio = v; saveSettings(); });
+    $('#bDlDir').onclick = async () => {
+      let d = null;
+      if (REAL) { try { d = await inv('pick_dir', { start: dir || null }); } catch (e) { toast(String(e)); } } else d = 'D:\\Referencias';
+      if (d) { set.dir = d; saveSettings(); dlRenderSide(); }
+    };
+    $('#lDlTitle').textContent = L.dlTitle; $('#bDlClear').textContent = L.dlClear; $('#lDlOpen').textContent = L.dlOpen;
+    const t = DL.tools;
+    $('#dlFoot').innerHTML = t && t.ytdlp ? `<i></i>${esc(L.dlVer(t.ytdlp, dlWhen(S.set.dlUpdated)))}` : t ? `<i class="off"></i>${esc(L.dlNotReady)}` : '';
+    dlRenderClip();
+  }
+  function dlWhen(ms) {
+    if (!ms) return '';
+    const d0 = new Date(); d0.setHours(0, 0, 0, 0); const d1 = new Date(ms); d1.setHours(0, 0, 0, 0);
+    const days = Math.round((d0 - d1) / 864e5);
+    return days <= 0 ? L.dlToday : days === 1 ? L.dlYesterday : L.dlDaysAgo(days);
+  }
+
+  /* modo demonstração: andamento de mentira para ver a tela */
+  function dlDemoRun(it) {
+    const samples = [
+      { title: 'Honesty Drop with Porsche', site: 'TikTok', width: 1080, height: 1920, fps: 60, duration: 42, vcodec: 'h264', acodec: 'aac' },
+      { title: 'How I edit street interviews in Premiere Pro', site: 'Youtube', width: 3840, height: 2160, fps: 30, duration: 728, vcodec: 'vp09.00.51.08', acodec: 'opus' },
+    ];
+    it.meta = Object.assign({ thumbnail: '' }, samples[it.id % 2]);
+    let p = 0; const total = 29.6e6;
+    it.timer = setInterval(() => {
+      p += 0.07;
+      if (p < 1) it.step = { stage: 'download', p, done: total * p, total, speed: 8.2e6, eta: (1 - p) * 4 };
+      else if (p < 1.6 && it.kind === 'video' && it.meta.vcodec !== 'h264') it.step = { stage: 'web', p: (p - 1) / 0.6, speed: 6.1, eta: null };
+      else { clearInterval(it.timer); Object.assign(it, { status: 'done', size: total * 0.48, files: ['C:\\x.mp4'] }); it.step = null; DL.running--; dlSave(); dlPump(); }
+      dlPatch(it);
+    }, 250);
+  }
+  function dlDemo() {
+    const thumb = (hue, v) => 'data:image/svg+xml,' + encodeURIComponent(scene(hue, v).replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" '));
+    DL.list = [
+      { id: 5, url: 'https://www.tiktok.com/@frankiebruno/video/7431804219857', kind: 'video', status: 'run', meta: { title: 'Honesty Drop with Porsche', site: 'TikTok', width: 1080, height: 1920, fps: 60, duration: 42, vcodec: 'h264', thumbnail: thumb(20, true) },
+        step: { stage: 'download', p: 0.62, done: 18.4e6, total: 29.6e6, speed: 8.2e6, eta: 2 } },
+      { id: 4, url: 'https://www.youtube.com/watch?v=Qx81kLm2aZc', kind: 'video', status: 'run', meta: { title: 'How I edit street interviews in Premiere Pro', site: 'Youtube', width: 3840, height: 2160, fps: 30, duration: 728, vcodec: 'vp09.00.51.08', thumbnail: thumb(210, false) },
+        step: { stage: 'web', p: 0.38, speed: 6.1 } },
+      { id: 3, url: 'https://x.com/streetq/status/1856043291711', kind: 'video', status: 'done', size: 14.2e6, files: ['C:\\x.mp4'], meta: { title: 'Asked strangers for a hug in Times Square', site: 'Twitter', width: 720, height: 1280, fps: 30, duration: 58, thumbnail: thumb(330, true) } },
+      { id: 2, url: 'https://www.youtube.com/watch?v=mD1v3', kind: 'audio', audioFmt: 'wav', status: 'done', size: 55.3e6, files: ['C:\\x.wav'], meta: { title: 'Midnight Drive · lo-fi beat, no copyright', site: 'Youtube', duration: 192 } },
+      { id: 1, url: 'https://www.instagram.com/reel/DB7xQwPtL4e', kind: 'video', status: 'err', errCode: 'dl-login', err: '[Instagram] DB7xQwPtL4e: Requested content is not available, rate-limit reached or login required', meta: { site: 'Instagram' } },
+    ];
+    DL.running = 0; DL.seq = 10;
+  }
 
   /* ---------- atualização ---------- */
   function renderUpdateBtn() {
@@ -2665,6 +3027,7 @@
     $('#bMax').onclick = () => w.toggleMaximize();
     $('#bClose').onclick = () => {
       if (S.job && Date.now() - closeArmed > 3000) { closeArmed = Date.now(); toast(L.quitWhileRendering); return; }
+      if (!S.job && DL.running && Date.now() - closeArmed > 3000) { closeArmed = Date.now(); toast(L.dlQuitWhile); return; }
       if (S.job) inv('stop').catch(() => {});
       saveQueue(true).finally(() => w.close());
     };
@@ -2698,7 +3061,8 @@
       }
       if (!st.engine.ffmpeg) S.engine.status = 'missing';
     } catch (e) { console.error(e); }
-    applyTheme(); applyLang(); renderAll();
+    applyTheme(); dlLoad(); applyLang(); renderAll();
+    setView(S.set.view === 'dl' ? 'dl' : 'conv', true);
     requestAnimationFrame(() => inv('ready').catch(() => {}));
     restoreQueue(st0 && st0.queue);
     sendWatch();
@@ -2751,12 +3115,20 @@
       } renderQueue(); renderSheetIfOpen();
       if (p.status === 'cpu') toast(L.cpuWarn);
     });
+    on('dl-event', (p) => {
+      const it = DL.list.find((x) => x.id === p.id); if (!it || it.status !== 'run') return;
+      if (p.meta) it.meta = Object.assign({}, it.meta, p.meta);
+      if (p.step) it.step = p.step;
+      dlPatch(it);
+    });
+    on('dl-setup', (p) => { if (DL.setup && !DL.setup.err) { DL.setup = { item: p.item, done: p.done, total: p.total }; dlRender(); } });
     on('update-progress', (p) => { if (p.total) { S.updating = Math.round(p.done / p.total * 100); renderUpdateBtn(); renderUpdCard(); } });
     setTimeout(() => { if (autoUpd()) checkUpdate(false); prunePreviews(); }, 4000);
   }
 
   if (REAL) bootReal();
   else {
+    if (qs.get('dlempty')) DL.list = []; else dlDemo();
     applyTheme(); applyLang();
     if (qs.get('sel')) selectOnly(qs.get('sel') === 'none' ? null : +qs.get('sel'));
     if (qs.get('multi')) qs.get('multi').split(',').forEach((id) => S.picked.add(+id));
@@ -2782,6 +3154,8 @@
     if (qs.get('folder')) setTimeout(addFolder, 300);
     if (qs.get('run')) setTimeout(() => $('#bRender').click(), 50);
     renderUpdateBtn();
+    setView(qs.get('view') === 'dl' ? 'dl' : 'conv', true);
+    if (qs.get('dlsetup')) { DL.setup = { item: 'deno', done: 21e6, total: 47e6 }; dlRender(); }
   }
   addEventListener('resize', drawWave);
 })();

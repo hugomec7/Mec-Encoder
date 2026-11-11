@@ -1,6 +1,7 @@
 // Sem janela de console no Windows (versão final)
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod downloader;
 mod store;
 mod update;
 
@@ -60,6 +61,8 @@ pub struct AppState {
     /// Prévia leve sendo gerada agora (cancelar = marcar e matar o processo).
     proxy_job: Mutex<Option<Arc<AtomicBool>>>,
     proxy_children: Children,
+    /// Aba Baixar: downloads rodando.
+    downloads: Arc<downloader::Downloads>,
 }
 
 #[derive(Clone, Debug, serde::Deserialize, Serialize)]
@@ -923,7 +926,9 @@ fn main() {
                 player: Mutex::new(None),
                 proxy_job: Mutex::new(None),
                 proxy_children: Arc::new(Mutex::new(HashMap::new())),
+                downloads: Arc::new(downloader::Downloads::default()),
             });
+            downloader::clean_work(&handle);
             clean_partial(&handle);
             // prévias que ficaram pela metade
             for e in std::fs::read_dir(previews_dir(&handle)).into_iter().flatten().flatten() {
@@ -973,7 +978,8 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             pick, add, pick_dir, save_queue, restore_queue, power, set_watch, job_status, open_jobs_dir, automation_info, forget, duplicate, preview, waveform, render, stop, get_state, save_presets, save_settings,
-            default_presets, play_file, play_live, play_stop, play_proxy, previews_size, previews_clear, previews_prune, import_enc, export_presets, import_presets, reveal, open_data_dir, open_log, open_url, notify, ready, check_update, install_update
+            default_presets, play_file, play_live, play_stop, play_proxy, previews_size, previews_clear, previews_prune, import_enc, export_presets, import_presets, reveal, open_data_dir, open_log, open_url, notify, ready, check_update, install_update,
+            downloader::dl_status, downloader::dl_install, downloader::dl_update, downloader::dl_start, downloader::dl_cancel, downloader::dl_open_dir, downloader::dl_clipboard
         ])
         .build(tauri::generate_context!())
         .expect("error while building Mec Encoder")
@@ -983,6 +989,7 @@ fn main() {
                     state.cancel.store(true, Ordering::SeqCst);
                     kill_all(&state.children);
                     kill_all(&state.proxy_children);
+                    state.downloads.stop_all();
                     if let Some(s) = state.player.lock().unwrap().take() { s.stop_all(); }
                     // espera o ffmpeg soltar o arquivo e apaga o que ficou pela metade
                     for c in state.children.lock().unwrap().values_mut() { let _ = c.wait(); }

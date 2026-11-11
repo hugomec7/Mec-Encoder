@@ -12,6 +12,7 @@
 //! Só usa a biblioteca padrão; `serde` entra pela feature `serde` (usada pelo app).
 
 pub mod command;
+pub mod download;
 pub mod enc;
 pub mod preset;
 pub mod play;

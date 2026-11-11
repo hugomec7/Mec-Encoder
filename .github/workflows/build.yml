@@ -23,6 +23,8 @@ jobs:
         with:
           key: core
       - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+      - name: yt-dlp (Downloader test)
+        run: sudo curl -sSL -o /usr/local/bin/yt-dlp https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp && sudo chmod +x /usr/local/bin/yt-dlp && yt-dlp --version
       - name: Unit + end-to-end tests
         run: cargo test -p mec-core --features serde
       - name: Command line (mec)

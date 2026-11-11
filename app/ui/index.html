@@ -19,6 +19,7 @@
       Mec Encoder
       <svg class="chev" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 4.5L6 7l2.5-2.5"/></svg>
     </button>
+    <div class="tabs" id="tabs"><button data-view="conv" id="tConv"></button><button data-view="dl" id="tDl"></button></div>
     <div class="tb-actions">
       <button class="update-pill" id="bUpdate" hidden><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.5v8M4.5 7L8 10.5 11.5 7M3 13.5h10"/></svg><span></span></button>
 <span class="tb-sep"></span>
@@ -115,6 +116,31 @@
       </div>
     </section>
   </div>
+
+  <!-- ABA BAIXAR -->
+  <div class="dlv" id="dlView">
+    <aside class="dk-side">
+      <div class="dk-blk">
+        <p class="dk-cap" id="lDlCap"></p>
+        <button class="dk-btn dk-pri" id="bDlVideo"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.5v8M4.5 7L8 10.5 11.5 7M3 13.5h10"/></svg><span id="lDlVideo"></span><span class="dk-keys" id="kDlVideo"></span></button>
+        <button class="dk-btn dk-sec" id="bDlAudio"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 12V3.5l7-1.5V10.5"/><circle cx="4.2" cy="12" r="1.8"/><circle cx="11.2" cy="10.5" r="1.8"/></svg><span id="lDlAudio"></span><span class="dk-keys" id="kDlAudio"></span></button>
+        <div class="dk-clip" id="dlClip"></div>
+      </div>
+      <div class="dk-blk">
+        <p class="dk-cap" id="lDlMulti"></p>
+        <textarea id="dlLinks" spellcheck="false"></textarea>
+        <div class="dk-multi"><div id="dlMultiSeg"></div><button class="dk-go" id="bDlMulti"></button></div>
+      </div>
+      <div class="dk-blk dk-set" id="dlSet"></div>
+      <div class="dk-foot" id="dlFoot"></div>
+    </aside>
+    <section class="dk-list">
+      <div class="dk-lhead"><h2 id="lDlTitle"></h2><span class="dk-n" id="dlCount"></span><button class="link" id="bDlClear"></button>
+        <button class="dk-ghost" id="bDlOpen"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M2 4.8A1.8 1.8 0 0 1 3.8 3h2.6l1.5 1.5h4.3A1.8 1.8 0 0 1 14 6.3v5A1.8 1.8 0 0 1 12.2 13H3.8A1.8 1.8 0 0 1 2 11.2z"/></svg><span id="lDlOpen"></span></button></div>
+      <div class="dk-rows" id="dlRows"></div>
+    </section>
+  </div>
+
 </div>
 
 <!-- configurações -->
@@ -172,6 +198,7 @@
   <script src="i18n-ja.js"></script>
   <script src="i18n-ko.js"></script>
   <script src="i18n-zh.js"></script>
+  <script src="i18n-dl.js"></script>
 <script src="news.js"></script>
 <script src="demo.js"></script>
 <script src="app.js"></script>
