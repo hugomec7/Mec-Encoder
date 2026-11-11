@@ -936,3 +936,32 @@
 .dk-pk-n{font:400 11px var(--mono);color:var(--text-3);text-align:right}
 .dk-pk-t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dk-pk-go:disabled{opacity:.45;cursor:default}
+
+/* aba Baixar enxuta: Baixar rápido, Baixar…, Salvar em; o resto em Opções */
+.dk-hint{font-size:11.5px;line-height:16px;color:var(--text-3);margin:6px 2px 12px}
+.dk-side .dk-sec{margin-top:0}
+.dk-side .dk-clip{margin-top:4px}
+.dk-foot{flex-direction:column;align-items:stretch;gap:10px}
+.dk-foot #dlFoot{display:flex;gap:8px;align-items:center}
+.dk-opts{height:32px;border-radius:9px;display:flex;align-items:center;gap:8px;padding:0 10px;font:500 12.5px var(--font);color:var(--text-2);background:var(--fill)}
+.dk-opts:hover{color:var(--text);background:var(--fill-2)}
+.dk-opts svg{width:15px;height:15px}
+.dk-opts-modal{width:min(440px,calc(100vw - 48px))}
+.dk-opts-modal .dk-pk-body{padding:4px 20px 16px}
+.dk-opts-modal .dk-set .row{padding:6px 0;min-height:48px}
+.dk-opts-modal .dk-set .row+.row::before{left:0}
+.dk-opts-modal .dk-acc{border-top:1px solid var(--sep);margin-top:4px;padding-top:12px}
+.dk-th{position:relative}
+.dk-th-play{position:absolute;inset:0;margin:auto;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;
+  background:rgba(0,0,0,.55);color:#fff;opacity:0;transition:opacity .16s var(--ease),transform .12s var(--ease)}
+.dk-th-play svg{width:13px;height:13px;margin-left:2px}
+.dk-row:hover .dk-th-play,.dk-th-play:focus-visible{opacity:1}
+.dk-th-play:hover{background:rgba(0,0,0,.72)}
+.dk-th-play:active{transform:scale(.92)}
+.dk-pk-link{padding:14px 16px 0 20px}
+.dk-pk-link textarea{width:100%;box-sizing:border-box;resize:none;border-radius:9px;background:var(--stage);border:1px solid var(--stroke-2);color:var(--text);
+  font:400 12px/18px var(--mono);padding:7px 10px;outline:none;min-height:34px;max-height:96px;overflow:auto;display:block}
+.dk-pk-link textarea:focus{border-color:color-mix(in srgb,var(--blue) 60%,transparent)}
+.dk-pk-link textarea::placeholder{font-family:var(--font);color:var(--text-3)}
+.dk-pk-link+.dk-pk-head{border-top:0}
+.dk-pk-url{font:400 12px var(--mono);color:var(--text-2)}

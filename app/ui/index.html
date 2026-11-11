@@ -119,25 +119,21 @@
 
   <!-- janela "Escolher qualidade" da aba Baixar -->
   <div class="dk-modal-bg" id="dlPickBg" hidden><div class="dk-modal" id="dlPick" role="dialog"></div></div>
+  <div class="dk-modal-bg" id="dlOptsBg" hidden><div class="dk-modal dk-opts-modal" role="dialog"><div class="dk-pk-head"><div><b id="lDlOptsT"></b></div><button class="dk-ib x" id="bDlOptsX"></button></div>
+    <div class="dk-pk-body"><div class="dk-set" id="dlOptSet"></div><div class="dk-acc" id="dlAcc"></div></div></div></div>
 
   <!-- ABA BAIXAR -->
   <div class="dlv" id="dlView">
     <aside class="dk-side">
       <div class="dk-blk">
-        <p class="dk-cap" id="lDlCap"></p>
-        <button class="dk-btn dk-pri" id="bDlVideo"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.5v8M4.5 7L8 10.5 11.5 7M3 13.5h10"/></svg><span id="lDlVideo"></span><span class="dk-keys" id="kDlVideo"></span></button>
-        <button class="dk-btn dk-sec" id="bDlAudio"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 12V3.5l7-1.5V10.5"/><circle cx="4.2" cy="12" r="1.8"/><circle cx="11.2" cy="10.5" r="1.8"/></svg><span id="lDlAudio"></span><span class="dk-keys" id="kDlAudio"></span></button>
+        <button class="dk-btn dk-pri" id="bDlVideo"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M9.2 1.6 3.4 9h4l-1 5.4L12.6 7h-4z"/></svg><span id="lDlVideo"></span><span class="dk-keys" id="kDlVideo"></span></button>
+        <p class="dk-hint" id="lDlCap"></p>
+        <button class="dk-btn dk-sec" id="bDlPick"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.5v8M4.5 7L8 10.5 11.5 7M3 13.5h10"/></svg><span id="lDlPick"></span></button>
+        <p class="dk-hint" id="lDlPickSub"></p>
         <div class="dk-clip" id="dlClip"></div>
-        <button class="dk-pickbtn" id="bDlPick"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 4.5h10M3 8h10M3 11.5h10"/><circle cx="6" cy="4.5" r="1.4" fill="var(--side)"/><circle cx="10.5" cy="8" r="1.4" fill="var(--side)"/><circle cx="5" cy="11.5" r="1.4" fill="var(--side)"/></svg><span id="lDlPick"></span></button>
-      </div>
-      <div class="dk-blk">
-        <p class="dk-cap" id="lDlMulti"></p>
-        <textarea id="dlLinks" spellcheck="false"></textarea>
-        <div class="dk-multi"><div id="dlMultiSeg"></div><button class="dk-go" id="bDlMulti"></button></div>
       </div>
       <div class="dk-blk dk-set" id="dlSet"></div>
-      <div class="dk-blk dk-acc" id="dlAcc"></div>
-      <div class="dk-foot" id="dlFoot"></div>
+      <div class="dk-foot"><button class="dk-opts" id="bDlOpts"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 4.5h10M3 8h10M3 11.5h10"/><circle cx="6" cy="4.5" r="1.4" fill="var(--side)"/><circle cx="10.5" cy="8" r="1.4" fill="var(--side)"/><circle cx="5" cy="11.5" r="1.4" fill="var(--side)"/></svg><span id="lDlOpts"></span></button><span id="dlFoot"></span></div>
     </aside>
     <section class="dk-list">
       <div class="dk-lhead"><h2 id="lDlTitle"></h2><span class="dk-n" id="dlCount"></span><button class="link" id="bDlClear"></button>

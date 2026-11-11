@@ -2549,7 +2549,7 @@
     DL.running++; dlPatch(it);
     if (!REAL) { dlDemoRun(it); return; }
     try {
-      const height = it.height != null ? it.height : +set.quality || 0;
+      const height = it.height != null ? it.height : 0;
       const d = await inv('dl_start', { id: it.id, url: it.url, kind: it.kind, web: !!set.web, audio: set.audio, dest: set.dir || null,
         height, subs: it.subs || [], thumb: !!it.thumb, section: it.section || null });
       Object.assign(it, { status: 'done', files: d.files, size: d.size, web: d.web, extras: d.extras || [], meta: Object.assign({}, it.meta, d.meta.title ? d.meta : {}) });
@@ -2619,9 +2619,8 @@
     const rm = `<button class="dk-ib x hov" data-act="remove" title="${esc(L.dlRemove)}">${ICONS.x}</button>`;
     if (it.status === 'done') {
       const toQ = it.kind !== 'thumb' ? `<button class="dk-ib" data-act="queue" title="${esc(L.dlToQueue)}">${DL_ICONS.queue}</button>` : '';
-      const play = `<button class="dk-ib" data-act="play" title="${esc(L.dlPlay)}">${DL_ICONS.play}</button>`;
       const ex = (it.extras || []).map((x) => String(x).split('.').pop().toUpperCase()).filter((v, i, a) => a.indexOf(v) === i);
-      return `<div class="dk-done">${DL_ICONS.ok}${esc(L.dlReady)}<span class="dk-sz">${it.size ? dlBytes(it.size) : ''}${ex.length ? ' · +' + esc(ex.join(' +')) : ''}</span><span class="dk-acts">${play}${toQ}<button class="dk-ib" data-act="show" title="${esc(L.showInFolder)}">${DL_ICONS.folder}</button>${rm}</span></div>`;
+      return `<div class="dk-done">${DL_ICONS.ok}${esc(L.dlReady)}<span class="dk-sz">${it.size ? dlBytes(it.size) : ''}${ex.length ? ' · +' + esc(ex.join(' +')) : ''}</span><span class="dk-acts">${toQ}<button class="dk-ib" data-act="show" title="${esc(L.showInFolder)}">${DL_ICONS.folder}</button>${rm}</span></div>`;
     }
     const acts = `<div class="dk-err-acts"><button class="link" data-act="retry">${esc(L.dlRetry)}</button><button class="link" data-act="remove">${esc(L.dlRemove)}</button></div>`;
     if (it.status === 'cancel') return `<span class="dk-muted">${esc(L.dlCancelled)}</span>${acts}`;
@@ -2658,7 +2657,8 @@
   }
   function dlRowHtml(it) {
     const th = dlThumb(it); const m = it.meta || {};
-    const thumb = typeof th === 'string' ? `<div class="dk-th">${th}</div>` : `<div class="dk-th ${th.o}">${th.html}</div>`;
+    const playBtn = it.status === 'done' ? `<button class="dk-th-play" data-act="play" title="${esc(L.dlPlay)}">${DL_ICONS.play}</button>` : '';
+    const thumb = typeof th === 'string' ? `<div class="dk-th">${th}${playBtn}</div>` : `<div class="dk-th ${th.o}">${th.html}${playBtn}</div>`;
     return `<div class="dk-row" data-dl="${it.id}">${thumb}
       <div class="dk-info"><div class="dk-ttl${dlCanRename(it) ? ' can-rename' : ''}" title="${esc(dlCanRename(it) ? L.dlRename : it.url)}">${esc(dlName(it))}</div><div class="dk-meta">${dlMetaLine(it)}</div></div>
       <div class="dk-st">${dlStatus(it)}</div></div>`;
@@ -2702,7 +2702,7 @@
     const tmp = document.createElement('div'); tmp.innerHTML = dlRowHtml(it); const fresh = tmp.firstElementChild;
     // troca só o que mudou (a miniatura não pisca)
     const oldImg = row.querySelector('.dk-th img'); const newImg = fresh.querySelector('.dk-th img');
-    if (!(oldImg && newImg && oldImg.getAttribute('src') === newImg.getAttribute('src'))) { row.querySelector('.dk-th').replaceWith(fresh.querySelector('.dk-th')); dlFixImgs(row); }
+    if (!(oldImg && newImg && oldImg.getAttribute('src') === newImg.getAttribute('src')) || !!row.querySelector('.dk-th-play') !== !!fresh.querySelector('.dk-th-play')) { row.querySelector('.dk-th').replaceWith(fresh.querySelector('.dk-th')); dlFixImgs(row); }
     row.querySelector('.dk-info').replaceWith(fresh.querySelector('.dk-info'));
     const st = row.querySelector('.dk-st'); const nst = fresh.querySelector('.dk-st');
     const bar = st.querySelector('.dk-bar i'); const nbar = nst.querySelector('.dk-bar i');
@@ -2746,34 +2746,17 @@
   $('#bDlClear').onclick = () => { DL.list = DL.list.filter((it) => !['done', 'err', 'cancel'].includes(it.status)); dlSave(); dlRender(); };
   $('#bDlOpen').onclick = () => { if (REAL) inv('dl_open_dir', { path: dlSet().dir || null }).catch((e) => toast(String(e))); else toast(L.revealToast); };
   $('#bDlVideo').onclick = () => dlQuick('video');
-  $('#bDlAudio').onclick = () => dlQuick('audio');
-  const dlTyped = () => dlLinks($('#dlLinks').value);
-  function dlRenderMultiBtn() { const n = dlTyped().length; const b = $('#bDlMulti'); b.textContent = n ? L.dlGoN(n) : L.dlGo; b.disabled = !n; }
-  $('#dlLinks').addEventListener('input', dlRenderMultiBtn);
-  $('#dlLinks').addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); $('#bDlMulti').click(); } });
-  $('#bDlMulti').onclick = () => { const links = dlTyped(); if (!links.length) return; dlAdd(links, dlSet().multi === 'audio' ? 'audio' : 'video'); $('#dlLinks').value = ''; dlRenderMultiBtn(); };
 
   // teclas configuradas viram keycaps nos botões
   const dlKeycaps = (a) => { const k = keyOf(a); return k ? k.split('+').map((p) => `<kbd>${esc(keyLabel(p))}</kbd>`).join('') : ''; };
   const dlKf = (str) => esc(String(str)).replace(/\{(dlv|dla)\}/g, (m, k) => dlKeycaps(k === 'dlv' ? 'dlVideo' : 'dlAudio'));
   function dlRenderSide() {
     const set = dlSet();
-    $('#lDlCap').textContent = L.dlCap; $('#lDlVideo').textContent = L.dlVideo; $('#lDlAudio').textContent = L.dlAudio;
-    $('#kDlVideo').innerHTML = dlKeycaps('dlVideo'); $('#kDlAudio').innerHTML = dlKeycaps('dlAudio');
-    $('#lDlMulti').textContent = L.dlMulti; $('#dlLinks').placeholder = L.dlPaste;
-    $('#dlMultiSeg').innerHTML = segH('dlMulti', set.multi, [['video', L.dlVideoShort], ['audio', L.dlAudioShort]]);
-    seg($('#dlMultiSeg .seg'), (v) => { set.multi = v; saveSettings(); });
-    dlRenderMultiBtn();
+    $('#lDlVideo').textContent = L.dlQuick; $('#lDlCap').textContent = L.dlQuickSub;
+    $('#kDlVideo').innerHTML = dlKeycaps('dlVideo');
+    $('#lDlPick').textContent = L.dlPickBtn; $('#lDlPickSub').textContent = L.dlPickSub;
     const dir = set.dir || (DL.tools && DL.tools.defaultDir) || (REAL ? '' : 'C:\\Users\\Hugo\\Downloads\\Mec Encoder');
-    $('#dlSet').innerHTML = `
-      <div class="row"><div class="lbl">${esc(L.dlWeb)}<small>${esc(L.dlWebSub)}</small></div><span class="switch ${set.web ? 'on' : ''}" id="dlWeb"></span></div>
-      <div class="row"><div class="lbl">${esc(L.dlQuality)}</div><span id="dlQSeg">${segH('dlQuality', +set.quality || 0, [[0, L.dlQMax], [1080, '1080p'], [720, '720p'], [480, '480p']])}</span></div>
-      <div class="row"><div class="lbl">${esc(L.dlAudioFmt)}</div><span id="dlASeg">${segH('dlAudioFmt', set.audio, [['wav', 'WAV'], ['m4a', 'M4A'], ['mp3', 'MP3'], ['flac', 'FLAC']])}</span></div>
-      <div class="row"><div class="lbl">${esc(L.dlSaveIn)}<button class="dk-pathfull" id="bDlDirOpen" title="${esc(L.dlOpen)}">${esc(dir)}</button></div><button class="dk-change" id="bDlDir">${esc(L.dlChange)}</button></div>`;
-    $('#dlWeb').onclick = () => { set.web = !set.web; saveSettings(); $('#dlWeb').classList.toggle('on', set.web); };
-    seg($('#dlASeg .seg'), (v) => { set.audio = v; saveSettings(); });
-    seg($('#dlQSeg .seg'), (v) => { set.quality = +v; saveSettings(); });
-    $('#lDlPick').textContent = L.dlPick;
+    $('#dlSet').innerHTML = `<div class="row"><div class="lbl">${esc(L.dlSaveIn)}<button class="dk-pathfull" id="bDlDirOpen" title="${esc(L.dlOpen)}">${esc(dir)}</button></div><button class="dk-change" id="bDlDir">${esc(L.dlChange)}</button></div>`;
     $('#bDlDirOpen').onclick = () => $('#bDlOpen').click();
     $('#bDlDir').onclick = async () => {
       let d = null;
@@ -2781,10 +2764,26 @@
       if (d) { set.dir = d; saveSettings(); dlRenderSide(); }
     };
     $('#lDlTitle').textContent = L.dlTitle; $('#bDlClear').textContent = L.dlClear; $('#lDlOpen').textContent = L.dlOpen;
+    $('#lDlOpts').textContent = L.dlOptions;
     const t = DL.tools;
     $('#dlFoot').innerHTML = t && t.ytdlp ? `<i></i>${esc(L.dlVer(t.ytdlp, dlWhen(S.set.dlUpdated)))}` : t ? `<i class="off"></i>${esc(L.dlNotReady)}` : '';
-    dlRenderClip(); dlRenderAccounts();
+    dlRenderClip(); dlRenderOpts();
   }
+  // Opções: Pronto para web, formato do áudio e as contas
+  function dlRenderOpts() {
+    const set = dlSet();
+    $('#lDlOptsT').textContent = L.dlOptions; $('#bDlOptsX').innerHTML = ICONS.x; $('#bDlOptsX').title = L.close;
+    $('#dlOptSet').innerHTML = `
+      <div class="row"><div class="lbl">${esc(L.dlWeb)}<small>${esc(L.dlWebSub)}</small></div><span class="switch ${set.web ? 'on' : ''}" id="dlWeb"></span></div>
+      <div class="row"><div class="lbl">${esc(L.dlAudioFmt)}</div><span id="dlASeg">${segH('dlAudioFmt', set.audio, [['wav', 'WAV'], ['m4a', 'M4A'], ['mp3', 'MP3'], ['flac', 'FLAC']])}</span></div>`;
+    $('#dlWeb').onclick = () => { set.web = !set.web; saveSettings(); $('#dlWeb').classList.toggle('on', set.web); };
+    seg($('#dlASeg .seg'), (v) => { set.audio = v; saveSettings(); });
+    dlRenderAccounts();
+  }
+  $('#bDlOpts').onclick = () => { $('#dlOptsBg').hidden = false; dlRenderOpts(); };
+  $('#bDlOptsX').onclick = () => { $('#dlOptsBg').hidden = true; };
+  $('#dlOptsBg').addEventListener('mousedown', (e) => { if (e.target.id === 'dlOptsBg') $('#dlOptsBg').hidden = true; });
+  addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#dlOptsBg').hidden && !$('#menu').classList.contains('show')) { e.stopPropagation(); $('#dlOptsBg').hidden = true; } }, true);
   function dlWhen(ms) {
     if (!ms) return '';
     const d0 = new Date(); d0.setHours(0, 0, 0, 0); const d1 = new Date(ms); d1.setHours(0, 0, 0, 0);
@@ -2829,17 +2828,47 @@
     return out;
   }
   async function dlPickOpen(url, kind) {
-    if (!url) { await dlClipRead(); if (!DL.clip.length) { toast(L.dlNoLink); return; } url = DL.clip[0]; }
-    Object.assign(PK, { info: null, err: null, url, choice: 'v0', sub: '', thumb: false, sec: false, from: '', to: '', listKind: kind === 'audio' ? 'audio' : 'video', listQ: +dlSet().quality || 0, sel: null });
-    $('#dlPickBg').hidden = false; dlPickRender();
+    if (!url) { await dlClipRead(); url = DL.clip.join('\n'); }
+    Object.assign(PK, { info: null, err: null, url: '', text: url || '', choice: 'v0', sub: '', thumb: false, sec: false, from: '', to: '', listKind: kind === 'audio' ? 'audio' : 'video', listQ: 0, sel: null });
+    $('#dlPickBg').hidden = false;
+    dlPickLoad();
+    requestAnimationFrame(() => { const f = $('#pkUrl'); if (f && !PK.text) f.focus(); });
+  }
+  // lê o que está no campo: nenhum link, um (mostra as qualidades) ou vários (lista para marcar)
+  async function dlPickLoad() {
+    const links = dlLinks(PK.text);
+    PK.info = null; PK.err = null; PK.url = links[0] || '';
+    if (links.length > 1) {
+      PK.info = { title: L.dlListN(links.length), entries: links.map((u) => ({ url: u, title: '' })), multi: true };
+      PK.sel = new Set(links.map((_, i) => i)); dlPickRender(); return;
+    }
+    dlPickRender();
+    if (!links.length) return;
+    const url = PK.url;
     try {
-      PK.info = REAL ? await inv('dl_info', { url: PK.url }) : await new Promise((r) => setTimeout(() => r(dlIsList(PK.url) ? dlDemoList() : dlDemoInfo()), 500));
+      const info = REAL ? await inv('dl_info', { url }) : await new Promise((r) => setTimeout(() => r(dlIsList(url) ? dlDemoList() : dlDemoInfo()), 500));
+      if (PK.url !== url) return;
+      PK.info = info;
       if (PK.info.entries) PK.sel = new Set(PK.info.entries.map((_, i) => i));
       PK.to = PK.info.duration ? dlDur(PK.info.duration) : ''; PK.from = '0:00';
       const sl = dlSubList(PK.info); const want = (S.set.lang || 'pt').slice(0, 2);
       PK.sub = ''; PK.subDefault = (sl.find((x) => x.lang.startsWith(want)) || sl[0] || {}).lang || '';
-    } catch (e) { const s = String(e); const i = s.indexOf('|'); PK.err = { code: i > 0 ? s.slice(0, i) : s.startsWith('dl-') ? s : 'unknown', detail: i > 0 ? s.slice(i + 1) : s }; }
+    } catch (e) { if (PK.url !== url) return; const s = String(e); const i = s.indexOf('|'); PK.err = { code: i > 0 ? s.slice(0, i) : s.startsWith('dl-') ? s : 'unknown', detail: i > 0 ? s.slice(i + 1) : s }; }
     dlPickRender();
+  }
+  // campo de link no topo da janela (já vem com o Ctrl+C); colar ou Enter lê de novo
+  function dlPickLinkBar(el) {
+    const bar = document.createElement('div'); bar.className = 'dk-pk-link';
+    bar.innerHTML = `<textarea id="pkUrl" rows="1" spellcheck="false" placeholder="${esc(L.dlPasteOne)}"></textarea>`;
+    el.prepend(bar);
+    const f = $('#pkUrl'); f.value = PK.text;
+    const fit = () => { f.style.height = 'auto'; f.style.height = Math.min(96, f.scrollHeight) + 'px'; }; fit();
+    let tm = 0;
+    const go = () => { clearTimeout(tm); if (f.value === PK.lastLoaded) return; PK.text = f.value; PK.lastLoaded = f.value; dlPickLoad(); };
+    f.addEventListener('input', () => { fit(); PK.text = f.value; clearTimeout(tm); tm = setTimeout(go, 700); });
+    f.addEventListener('paste', () => setTimeout(go, 0));
+    f.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); go(); } if (e.key === 'Escape') dlPickClose(); });
+    PK.lastLoaded = PK.lastLoaded == null ? PK.text : PK.lastLoaded;
   }
   function dlPickClose() { $('#dlPickBg').hidden = true; PK.info = null; }
   function dlPickRender() {
@@ -2847,13 +2876,17 @@
     const head = (t, sub, img) => `<div class="dk-pk-head">${img ? `<img src="${esc(img)}" referrerpolicy="no-referrer" alt="">` : ''}<div><b>${esc(t)}</b><small>${sub}</small></div>
       <button class="dk-ib x" id="bPkX" title="${esc(L.cancel)}">${ICONS.x}</button></div>`;
     if (!PK.info) {
+      if (!PK.url) {
+        el.innerHTML = `<div class="dk-pk-msg dk-muted">${esc(L.dlPasteHint)}</div><div class="dk-pk-foot"><button class="dk-go" id="bPkCancel">${esc(L.cancel)}</button></div>`;
+        dlPickLinkBar(el); $('#bPkCancel').onclick = dlPickClose; return;
+      }
       el.innerHTML = head(dlShort(PK.url), '', '') + (PK.err
         ? `<div class="dk-pk-msg"><span class="dk-err" title="${esc(PK.err.detail)}">${esc((L.dlErrs && L.dlErrs[PK.err.code]) || (L.errs && L.errs[PK.err.code]) || L.dlErrs.unknown)}</span></div>`
         : `<div class="dk-pk-msg dk-muted">${esc(L.dlReading)}</div>`) + `<div class="dk-pk-foot"><button class="dk-go" id="bPkCancel">${esc(L.cancel)}</button></div>`;
-      $('#bPkX').onclick = dlPickClose; $('#bPkCancel').onclick = dlPickClose; return;
+      dlPickLinkBar(el); $('#bPkX').onclick = dlPickClose; $('#bPkCancel').onclick = dlPickClose; return;
     }
     const info = PK.info;
-    if (info.entries) { dlPickRenderList(el, head); return; }
+    if (info.entries) { dlPickRenderList(el, head); dlPickLinkBar(el); return; }
     const sm = dlSummary(info, set.web); const subs = dlSubList(info);
     const site = dlSite({ url: PK.url, meta: { site: info.extractor_key } });
     const opt = (id, label, size, extra) => `<label class="dk-pk-opt ${PK.choice === id ? 'on' : ''}"><input type="radio" name="pk" value="${id}" ${PK.choice === id ? 'checked' : ''}>
@@ -2879,6 +2912,7 @@
         </div>` : ''}
       </div>
       <div class="dk-pk-foot"><button class="dk-go" id="bPkCancel">${esc(L.cancel)}</button><button class="dk-btn dk-pri dk-pk-go" id="bPkGo">${esc(L.dlGo)}</button></div>`;
+    dlPickLinkBar(el);
     $('#bPkX').onclick = dlPickClose; $('#bPkCancel').onclick = dlPickClose;
     $$('input[name="pk"]', el).forEach((r) => { r.onchange = () => { PK.choice = r.value; const sc = $('.dk-pk-body', el).scrollTop; dlPickRender(); $('.dk-pk-body', el).scrollTop = sc; }; });
     const ps = $('#pkSub'); if (ps && subs.length) ps.onclick = () => { PK.sub = PK.sub ? '' : PK.subDefault; dlPickRender(); };
@@ -2917,12 +2951,12 @@
   function dlPickRenderList(el, head) {
     const info = PK.info; const es = info.entries; const n = PK.sel.size;
     const site = dlSite({ url: PK.url, meta: { site: info.extractor_key } });
-    el.innerHTML = head(info.title || info.uploader || dlShort(PK.url), esc([site, L.dlListN(es.length)].filter(Boolean).join(' · ')), '') + `
+    el.innerHTML = head(info.multi ? L.dlLinksN(es.length) : info.title || info.uploader || dlShort(PK.url), info.multi ? '' : esc([site, L.dlListN(es.length)].filter(Boolean).join(' · ')), '') + `
       <div class="dk-pk-tools"><span id="pkKind">${segH('pkKind', PK.listKind, [['video', L.dlVideoShort], ['audio', L.dlAudioShort]])}</span>
         ${PK.listKind === 'video' ? `<span id="pkQ">${segH('pkQ', PK.listQ, [[0, L.dlQMax], [1080, '1080p'], [720, '720p'], [480, '480p']])}</span>` : ''}
         <button class="link" id="pkAll">${esc(n === es.length ? L.dlSelNone : L.dlSelAll)}</button></div>
       <div class="dk-pk-body dk-pk-list">${es.map((e, i) => `<label class="dk-pk-entry ${PK.sel.has(i) ? 'on' : ''}"><input type="checkbox" data-i="${i}" ${PK.sel.has(i) ? 'checked' : ''}>
-        <span class="dk-pk-n">${i + 1}</span><span class="dk-pk-t">${esc(e.title || dlShort(e.url))}</span><span class="dk-pk-s">${e.duration ? dlDur(e.duration) : ''}</span></label>`).join('')}</div>
+        <span class="dk-pk-n">${i + 1}</span><span class="dk-pk-t ${e.title ? '' : 'dk-pk-url'}">${esc(e.title || dlShort(e.url))}</span><span class="dk-pk-s">${e.duration ? dlDur(e.duration) : ''}</span></label>`).join('')}</div>
       <div class="dk-pk-foot"><button class="dk-go" id="bPkCancel">${esc(L.cancel)}</button><button class="dk-btn dk-pri dk-pk-go" id="bPkGo" ${n ? '' : 'disabled'}>${esc(L.dlGoVideos(n))}</button></div>`;
     $('#bPkX').onclick = dlPickClose; $('#bPkCancel').onclick = dlPickClose;
     seg($('#pkKind .seg'), (v) => { PK.listKind = v; dlPickRender(); });
@@ -2936,7 +2970,7 @@
       // um item por vídeo, na ordem da lista (a fila baixa 3 por vez)
       const now = Date.now();
       pick.slice().reverse().forEach((e) => DL.list.unshift({ id: ++DL.seq, url: e.url, kind: PK.listKind, status: 'wait', t: now, web: '',
-        height: PK.listKind === 'video' ? PK.listQ : 0, meta: { title: e.title || '', duration: e.duration || 0, thumbnail: e.thumbnail || '', site: info.extractor_key } }));
+        height: PK.listKind === 'video' ? PK.listQ : 0, meta: e.title ? { title: e.title, duration: e.duration || 0, thumbnail: e.thumbnail || '', site: info.extractor_key } : null }));
       dlPickClose(); dlRender(); dlPump();
     };
   }

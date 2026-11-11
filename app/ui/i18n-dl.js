@@ -2,6 +2,7 @@
 (() => {
   const T = {
     en: {
+      dlQuick: 'Quick download', dlQuickSub: 'Takes the link in Ctrl+C and downloads it in the best quality', dlPickBtn: 'Download…', dlPickSub: 'Choose quality, audio only, subtitles, a section or several links', dlOptions: 'Options', dlPasteOne: 'Paste one or more links', dlPasteHint: 'Paste the link of a video, playlist or profile. One per line to download several.', dlLinksN: (n) => `${n} links`,
       dlSection: 'Only a section', dlFrom: 'from', dlTo: 'to', dlSectionBad: 'Invalid section: use 1:20 to 1:45', dlListN: (n) => `${n} video${n === 1 ? '' : 's'}`, dlSelAll: 'Select all', dlSelNone: 'Clear', dlGoVideos: (n) => `Download ${n} video${n === 1 ? '' : 's'}`,
       dlQuality: 'Quality', dlQMax: 'Best', dlPick: 'Choose quality…', dlReading: 'Reading the link…', dlPickVideo: 'Video', dlPickOther: 'Other', dlPickAudio: 'Audio only', dlPickThumb: 'Thumbnail only', dlExtras: 'Together', dlWithSubs: 'Subtitles', dlWithThumb: 'Thumbnail (JPG)', dlAutoSub: '(automatic)', dlNoSubs: 'No subtitles',
       dlAccounts: 'Accounts', dlAccountsSub: 'For Instagram and videos that need a login. The session stays only on this PC', dlConnected: 'Connected', dlSignOut: 'Sign out', dlSignInShort: 'Sign in', dlSigningIn: 'Opening…',
@@ -35,6 +36,7 @@
       },
     },
     pt: {
+      dlQuick: 'Baixar rápido', dlQuickSub: 'Pega o link do Ctrl+C e baixa na maior qualidade', dlPickBtn: 'Baixar…', dlPickSub: 'Escolha qualidade, só áudio, legenda, trecho ou vários links', dlOptions: 'Opções', dlPasteOne: 'Cole um ou mais links', dlPasteHint: 'Cole o link de um vídeo, playlist ou perfil. Um por linha para baixar vários.', dlLinksN: (n) => `${n} links`,
       dlSection: 'Só um trecho', dlFrom: 'de', dlTo: 'até', dlSectionBad: 'Trecho inválido: use 1:20 até 1:45', dlListN: (n) => `${n} vídeo${n === 1 ? '' : 's'}`, dlSelAll: 'Marcar todos', dlSelNone: 'Desmarcar', dlGoVideos: (n) => `Baixar ${n} vídeo${n === 1 ? '' : 's'}`,
       dlQuality: 'Qualidade', dlQMax: 'Máxima', dlPick: 'Escolher qualidade…', dlReading: 'Lendo o link…', dlPickVideo: 'Vídeo', dlPickOther: 'Outros', dlPickAudio: 'Só áudio', dlPickThumb: 'Só a miniatura', dlExtras: 'Junto', dlWithSubs: 'Legenda', dlWithThumb: 'Miniatura (JPG)', dlAutoSub: '(automática)', dlNoSubs: 'Sem legenda',
       dlAccounts: 'Contas', dlAccountsSub: 'Para Instagram e vídeos que pedem login. A sessão fica só neste PC', dlConnected: 'Conectado', dlSignOut: 'Sair', dlSignInShort: 'Entrar', dlSigningIn: 'Abrindo…',
@@ -68,6 +70,7 @@
       },
     },
     es: {
+      dlQuick: 'Descarga rápida', dlQuickSub: 'Toma el enlace del Ctrl+C y lo descarga en la mejor calidad', dlPickBtn: 'Descargar…', dlPickSub: 'Elige calidad, solo audio, subtítulos, un fragmento o varios enlaces', dlOptions: 'Opciones', dlPasteOne: 'Pega uno o más enlaces', dlPasteHint: 'Pega el enlace de un video, lista o perfil. Uno por línea para descargar varios.', dlLinksN: (n) => `${n} enlaces`,
       dlSection: 'Solo un fragmento', dlFrom: 'de', dlTo: 'a', dlSectionBad: 'Fragmento no válido: usa 1:20 a 1:45', dlListN: (n) => `${n} video${n === 1 ? '' : 's'}`, dlSelAll: 'Marcar todos', dlSelNone: 'Desmarcar', dlGoVideos: (n) => `Descargar ${n} video${n === 1 ? '' : 's'}`,
       dlQuality: 'Calidad', dlQMax: 'Máxima', dlPick: 'Elegir calidad…', dlReading: 'Leyendo el enlace…', dlPickVideo: 'Video', dlPickOther: 'Otros', dlPickAudio: 'Solo audio', dlPickThumb: 'Solo la miniatura', dlExtras: 'Junto', dlWithSubs: 'Subtítulos', dlWithThumb: 'Miniatura (JPG)', dlAutoSub: '(automáticos)', dlNoSubs: 'Sin subtítulos',
       dlAccounts: 'Cuentas', dlAccountsSub: 'Para Instagram y videos que piden iniciar sesión. La sesión queda solo en este PC', dlConnected: 'Conectado', dlSignOut: 'Cerrar sesión', dlSignInShort: 'Entrar', dlSigningIn: 'Abriendo…',
@@ -101,6 +104,7 @@
       },
     },
     fr: {
+      dlQuick: 'Téléchargement rapide', dlQuickSub: 'Prend le lien du Ctrl+C et le télécharge en meilleure qualité', dlPickBtn: 'Télécharger…', dlPickSub: 'Choisir la qualité, l’audio seul, les sous-titres, un extrait ou plusieurs liens', dlOptions: 'Options', dlPasteOne: 'Collez un ou plusieurs liens', dlPasteHint: 'Collez le lien d’une vidéo, playlist ou profil. Un par ligne pour en télécharger plusieurs.', dlLinksN: (n) => `${n} liens`,
       dlSection: 'Seulement un extrait', dlFrom: 'de', dlTo: 'à', dlSectionBad: 'Extrait invalide : utilisez 1:20 à 1:45', dlListN: (n) => `${n} vidéo${n === 1 ? '' : 's'}`, dlSelAll: 'Tout cocher', dlSelNone: 'Tout décocher', dlGoVideos: (n) => `Télécharger ${n} vidéo${n === 1 ? '' : 's'}`,
       dlQuality: 'Qualité', dlQMax: 'Maximale', dlPick: 'Choisir la qualité…', dlReading: 'Lecture du lien…', dlPickVideo: 'Vidéo', dlPickOther: 'Autres', dlPickAudio: 'Audio seul', dlPickThumb: 'Miniature seule', dlExtras: 'Avec', dlWithSubs: 'Sous-titres', dlWithThumb: 'Miniature (JPG)', dlAutoSub: '(automatiques)', dlNoSubs: 'Pas de sous-titres',
       dlAccounts: 'Comptes', dlAccountsSub: 'Pour Instagram et les vidéos qui demandent une connexion. La session reste sur ce PC', dlConnected: 'Connecté', dlSignOut: 'Se déconnecter', dlSignInShort: 'Se connecter', dlSigningIn: 'Ouverture…',
@@ -134,6 +138,7 @@
       },
     },
     de: {
+      dlQuick: 'Schnell laden', dlQuickSub: 'Nimmt den Link aus Strg+C und lädt ihn in bester Qualität', dlPickBtn: 'Laden…', dlPickSub: 'Qualität, nur Audio, Untertitel, Ausschnitt oder mehrere Links wählen', dlOptions: 'Optionen', dlPasteOne: 'Einen oder mehrere Links einfügen', dlPasteHint: 'Link eines Videos, einer Playlist oder eines Profils einfügen. Einer pro Zeile für mehrere.', dlLinksN: (n) => `${n} Links`,
       dlSection: 'Nur ein Ausschnitt', dlFrom: 'von', dlTo: 'bis', dlSectionBad: 'Ungültiger Ausschnitt: z. B. 1:20 bis 1:45', dlListN: (n) => `${n} Video${n === 1 ? '' : 's'}`, dlSelAll: 'Alle auswählen', dlSelNone: 'Keine', dlGoVideos: (n) => `${n} Video${n === 1 ? '' : 's'} laden`,
       dlQuality: 'Qualität', dlQMax: 'Maximal', dlPick: 'Qualität wählen…', dlReading: 'Link wird gelesen…', dlPickVideo: 'Video', dlPickOther: 'Andere', dlPickAudio: 'Nur Audio', dlPickThumb: 'Nur Vorschaubild', dlExtras: 'Dazu', dlWithSubs: 'Untertitel', dlWithThumb: 'Vorschaubild (JPG)', dlAutoSub: '(automatisch)', dlNoSubs: 'Keine Untertitel',
       dlAccounts: 'Konten', dlAccountsSub: 'Für Instagram und Videos mit Anmeldung. Die Sitzung bleibt nur auf diesem PC', dlConnected: 'Verbunden', dlSignOut: 'Abmelden', dlSignInShort: 'Anmelden', dlSigningIn: 'Wird geöffnet…',
@@ -167,6 +172,7 @@
       },
     },
     it: {
+      dlQuick: 'Scarica subito', dlQuickSub: 'Prende il link del Ctrl+C e lo scarica nella qualità migliore', dlPickBtn: 'Scarica…', dlPickSub: 'Scegli qualità, solo audio, sottotitoli, un tratto o più link', dlOptions: 'Opzioni', dlPasteOne: 'Incolla uno o più link', dlPasteHint: 'Incolla il link di un video, playlist o profilo. Uno per riga per scaricarne più di uno.', dlLinksN: (n) => `${n} link`,
       dlSection: 'Solo un tratto', dlFrom: 'da', dlTo: 'a', dlSectionBad: 'Tratto non valido: usa 1:20 a 1:45', dlListN: (n) => `${n} video`, dlSelAll: 'Seleziona tutti', dlSelNone: 'Deseleziona', dlGoVideos: (n) => `Scarica ${n} video`,
       dlQuality: 'Qualità', dlQMax: 'Massima', dlPick: 'Scegli la qualità…', dlReading: 'Lettura del link…', dlPickVideo: 'Video', dlPickOther: 'Altro', dlPickAudio: 'Solo audio', dlPickThumb: 'Solo miniatura', dlExtras: 'Insieme', dlWithSubs: 'Sottotitoli', dlWithThumb: 'Miniatura (JPG)', dlAutoSub: '(automatici)', dlNoSubs: 'Nessun sottotitolo',
       dlAccounts: 'Account', dlAccountsSub: 'Per Instagram e i video che richiedono l’accesso. La sessione resta solo su questo PC', dlConnected: 'Connesso', dlSignOut: 'Esci', dlSignInShort: 'Accedi', dlSigningIn: 'Apertura…',
@@ -200,6 +206,7 @@
       },
     },
     ru: {
+      dlQuick: 'Быстро скачать', dlQuickSub: 'Берёт ссылку из Ctrl+C и скачивает в лучшем качестве', dlPickBtn: 'Скачать…', dlPickSub: 'Выбор качества, только аудио, субтитры, фрагмент или несколько ссылок', dlOptions: 'Настройки', dlPasteOne: 'Вставьте одну или несколько ссылок', dlPasteHint: 'Вставьте ссылку на видео, плейлист или профиль. По одной в строке, чтобы скачать несколько.', dlLinksN: (n) => `ссылок: ${n}`,
       dlSection: 'Только фрагмент', dlFrom: 'с', dlTo: 'до', dlSectionBad: 'Неверный фрагмент: например, 1:20 до 1:45', dlListN: (n) => `видео: ${n}`, dlSelAll: 'Выбрать все', dlSelNone: 'Снять выбор', dlGoVideos: (n) => `Скачать (${n})`,
       dlQuality: 'Качество', dlQMax: 'Максимальное', dlPick: 'Выбрать качество…', dlReading: 'Читаю ссылку…', dlPickVideo: 'Видео', dlPickOther: 'Другое', dlPickAudio: 'Только аудио', dlPickThumb: 'Только обложка', dlExtras: 'Вместе', dlWithSubs: 'Субтитры', dlWithThumb: 'Обложка (JPG)', dlAutoSub: '(автоматические)', dlNoSubs: 'Нет субтитров',
       dlAccounts: 'Аккаунты', dlAccountsSub: 'Для Instagram и видео, где нужен вход. Сессия хранится только на этом ПК', dlConnected: 'Подключено', dlSignOut: 'Выйти', dlSignInShort: 'Войти', dlSigningIn: 'Открывается…',
@@ -233,6 +240,7 @@
       },
     },
     ja: {
+      dlQuick: 'すぐにダウンロード', dlQuickSub: 'Ctrl+C のリンクを最高画質でダウンロード', dlPickBtn: 'ダウンロード…', dlPickSub: '画質、音声のみ、字幕、一部分、複数リンクを選ぶ', dlOptions: 'オプション', dlPasteOne: 'リンクを 1 つ以上貼り付け', dlPasteHint: '動画、プレイリスト、プロフィールのリンクを貼り付けます。複数は 1 行に 1 つ。', dlLinksN: (n) => `リンク ${n} 件`,
       dlSection: '一部分だけ', dlFrom: '開始', dlTo: '終了', dlSectionBad: '区間が正しくありません: 1:20 から 1:45 のように入力', dlListN: (n) => `動画 ${n} 本`, dlSelAll: 'すべて選択', dlSelNone: '選択解除', dlGoVideos: (n) => `${n} 本をダウンロード`,
       dlQuality: '画質', dlQMax: '最高', dlPick: '画質を選ぶ…', dlReading: 'リンクを読み込み中…', dlPickVideo: '動画', dlPickOther: 'その他', dlPickAudio: '音声のみ', dlPickThumb: 'サムネイルのみ', dlExtras: '一緒に', dlWithSubs: '字幕', dlWithThumb: 'サムネイル (JPG)', dlAutoSub: '(自動)', dlNoSubs: '字幕なし',
       dlAccounts: 'アカウント', dlAccountsSub: 'Instagram やログインが必要な動画用。セッションはこの PC にだけ保存されます', dlConnected: '接続済み', dlSignOut: 'ログアウト', dlSignInShort: 'ログイン', dlSigningIn: '開いています…',
@@ -266,6 +274,7 @@
       },
     },
     ko: {
+      dlQuick: '빠른 다운로드', dlQuickSub: 'Ctrl+C의 링크를 최고 화질로 다운로드', dlPickBtn: '다운로드…', dlPickSub: '화질, 오디오만, 자막, 구간, 여러 링크 선택', dlOptions: '옵션', dlPasteOne: '링크를 하나 이상 붙여 넣으세요', dlPasteHint: '동영상, 재생목록, 프로필 링크를 붙여 넣으세요. 여러 개는 한 줄에 하나씩.', dlLinksN: (n) => `링크 ${n}개`,
       dlSection: '일부 구간만', dlFrom: '시작', dlTo: '끝', dlSectionBad: '잘못된 구간: 1:20 ~ 1:45처럼 입력하세요', dlListN: (n) => `동영상 ${n}개`, dlSelAll: '모두 선택', dlSelNone: '선택 해제', dlGoVideos: (n) => `동영상 ${n}개 다운로드`,
       dlQuality: '화질', dlQMax: '최고', dlPick: '화질 선택…', dlReading: '링크를 읽는 중…', dlPickVideo: '동영상', dlPickOther: '기타', dlPickAudio: '오디오만', dlPickThumb: '썸네일만', dlExtras: '함께', dlWithSubs: '자막', dlWithThumb: '썸네일 (JPG)', dlAutoSub: '(자동)', dlNoSubs: '자막 없음',
       dlAccounts: '계정', dlAccountsSub: 'Instagram과 로그인이 필요한 동영상용. 세션은 이 PC에만 저장됩니다', dlConnected: '연결됨', dlSignOut: '로그아웃', dlSignInShort: '로그인', dlSigningIn: '여는 중…',
@@ -299,6 +308,7 @@
       },
     },
     zh: {
+      dlQuick: '快速下载', dlQuickSub: '以最高画质下载 Ctrl+C 中的链接', dlPickBtn: '下载…', dlPickSub: '选择画质、仅音频、字幕、片段或多个链接', dlOptions: '选项', dlPasteOne: '粘贴一个或多个链接', dlPasteHint: '粘贴视频、播放列表或主页的链接。多个链接每行一个。', dlLinksN: (n) => `${n} 个链接`,
       dlSection: '仅一段', dlFrom: '从', dlTo: '到', dlSectionBad: '片段无效：请输入如 1:20 到 1:45', dlListN: (n) => `${n} 个视频`, dlSelAll: '全选', dlSelNone: '取消全选', dlGoVideos: (n) => `下载 ${n} 个视频`,
       dlQuality: '画质', dlQMax: '最高', dlPick: '选择画质…', dlReading: '正在读取链接…', dlPickVideo: '视频', dlPickOther: '其他', dlPickAudio: '仅音频', dlPickThumb: '仅缩略图', dlExtras: '一起下载', dlWithSubs: '字幕', dlWithThumb: '缩略图 (JPG)', dlAutoSub: '（自动）', dlNoSubs: '没有字幕',
       dlAccounts: '账户', dlAccountsSub: '用于 Instagram 和需要登录的视频。会话只保存在这台电脑上', dlConnected: '已连接', dlSignOut: '退出', dlSignInShort: '登录', dlSigningIn: '正在打开…',
