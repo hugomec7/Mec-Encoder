@@ -2470,12 +2470,13 @@
     if (DL.entered) return; DL.entered = true;
     if (!REAL) { DL.tools = { ytdlp: '2026.11.03', deno: true }; dlRenderSide(); return; }
     try { DL.tools = await inv('dl_status'); } catch { DL.tools = { ytdlp: '', deno: false }; }
+    dlRenderSide();
     if (!DL.tools.ytdlp || !DL.tools.deno) dlInstall(); else { dlRenderSide(); dlAutoUpdate(); dlPump(); }
   }
   async function dlInstall() {
     DL.setup = { item: 'ytdlp', done: 0, total: 0, err: null }; dlRender();
     try {
-      const v = await inv('dl_install'); DL.tools = { ytdlp: v, deno: true }; DL.setup = null;
+      const v = await inv('dl_install'); DL.tools = Object.assign({}, DL.tools, { ytdlp: v, deno: true }); DL.setup = null;
       S.set.dlUpdated = Date.now(); saveSettings();
     } catch (e) { DL.setup = { err: String(e) }; }
     dlRender(); dlRenderSide(); dlPump();

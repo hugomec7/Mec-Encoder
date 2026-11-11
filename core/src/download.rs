@@ -124,7 +124,7 @@ fn num(s: &str) -> Option<f64> { s.trim().parse::<f64>().ok().filter(|x| x.is_fi
 /// Argumentos do yt-dlp. Tudo que sai vai para `work`; depois o arquivo é movido para a pasta final.
 pub fn ytdlp_args(job: &Job, t: &Tools, work: &Path) -> Vec<String> {
     let mut a: Vec<String> = ["--ignore-config", "--no-playlist", "--newline", "--no-colors", "--no-mtime", "--windows-filenames",
-        "--no-simulate", "--progress", "--progress-delta", "0.25", "--retries", "5", "--fragment-retries", "5"]
+        "--no-simulate", "--progress", "--encoding", "utf-8", "--progress-delta", "0.25", "--retries", "5", "--fragment-retries", "5"]
         .iter().map(|s| s.to_string()).collect();
     a.extend(["--ffmpeg-location".into(), t.ffmpeg.to_string_lossy().into_owned()]);
     if let Some(d) = &t.deno { a.extend(["--js-runtimes".into(), format!("deno:{}", d.display())]); }
@@ -379,7 +379,10 @@ fn run_inner(job: &Job, t: &Tools, work: &Path, h: &Hooks, on: &(dyn Fn(Event) +
     let s = st.into_inner().unwrap();
     let errs = errors.into_inner().unwrap();
     let ok = matches!(status, Some(Ok(x)) if x.success());
-    let files: Vec<PathBuf> = s.files.iter().filter(|f| f.is_file()).cloned().collect();
+    let mut files: Vec<PathBuf> = s.files.iter().filter(|f| f.is_file()).cloned().collect();
+    // o caminho que o yt-dlp imprimiu não bateu (acento ou símbolo no título, em outra codificação):
+    // a pasta de trabalho é só deste download, então o que sobrou nela é o resultado
+    if ok && files.is_empty() { files = leftovers(work); }
     if !ok || files.is_empty() {
         let detail = if !errs.is_empty() { errs.join(" / ") } else { tail.into_inner().unwrap().join(" / ") };
         let detail = if detail.is_empty() { "yt-dlp failed".to_string() } else { detail };
@@ -420,6 +423,22 @@ fn run_inner(job: &Job, t: &Tools, work: &Path, h: &Hooks, on: &(dyn Fn(Event) +
     }
     (h.log)(&format!("download | {} | ok | {}", job.url, out.files.iter().map(|f| f.display().to_string()).collect::<Vec<_>>().join(", ")));
     Ok(out)
+}
+
+/// Arquivos prontos numa pasta de trabalho (sem pedaços .part, .ytdl, .temp ou do acabamento).
+pub fn leftovers(work: &Path) -> Vec<PathBuf> {
+    let mut v: Vec<(u64, PathBuf)> = std::fs::read_dir(work).into_iter().flatten().flatten()
+        .map(|e| e.path())
+        .filter(|p| p.is_file())
+        .filter(|p| {
+            let name = p.file_name().map(|n| n.to_string_lossy().to_lowercase()).unwrap_or_default();
+            !(name.ends_with(".part") || name.ends_with(".ytdl") || name.contains(".temp.") || name.contains(".part-frag")
+              || name.starts_with("web-") || name.ends_with(".json") || name.ends_with(".jpg") || name.ends_with(".webp"))
+        })
+        .map(|p| (std::fs::metadata(&p).map(|m| m.len()).unwrap_or(0), p))
+        .collect();
+    v.sort_by(|a, b| b.0.cmp(&a.0));
+    v.into_iter().map(|x| x.1).collect()
 }
 
 /// Junta o andamento das partes (vídeo e áudio vêm separados no YouTube) numa porcentagem só.
@@ -470,7 +489,7 @@ mod tests {
         let a = ytdlp_args(&job(Kind::Video, true), &tools_(), Path::new("/w")).join(" ");
         assert!(a.contains("-f bv*+ba/b -S res,fps,vcodec:h264,acodec:aac --merge-output-format mp4/mkv"), "{a}");
         assert!(a.contains("--js-runtimes deno:/t/deno"), "{a}");
-        assert!(a.contains("--no-playlist") && a.contains("--ignore-config"), "{a}");
+        assert!(a.contains("--no-playlist") && a.contains("--ignore-config") && a.contains("--encoding utf-8"), "{a}");
         assert!(a.ends_with("-- https://youtu.be/abc"), "{a}");
         let b = ytdlp_args(&job(Kind::Video, false), &tools_(), Path::new("/w")).join(" ");
         assert!(!b.contains("vcodec:h264"), "{b}");
@@ -528,6 +547,17 @@ mod tests {
         assert_eq!(classify("[TikTok] x: Unable to extract universal data for rehydration; please report this issue"), "dl-broken");
         assert_eq!(classify("[youtube] x: Unable to download API page: ('Unable to connect to proxy', OSError('Tunnel connection failed: 403 Forbidden')); please report this issue"), "dl-network");
         assert_eq!(classify("something new"), "unknown");
+    }
+
+    #[test]
+    fn leftover_files() {
+        let d = std::env::temp_dir().join(format!("mec-left-{}", std::process::id()));
+        std::fs::create_dir_all(&d).unwrap();
+        std::fs::write(d.join("piter · Editor.mp4"), vec![0u8; 50]).unwrap();
+        std::fs::write(d.join("x.f137.mp4.part"), b"x").unwrap();
+        std::fs::write(d.join("x.temp.mp4"), b"x").unwrap();
+        assert_eq!(leftovers(&d), vec![d.join("piter · Editor.mp4")]);
+        let _ = std::fs::remove_dir_all(&d);
     }
 
     #[test]
