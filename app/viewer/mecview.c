@@ -226,7 +226,13 @@ static int build_graph(Clip *c, const AVFrame *f, const char *desc) {
     AVRational sar = f->sample_aspect_ratio.num ? f->sample_aspect_ratio : (AVRational){ 1, 1 };
     snprintf(args, sizeof args, "video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d",
              f->width, f->height, f->format, c->tb.num, c->tb.den, sar.num, sar.den);
-    int r = avfilter_graph_create_filter(&c->src, avfilter_get_by_name("buffer"), "in", args, NULL, c->graph);
+    /* espaço de cor e faixa na entrada (FFmpeg 7.1+): sem isso o scale antes do zscale trata as cores diferente
+       do FFmpeg de linha de comando. Nas versões antigas a opção não existe e é ignorada. */
+    c->src = avfilter_graph_alloc_filter(c->graph, avfilter_get_by_name("buffer"), "in");
+    if (!c->src) return AVERROR(ENOMEM);
+    av_opt_set_int(c->src, "colorspace", f->colorspace, AV_OPT_SEARCH_CHILDREN);
+    av_opt_set_int(c->src, "range", f->color_range, AV_OPT_SEARCH_CHILDREN);
+    int r = avfilter_init_str(c->src, args);
     if (r < 0) return r;
     r = avfilter_graph_create_filter(&c->sink, avfilter_get_by_name("buffersink"), "out", NULL, NULL, c->graph);
     if (r < 0) return r;
