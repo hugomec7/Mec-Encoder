@@ -25,6 +25,13 @@
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const root = document.documentElement;
   const qs = new URLSearchParams(location.search);
+  /* idiomas: nome no próprio idioma e o formato de números (vírgula ou ponto) */
+  const LANGS = [['en', 'English', 'en-US'], ['pt', 'Português', 'pt-BR'], ['es', 'Español', 'es-ES'], ['fr', 'Français', 'fr-FR'], ['de', 'Deutsch', 'de-DE'],
+    ['it', 'Italiano', 'it-IT'], ['ru', 'Русский', 'ru-RU'], ['ja', '日本語', 'ja-JP'], ['ko', '한국어', 'ko-KR'], ['zh', '简体中文', 'zh-CN']];
+  // primeira vez: o idioma do Windows, se o app tiver
+  function sysLang() { const n = (navigator.language || 'en').toLowerCase().slice(0, 2); return LANGS.some((l) => l[0] === n) ? n : 'en'; }
+  const locale = () => (LANGS.find((l) => l[0] === S.set.lang) || LANGS[0])[2];
+  const decComma = () => (1.5).toLocaleString(locale()).includes(',');
   const TA = window.__TAURI__;
   const REAL = !!TA;
   const inv = (cmd, args) => TA.core.invoke(cmd, args);
@@ -77,7 +84,7 @@
   const S = {
     presets: demo.presets,
     queue: demo.queue.map((q) => Object.assign(q, { cfg: clone(demo.presets.find((p) => p.id === q.preset)) })),
-    set: Object.assign({ lang: 'en', theme: 'oled', lastDark: 'oled', defaultPreset: demo.presets[0] && demo.presets[0].id,
+    set: Object.assign({ lang: sysLang(), theme: 'studio', lastDark: 'studio', defaultPreset: demo.presets[0] && demo.presets[0].id,
       clearWhenDone: true, notify: true, sound: true, foldPresets: false, parallel: 2 }, demo.settings),
     audioDefaults: REAL ? [] : (demo.audioDefaults || []), sel: REAL ? null : 2, picked: new Set(REAL ? [] : [2]), anchor: null, editPreset: null, cmp: false, job: null, playing: false, t: REAL ? 0 : .31,
     open: { video: true }, engine: { status: REAL ? 'checking' : 'nvenc', gpu: REAL ? null : 'NVIDIA GeForce RTX' },
@@ -153,8 +160,11 @@
   };
   /* ---------- idioma ---------- */
   function applyLang() {
-    L = window.MEC_I18N[S.set.lang] || window.MEC_I18N.en;
-    root.lang = S.set.lang === 'pt' ? 'pt-BR' : 'en';
+    // o que faltar no idioma escolhido vem do inglês
+    const en = window.MEC_I18N.en; const tr = window.MEC_I18N[S.set.lang] || {};
+    L = Object.assign({}, en, tr);
+    ['act', 'errs', 'colors', 'tagDesc', 'afterOn'].forEach((k) => { L[k] = Object.assign({}, en[k], tr[k]); });
+    root.lang = locale();
     const txt = { lQueue: L.queue, bClearDone: L.clearDone, lDropTitle: L.dropTitle, lDropSub: L.dropSub,
       lCompare: L.compare, lPresets: L.presets, bManage: L.manage, lModified: L.modified,
       bSavePreset: L.saveToPreset, lEst: L.estSize, bDiscard: L.discard, lSettings: L.settings, bDone: L.done, lDropAll: L.dropAll, lPvEmpty: L.pvEmpty };
@@ -172,10 +182,10 @@
 
   /* ---------- mídia ---------- */
   const secs = (tc) => { const [h, m, s, f] = tc.split(':').map(Number); return h * 3600 + m * 60 + s + f / 60; };
-  const num = (n, d = 1) => Number(n || 0).toLocaleString(S.set.lang === 'pt' ? 'pt-BR' : 'en-US', { maximumFractionDigits: d });
+  const num = (n, d = 1) => Number(n || 0).toLocaleString(locale(), { maximumFractionDigits: d });
   const fmtMB = (mb) => mb >= 1000 ? num(mb / 1000, 2) + ' GB' : mb >= 10 ? Math.round(mb) + ' MB' : mb >= 1 ? num(mb, 1) + ' MB' : Math.max(1, Math.round(mb * 1000)) + ' KB';
   const fmtK = (k) => num(k / 1000) + ' Mb/s';
-  const fpsTxt = (v) => S.set.lang === 'pt' ? String(v).replace('.', ',') : String(v).replace(',', '.');
+  const fpsTxt = (v) => decComma() ? String(v).replace('.', ',') : String(v).replace(',', '.');
   // "Original" no FPS: padrão mais próximo do arquivo (igual ao motor): iPhone 59,93 VFR → 60; FX30 → 59,94
   const STD_FPS = [23.976, 24, 25, 29.97, 30, 48, 50, 59.94, 60, 119.88, 120];
   function srcFps(src) {
@@ -1037,7 +1047,7 @@
       f.classList.toggle('pz', z > 1.001);
       f.querySelectorAll('img.pv-img, video.pv-vid, svg.scene, .grade').forEach((el) => { el.style.transformOrigin = '0 0'; el.style.transform = tf; });
     });
-    const st = $('.stage'); if (z > 1.001) st.dataset.zoom = `${z < 10 ? z.toFixed(1).replace('.', S.set.lang === 'pt' ? ',' : '.') : Math.round(z)}×`; else delete st.dataset.zoom;
+    const st = $('.stage'); if (z > 1.001) st.dataset.zoom = `${z < 10 ? z.toFixed(1).replace('.', decComma() ? ',' : '.') : Math.round(z)}×`; else delete st.dataset.zoom;
   }
   function setPz(z, mx, my) {
     const o = S.pz; z = clamp(z, 1, 8);
@@ -2186,7 +2196,7 @@
     const dp = presetOf(S.set.defaultPreset) || S.presets[0];
     $('#sheetBody').innerHTML = `
       <div class="group">
-        ${row(L.language, segH('lang', S.set.lang, [['en', 'English'], ['pt', 'Português']]))}
+        ${row(L.language, `<button class="field pick" data-menu="1" id="bLang">${esc((LANGS.find((l) => l[0] === S.set.lang) || LANGS[0])[1])}${ICONS.chev}</button>`)}
         ${row(L.appearance, segH('theme', S.set.theme, [['system', L.system], ['light', L.light], ['dark', L.dark], ['oled', L.oled], ['studio', L.studio]]))}
       </div>
       <div class="sec-label">${L.general}</div>
@@ -2245,8 +2255,9 @@
       if (s.dataset.k === 'playQ') { S.set.playQ = v; S.queue.forEach((q) => { delete q.liveH; }); saveSettings(); return; }
       if (s.dataset.k === 'previewGB') { S.set.previewGB = +v; saveSettings(); return; }
       if (s.dataset.k === 'previewDays') { S.set.previewDays = +v; saveSettings(); prunePreviews(); return; }
-      S.set.lang = v; saveSettings(); applyLang(); renderAll(); renderSheet();
     }));
+    $('#bLang').onclick = (e) => openMenu(e.currentTarget, LANGS.map(([v, n]) => ({ label: n, value: v, sel: S.set.lang === v })),
+      (v) => { S.set.lang = v; saveSettings(); applyLang(); renderAll(); renderSheet(); });
     $('#bSheetDef').onclick = (e) => openMenu(e.currentTarget, presetItems(S.set.defaultPreset).filter((i) => !isAudioP(presetOf(i.value)) && !isImageP(presetOf(i.value))), (v) => { S.set.defaultPreset = v; saveSettings(); renderSheet(); renderQueue(); });
     const di = $('#bSheetDefI'); if (di) di.onclick = (e) => openMenu(e.currentTarget, presetItems(defaultImageId()).filter((i) => isImageP(presetOf(i.value))), (v) => { S.set.defaultImagePreset = v; saveSettings(); renderSheet(); });
     const da = $('#bSheetDefA'); if (da) da.onclick = (e) => openMenu(e.currentTarget, presetItems(defaultAudioId()).filter((i) => isAudioP(presetOf(i.value))), (v) => { S.set.defaultAudioPreset = v; saveSettings(); renderSheet(); });
@@ -2600,7 +2611,7 @@
   const md = (t) => esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
   function openNews(on) {
     if (on) {
-      const lang = S.set.lang === 'pt' ? 'pt' : 'en';
+      const lang = S.set.lang;
       $('#lNews').textContent = L.news; $('#bNewsDone').textContent = L.done;
       $('#newsBody').innerHTML = (window.MEC_NEWS || []).map((v) => `<section class="news-v ${v.version === S.version ? '' : 'old'}"><h3>${esc(v.version)}${v.version === S.version ? `<small>${L.thisVersion}</small>` : ''}</h3>
         <ul>${(v[lang] && v[lang].length ? v[lang] : v.en).map((li) => `<li>${md(li)}</li>`).join('')}</ul></section>`).join('');
@@ -2665,8 +2676,7 @@
     try {
       const st = await inv('get_state'); st0 = st;
       S.presets = (st.presets || []).map(normPreset);
-      if (st.settings && typeof st.settings === 'object') Object.assign(S.set, st.settings);
-      else if ((navigator.language || '').toLowerCase().startsWith('pt')) S.set.lang = 'pt'; // primeira vez: idioma do Windows
+      if (st.settings && typeof st.settings === 'object') Object.assign(S.set, st.settings); // primeira vez: idioma do Windows e tema Estúdio (padrões acima)
       if (!presetOf(S.set.defaultPreset) && S.presets[0]) S.set.defaultPreset = S.presets[0].id;
       S.engine = Object.assign(S.engine, st.engine); S.version = st.version;
       S.audioDefaults = st.audioDefaults || []; S.imageDefaults = st.imageDefaults || []; S.cameraPreset = st.cameraPreset; S.firstRun = !!st.firstRun;
