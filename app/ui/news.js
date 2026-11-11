@@ -1,6 +1,25 @@
 // Gerado por docs/release-notes/make_news.py — não edite à mão.
 window.MEC_NEWS = [
  {
+  "version": "0.3.4",
+  "en": [
+   "**New player, like a video editor**: clicking or dragging on the timeline, the arrow keys and play no longer open FFmpeg each time. A player engine keeps the video open, reads it on the graphics card (GPU) when it can, and keeps the frames around the playhead ready in memory, so nearby frames show instantly. Works in the Cutter and in Convert (both sides of Compare).",
+   "**Play through the engine**: picture and sound together, already without the cut parts and with no stutter between cuts; speed keeps the pitch of the voice. **J** plays backward (again: 2×, 4×), **L** forward (2×, 4×), **K** pauses. If the engine fails on a file, the old player takes over.",
+   "**Preview quality like Premiere**: menu next to the speed with Paused and Playing, each in Automatic, Full, 1/2, 1/4 or 1/8.",
+   "**Frame memory** in Settings (1 to 8 GB of RAM) and an option to show the player timings on the video.",
+   "**Exact frame on cuts**: Export and GIF parts now start on the exact frame even right before a keyframe (in some HEVC videos the cut could start 1–3 frames late). The preview also shows the right frame there.",
+   "**Download**: finished downloads keep the link: **Copy link** or **Download again** (choose quality, video or audio only)."
+  ],
+  "pt": [
+   "**Player novo, como de editor de vídeo**: clicar ou arrastar na linha do tempo, as setas e o play não abrem mais o FFmpeg a cada vez. Um motor de reprodução fica com o vídeo aberto, lê na placa de vídeo quando dá e guarda na memória os quadros em volta da agulha, então os quadros perto aparecem na hora. Vale no Cortador e no Converter (os dois lados do Comparar).",
+   "**Play pelo motor**: imagem e som juntos, já sem os trechos cortados e sem engasgo entre os cortes; a velocidade mantém o tom da voz. **J** toca para trás (de novo: 2×, 4×), **L** para frente (2×, 4×), **K** pausa. Se o motor falhar num arquivo, o player antigo assume.",
+   "**Qualidade do preview como no Premiere**: menu ao lado da velocidade com Pausado e Tocando, cada um em Automática, Completa, 1/2, 1/4 ou 1/8.",
+   "**Memória de quadros** nas Configurações (1 a 8 GB de RAM) e opção de mostrar os tempos do player no vídeo.",
+   "**Quadro exato nos cortes**: Exportar e os trechos do GIF agora começam no quadro exato mesmo logo antes de um quadro-chave (em alguns vídeos HEVC o corte podia começar 1 a 3 quadros depois). A prévia também mostra o quadro certo ali.",
+   "**Baixar**: os downloads concluídos guardam o link: **Copiar link** ou **Baixar de novo** (escolher qualidade, vídeo ou só áudio)."
+  ]
+ },
+ {
   "version": "0.3.3",
   "en": [
    "**Video to GIF** in Convert: a new GIF preset (in the GIF folder) with width, fps, quality (High or Light), loop, aspect ratio and rotation. With cuts, only the cuts become a GIF; joined, they make a single GIF. HDR videos are converted to normal colors.",
@@ -160,33 +179,6 @@ window.MEC_NEWS = [
    "**Ímã**: arrastando a agulha perto do início ou do fim de um trecho, ela gruda no primeiro ou no último quadro. Segure **Alt** para arrastar sem ímã.",
    "Atalhos novos (todos dá para trocar em Configurações › Atalhos): **Shift+I / Shift+O** vão ao início ou ao último quadro do trecho, **Home / End** vão ao começo ou ao fim, **Ctrl+L** liga e desliga o Repetir.",
    "Configurações › **Reprodução**: qualidade da prévia, espaço para as prévias guardadas e **Apagar** prévias."
-  ]
- },
- {
-  "version": "0.2.8",
-  "en": [
-   "**Test version**: not offered by the app's automatic update. Download it from this page.",
-   "**Cutter**: cutting now has its own page, with a large preview and timeline and the list of cuts. Open it with the **Cut** button under the preview, the scissors on a queued video, right-click › Open the Cutter, or the **C** key. **Done** (Enter/Esc) goes back to the queue; **Cancel** undoes the changes.",
-   "**I** = start of the cut, **O** = end of the cut (the playhead frame is included), **S** = new cut at the playhead (inside a cut, it splits it).",
-   "The list shows each cut with start and end in timecode (you can type them), duration and ×. Clicking a cut takes the playhead to its start.",
-   "**[Separate | Joined]** above the list, and the names of the files that will be saved.",
-   "Click the edge of a cut to go to its first or last frame; drag to adjust frame by frame.",
-   "**Playhead snaps to frames**, and the timecode counts frames like Premiere.",
-   "**New zoom bar** under the timeline with the cuts in miniature: drag the middle to move, drag the ends to zoom.",
-   "**Shortcuts** can be changed in Settings › Shortcuts.",
-   "**Fixes**: dragging the zoomed preview stopped when the button was released (it kept following the mouse); the middle mouse button also moves the preview and the timeline."
-  ],
-  "pt": [
-   "**Versão de teste**: a atualização automática do app não oferece esta versão. Baixe por esta página.",
-   "**Cortador**: cortar agora tem uma página própria, com prévia e linha do tempo grandes e a lista de trechos. Abra pelo botão **Cortar** embaixo da prévia, pela tesoura no vídeo da fila, pelo botão direito › Abrir o Cortador ou pela tecla **C**. **Concluir** (Enter/Esc) volta para a fila; **Cancelar** desfaz o que mudou.",
-   "**I** = início do trecho, **O** = fim do trecho (o quadro da agulha entra), **S** = trecho novo na agulha (dentro de um trecho, divide em dois).",
-   "A lista mostra cada trecho com início e fim em timecode (dá para digitar), duração e ×. Clicar num trecho leva a agulha ao começo dele.",
-   "**[Separados | Juntos]** em cima da lista, e os nomes dos arquivos que vão sair.",
-   "Clicar na borda de um trecho leva a agulha ao primeiro ou ao último quadro; arrastar ajusta quadro a quadro.",
-   "**Agulha presa nos quadros**, e o timecode conta quadros como o Premiere.",
-   "**Barra de zoom nova** embaixo da linha do tempo, com os trechos em miniatura: arraste o meio para andar, as pontas para dar zoom.",
-   "**Atalhos** configuráveis em Configurações › Atalhos.",
-   "**Correções**: arrastar a prévia com zoom para quando o botão é solto (antes continuava seguindo o mouse); o botão do meio do mouse também arrasta a prévia e a linha do tempo."
   ]
  }
 ];
