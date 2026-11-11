@@ -42,6 +42,7 @@
   const PALETTE = Object.keys(COLORS);
   const ICONS = {
     image: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.2" y="3" width="11.6" height="10" rx="2"/><circle cx="6" cy="6.6" r="1.1"/><path d="M13.6 10.6l-3.2-3.1L4 13"/></svg>',
+    gif: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.2" y="3" width="11.6" height="10" rx="2"/><path d="M6.6 6.2v3.6l3-1.8z" fill="currentColor"/><path d="M11.4 1.6l.5 1M13.6 2.6l-.8.6"/></svg>',
     again: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 8a5 5 0 1 1-1.6-3.7"/><path d="M13 2.8v2.8h-2.8"/></svg>',
     dup: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><rect x="5.2" y="5.2" width="8" height="8" rx="1.8"/><path d="M10.8 5.2V4a1.6 1.6 0 0 0-1.6-1.6H4A1.6 1.6 0 0 0 2.4 4v5.2A1.6 1.6 0 0 0 4 10.8h1.2"/></svg>',
     note: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 12.2V3.4l7-1.4v8.6"/><circle cx="4.3" cy="12.2" r="1.8" fill="currentColor"/><circle cx="11.3" cy="10.6" r="1.8" fill="currentColor"/></svg>',
@@ -86,8 +87,8 @@
     queue: demo.queue.map((q) => Object.assign(q, { cfg: clone(demo.presets.find((p) => p.id === q.preset)) })),
     set: Object.assign({ lang: sysLang(), theme: 'studio', lastDark: 'studio', defaultPreset: demo.presets[0] && demo.presets[0].id,
       clearWhenDone: true, notify: true, sound: true, foldPresets: false, parallel: 2 }, demo.settings),
-    audioDefaults: REAL ? [] : (demo.audioDefaults || []), sel: REAL ? null : 2, picked: new Set(REAL ? [] : [2]), anchor: null, editPreset: null, cmp: false, job: null, playing: false, t: REAL ? 0 : .31,
-    open: { video: true }, engine: { status: REAL ? 'checking' : 'nvenc', gpu: REAL ? null : 'NVIDIA GeForce RTX' },
+    audioDefaults: REAL ? [] : (demo.audioDefaults || []), gifDefaults: REAL ? [] : (demo.gifDefaults || []), sel: REAL ? null : 2, picked: new Set(REAL ? [] : [2]), anchor: null, editPreset: null, cmp: false, job: null, playing: false, t: REAL ? 0 : .31,
+    open: { video: true, gif: true }, engine: { status: REAL ? 'checking' : 'nvenc', gpu: REAL ? null : 'NVIDIA GeForce RTX' },
     version: '0.1.0', update: null,
   };
   const presetOf = (id) => S.presets.find((p) => p.id === id);
@@ -279,6 +280,25 @@
   }
   const isAudioP = (c) => c && c.kind === 'audio';
   const isImageP = (c) => c && c.kind === 'image';
+  const isGifP = (c) => c && c.kind === 'gif';
+  const gifOf = (c) => Object.assign({ width: 480, fps: '15', quality: 'high', repeat: true }, (c && c.gif) || {});
+  // FPS do GIF: o escolhido, ou o do vídeo (acima de 50 cai pela metade; o GIF conta em centésimos), igual ao motor
+  const gifFps = (c, src) => { const g = gifOf(c); if (g.fps && g.fps !== 'source') return +g.fps; const f = src ? +srcFps(src) || 15 : 15; return f > 50 ? Math.min(50, Math.round(f / 2)) : f; };
+  // tamanho do GIF: proporção e giro do preset, largura escolhida (nunca aumenta)
+  function gifDims(src, c) {
+    const base = outDims(src, Object.assign({}, c, { scale: 'source' })); const w = +gifOf(c).width || 0;
+    if (!w || w >= base.w) return base;
+    return { w: Math.max(2, Math.round(w / 2) * 2), h: Math.max(2, Math.round(base.h * w / base.w / 2) * 2) };
+  }
+  // o que um preset de GIF vai gerar: "GIF · 480 × 270 · 15 fps" (sem vídeo: "GIF · 480 px · 15 fps")
+  function gifOutTxt(c, src) {
+    const g = gifOf(c); const d = src && src.w ? gifDims(src, c) : null;
+    const size = d ? `${d.w} × ${d.h}` : g.width ? `${g.width} px` : L.source;
+    const fps = g.fps === 'source' && !src ? `${L.source} fps` : `${fpsTxt(String(gifFps(c, src)))} fps`;
+    return ['GIF', size, fps].join(' · ');
+  }
+  // GIF real (filmagem) fica perto de meio byte por pixel por quadro; "Leve" (128 cores, pontilhado em grade) bem menos
+  const gifMB = (q) => { const d = gifDims(q.src, q.cfg); return d.w * d.h * (gifOf(q.cfg).quality === 'small' ? 0.28 : 0.45) * gifFps(q.cfg, q.src) * durOf(q) / 1e6; };
   const IEXT = { jpg: 'jpg', png: 'png', webp: 'webp' };
   const IFMT = { jpg: 'JPG', png: 'PNG', webp: 'WebP' };
   // o que um preset de imagem vai gerar: "JPG · 90% · 400 × 300"
@@ -311,7 +331,7 @@
   }
   const imageMB = (q) => { const d = outDims(q.src, q.cfg); const im = q.cfg.image || {}; const px = d.w * d.h;
     return px * (im.format === 'png' ? 1.6 : (im.format === 'webp' ? 0.6 : 1) * (im.lossless ? 1.2 : 0.08 + (im.quality || 90) / 100 * 0.35)) / 1e6; };
-  const estMB = (q) => (isImageP(q.cfg) ? imageMB(q) : (isAudioP(q.cfg) ? audioKbps(q) : videoKbps(q.src, q.cfg) + (q.cfg.audio.codec === 'copy' ? 256 : q.cfg.audio.kbps || 256)) * durOf(q) / 8 / 1000);
+  const estMB = (q) => (isGifP(q.cfg) ? gifMB(q) : isImageP(q.cfg) ? imageMB(q) : (isAudioP(q.cfg) ? audioKbps(q) : videoKbps(q.src, q.cfg) + (q.cfg.audio.codec === 'copy' ? 256 : q.cfg.audio.kbps || 256)) * durOf(q) / 8 / 1000);
   const warnings = (q) => (q.src.hdr && !q.cfg.hdrToSdr ? [L.hdrMismatch(q.src.hdr)] : []);
   const codecName = (c) => (c === 'h265' ? 'H.265' : c === 'h264' ? 'H.264' : L.source);
   const scaleTxt = (s) => (s === 'source' ? L.source : s === '1080' ? '1080p' : s === 'custom' ? L.custom : s + '%');
@@ -716,7 +736,7 @@
 
   function assign(q, pid) {
     if (q.src.audioOnly && !isAudioP(presetOf(pid))) { toast(L.needAudioPreset); return false; }
-    if (q.src.isImage !== isImageP(presetOf(pid))) { toast(q.src.isImage ? L.needImagePreset : L.imagePresetOnlyImages); return false; }
+    if (!!q.src.isImage !== !!isImageP(presetOf(pid))) { toast(q.src.isImage ? L.needImagePreset : L.imagePresetOnlyImages); return false; }
     q.preset = pid; q.cfg = clone(presetOf(pid)); return true;
   }
   function assignPicked(pid) {
@@ -735,6 +755,7 @@
   function describe(p) {
     if (isImageP(p)) return `<b>${esc(p.name)}:</b> ${imageOutTxt(p, null)} · ${L.imageOnlyDesc}`;
     if (isAudioP(p)) return `<b>${esc(p.name)}:</b> ${audioOutTxt(p, null)} · ${L.audioOnlyDesc}`;
+    if (isGifP(p)) return `<b>${esc(p.name)}:</b> ${gifOutTxt(p, null)} · ${L.gifDesc}`;
     const parts = [codecName(p.codec) + ' ' + bitsTxt(p, null) + ((p.chroma || '420') === '420' ? '' : ' ' + (p.chroma === '422' ? '4:2:2' : L.sourceChroma)), p.scale === 'source' ? L.sourceRes : scaleTxt(p.scale),
       p.bitrate.mode === 'manual' ? fmtK(p.bitrate.kbps) + ' ' + p.bitrate.rc.toUpperCase() : p.bitrate.mode === 'source' ? L.bitrateSrc : L.bitrateAuto,
       p.fps.conform ? fpsCfrTxt(p, null) : null, p.hdrToSdr ? 'HDR → 709' : null,
@@ -750,7 +771,7 @@
     return f;
   }
   const inside = (p, f) => p.folder === f;
-  const pill = (p, selId) => `<button class="preset ${selId === p.id ? 'sel' : ''} ${isAudioP(p) || isImageP(p) ? 'is-audio' : ''}" data-id="${p.id}" style="--c:${COLORS[p.color] || COLORS.blue}"><i class="pdot"></i>${isAudioP(p) ? ICONS.note : isImageP(p) ? ICONS.image : ''}${esc(p.name)}</button>`;
+  const pill = (p, selId) => `<button class="preset ${selId === p.id ? 'sel' : ''} ${isAudioP(p) || isImageP(p) || isGifP(p) ? 'is-audio' : ''}" data-id="${p.id}" style="--c:${COLORS[p.color] || COLORS.blue}"><i class="pdot"></i>${isAudioP(p) ? ICONS.note : isImageP(p) ? ICONS.image : isGifP(p) ? ICONS.gif : ''}${esc(p.name)}</button>`;
   function folderHtml(f, selId, closed) {
     const list = S.presets.filter((p) => p.folder === f);
     return `<div class="pfolder ${closed[f] ? 'closed' : ''}" data-folder="${esc(f)}">
@@ -812,6 +833,12 @@
     const base = clone(S.presets.find(isImageP) || (S.imageDefaults || [])[0] || {});
     if (!base.image) return;
     Object.assign(base, { kind: 'image', id: uid(), name: L.newPresetName, color: PALETTE[S.presets.length % PALETTE.length], folder: base.folder || '' });
+    addPresets([base], false); editPreset(base.id, true);
+  }
+  function newGifPreset() {
+    const base = clone(S.presets.find(isGifP) || (S.gifDefaults || [])[0] || {});
+    if (!base.gif) return;
+    Object.assign(base, { kind: 'gif', id: uid(), name: L.newPresetName, color: PALETTE[S.presets.length % PALETTE.length], folder: base.folder || '' });
     addPresets([base], false); editPreset(base.id, true);
   }
   function deletePreset(pid) {
@@ -924,8 +951,8 @@
     if (fh) { const f = fh.dataset.folder; S.set.folderClosed = Object.assign({}, S.set.folderClosed, { [f]: !(S.set.folderClosed || {})[f] }); saveSettings(); renderPresets(); return; }
     const b = e.target.closest('.preset'); if (!b) return;
     if (b.classList.contains('add')) {
-      openMenu(b, [{ label: L.newPresetMenu, value: 'new', icon: ICONS.plus }, { label: L.newAudioPreset, value: 'audio', icon: ICONS.note }, { label: L.newImagePreset, value: 'image', icon: ICONS.image }, { label: L.newFolderMenu, value: 'folder', icon: ICONS.folder }, { label: L.importEnc, value: 'enc', icon: ICONS.down }],
-        (v) => (v === 'new' ? newPreset() : v === 'audio' ? newAudioPreset() : v === 'image' ? newImagePreset() : v === 'folder' ? newFolder('') : importEnc()));
+      openMenu(b, [{ label: L.newPresetMenu, value: 'new', icon: ICONS.plus }, { label: L.newAudioPreset, value: 'audio', icon: ICONS.note }, { label: L.newImagePreset, value: 'image', icon: ICONS.image }, { label: L.newGifPreset, value: 'gif', icon: ICONS.gif }, { label: L.newFolderMenu, value: 'folder', icon: ICONS.folder }, { label: L.importEnc, value: 'enc', icon: ICONS.down }],
+        (v) => (v === 'new' ? newPreset() : v === 'audio' ? newAudioPreset() : v === 'image' ? newImagePreset() : v === 'gif' ? newGifPreset() : v === 'folder' ? newFolder('') : importEnc()));
       return;
     }
     const q = selItem();
@@ -1171,6 +1198,7 @@
     if (cutsOf(q)) c.push(trimChip(q));
     c.push(chip(`≈ ${fmtMB(estMB(q))}`));
     if (isImageP(q.cfg)) $('#pvMeta').innerHTML = [chip(imageOutTxt(q.cfg, q.src), COLORS.orange, ICONS.image), chip(`≈ ${fmtMB(estMB(q))}`)].join('<span class="dot">·</span>');
+    else if (isGifP(q.cfg)) $('#pvMeta').innerHTML = [chip(gifOutTxt(q.cfg, q.src), COLORS.purple, ICONS.gif), trimChip(q), chip(`≈ ${fmtMB(estMB(q))}`)].filter(Boolean).join('<span class="dot">·</span>');
     else if (!isAudioP(q.cfg)) $('#pvMeta').innerHTML = c.join('<span class="dot">·</span>');
     if (anim) { const m = $('#pvMeta'); m.classList.remove('swap'); void m.offsetWidth; m.classList.add('swap'); }
     paintFrame(fr, q, true);
@@ -1782,6 +1810,13 @@
     let t;
     if (PL.mode === 'demo') { PL.dt += Math.min(0.1, (now - PL.last) / 1000) * PL.rate; PL.last = now; t = PL.dt; }
     else t = srcOf(mt != null ? mt : vid.currentTime);
+    // direto: alguns arquivos (gravação de tela, por exemplo) não deixam o player pular para o meio
+    // e ele toca do começo; tocando antes do trecho por alguns quadros, passa para a conversão ao vivo
+    if (PL.mode === 'direct' && PL.started && !vid.seeking && parts[PL.i]) {
+      const a = parts[PL.i][0];
+      PL.behind = t < a - 0.5 ? (PL.behind || 0) + 1 : 0;
+      if (PL.behind >= 3) { PL.behind = 0; q.play.noDirect = true; plRestartAt(a); return false; }
+    }
     // direto/guardada: no último quadro do trecho, pula para o próximo trecho ou termina
     if (PL.mode !== 'live' && parts[PL.i]) {
       const b = parts[PL.i][1];
@@ -1972,6 +2007,19 @@
       ${row(L.rotate, dd('rotate', c.rotate || 0, [[0, L.rotNone], [90, L.rotCw], [180, '180°'], [270, L.rotCcw]]))}
     </div>${im.format === 'jpg' ? `<div class="hint">${L.jpgNoAlpha}</div>` : ''}`);
   }
+  // Preset de GIF: largura, FPS, qualidade, loop, proporção e giro
+  function gifInspector(c, src) {
+    const g = gifOf(c);
+    const w = src && src.w ? gifDims(src, c) : null;
+    return sec('gif', 'GIF', gifOutTxt(c, src), `<div class="group">
+      ${row(L.gifWidth + (w ? `<small class="res-out">${w.w} × ${w.h}</small>` : ''), dd('gif.width', g.width || 0, [[0, L.source], [1080, '1080 px'], [720, '720 px'], [640, '640 px'], [480, '480 px'], [320, '320 px']]))}
+      ${row(L.fps + (g.fps === 'source' && src ? `<small class="res-out">${fpsTxt(String(gifFps(c, src)))} fps</small>` : ''), dd('gif.fps', g.fps || '15', [['source', L.source], ['30', '30'], ['25', '25'], ['20', '20'], ['15', '15'], ['12', '12'], ['10', '10']]))}
+      ${row(L.quality, segH('gif.quality', g.quality === 'small' ? 'small' : 'high', [['high', L.gifHigh], ['small', L.gifSmall]]))}
+      ${row(L.gifRepeat, sw('gif.repeat', g.repeat !== false))}
+      ${aspectRows(c)}
+      ${row(L.rotate, dd('rotate', c.rotate || 0, [[0, L.rotNone], [90, L.rotCw], [180, '180°'], [270, L.rotCcw]]))}
+    </div><div class="hint">${L.gifHint}</div>`);
+  }
   // Preset de áudio: só formato, qualidade, taxa e canais
   function audioInspector(c, src) {
     const a = c.audio; const s0 = srcAud(src); const lossy = a.codec === 'mp3' || a.codec === 'aac'; const pcm = a.codec === 'wav' || a.codec === 'flac';
@@ -2002,6 +2050,7 @@
     const rotTxt = c.rotate ? ` · ↻ ${c.rotate}°` : '';
     const top = (T.isPreset ? '' : S.picked.size > 1 ? `<div class="hint top-hint multi-hint">${L.multiHint(S.picked.size)}</div>` : '');
     if (isImageP(c)) el.innerHTML = top + imageInspector(c, src);
+    else if (isGifP(c)) { if (!c.gif) c.gif = gifOf(c); el.innerHTML = top + gifInspector(c, src); }
     else if (isAudioP(c)) el.innerHTML = top + audioInspector(c, src) + sec('adv', L.advanced, c.metadata ? L.metadata : '—', `<div class="group">${row(L.metadata, sw('metadata', c.metadata), L.metadataSub)}</div>`);
     else el.innerHTML = top
       + sec('video', L.video, `${codecName(codecOut(c, src) || c.codec)} · ${bitsTxt(c, src)}${chromaOut(c, src) === '422' ? ' 4:2:2' : ''} · ${scaleTxt(c.scale)}${ratioOf(c) ? ' · ' + c.aspect : ''}${rotTxt} · ${c.fps.conform ? fpsCfrTxt(c, src) : c.bitrate.mode === 'manual' ? fmtK(c.bitrate.kbps) : c.bitrate.mode === 'source' ? L.source : { high: L.autoHigh, balanced: L.autoBalanced, light: L.autoLight }[autoLevel(c)]}${c.hdrToSdr ? ' · 709' : ''}`,
@@ -2066,7 +2115,7 @@
         ${fixed ? row(`<span class="lbl-i">${L.keepTree}<span class="info" tabindex="0" aria-label="${esc(L.keepTreeTip)}" data-tip="${esc(L.keepTreeTip)}">${ICONS.info}</span></span>`, sw('output.keepTree', o.keepTree !== false)) : ''}
         ${row(L.suffix, `<div class="field tagged ${o.suffix.on ? '' : 'off'}"><input data-k="output.suffix.text" value="${esc(o.suffix.text)}" class="txt" spellcheck="false"><button class="tag-btn" data-menu="1" data-tags="output.suffix.text" title="${esc(L.tagsTitle)}" aria-label="${esc(L.tagsTitle)}">{ }</button></div>${sw('output.suffix.on', o.suffix.on)}`)}
         ${row(L.subfolder, `<div class="field ${o.subfolder.on ? '' : 'off'}"><input data-k="output.subfolder.text" value="${esc(o.subfolder.text)}" class="txt" spellcheck="false"></div>${sw('output.subfolder.on', o.subfolder.on)}`)}
-        ${isAudioP(c) || isImageP(c) ? '' : row(L.format + (c.container === 'source' && T.q ? `<small class="res-out">.${extOut(c, T.q.file)}</small>` : ''), dd('container', c.container || 'mp4', [['source', L.source], ['mp4', 'MP4'], ['mov', 'MOV']]))}
+        ${isAudioP(c) || isImageP(c) || isGifP(c) ? '' : row(L.format + (c.container === 'source' && T.q ? `<small class="res-out">.${extOut(c, T.q.file)}</small>` : ''), dd('container', c.container || 'mp4', [['source', L.source], ['mp4', 'MP4'], ['mov', 'MOV']]))}
         ${row(L.deleteSrc, sw('output.deleteSource', o.deleteSource, true), '', o.deleteSource ? 'danger' : '')}
       </div>`;
     wireDD(box);
@@ -2090,10 +2139,10 @@
   function tagMap(cfg, q) {
     const src = q && q.src; const t = nowTags();
     const vid = !!(src && !src.audioOnly && !isAudioP(cfg));
-    const d = vid && src.w ? outDims(src, cfg) : null;
-    const codec = isImageP(cfg) ? ({ png: 'PNG', webp: 'WEBP' }[(cfg.image || {}).format] || 'JPG') : isAudioP(cfg) ? (ACODEC[cfg.audio.codec] || 'AUDIO') : (codecOut(cfg, src) === 'h264' ? 'H264' : 'H265');
-    const fps = vid && !isImageP(cfg) ? (cfg.fps.conform && cfg.fps.value !== 'source' ? cfg.fps.value : srcFps(src)) : '';
-    const bits = isAudioP(cfg) ? (['wav', 'flac'].includes(cfg.audio.codec) ? Math.max(16, cfg.audio.bits || 0) + 'bit' : '') : isImageP(cfg) ? '' : (bitsOut(cfg, src) || 8) + 'bit';
+    const d = vid && src.w ? (isGifP(cfg) ? gifDims(src, cfg) : outDims(src, cfg)) : null;
+    const codec = isGifP(cfg) ? 'GIF' : isImageP(cfg) ? ({ png: 'PNG', webp: 'WEBP' }[(cfg.image || {}).format] || 'JPG') : isAudioP(cfg) ? (ACODEC[cfg.audio.codec] || 'AUDIO') : (codecOut(cfg, src) === 'h264' ? 'H264' : 'H265');
+    const fps = vid && isGifP(cfg) ? String(gifFps(cfg, src)) : vid && !isImageP(cfg) ? (cfg.fps.conform && cfg.fps.value !== 'source' ? cfg.fps.value : srcFps(src)) : '';
+    const bits = isAudioP(cfg) ? (['wav', 'flac'].includes(cfg.audio.codec) ? Math.max(16, cfg.audio.bits || 0) + 'bit' : '') : isImageP(cfg) || isGifP(cfg) ? '' : (bitsOut(cfg, src) || 8) + 'bit';
     const i = q ? S.queue.indexOf(q) : -1;
     return { codec, preset: cfg.name || '', data: t.date, date: t.date, hora: t.time, time: t.time, res: d ? `${d.w}x${d.h}` : '', fps, bits, n: pad(i >= 0 ? i + 1 : 1) };
   }
@@ -2121,7 +2170,7 @@
     const suf = c.suffix.on ? cleanName(applyTags(c.suffix.text, cfg, q || null)) : '';
     // trechos separados: um arquivo por trecho (_01, _02...)
     const n = q && cutsOf(q) && !q.cutJoin ? q.cuts.length : 0;
-    return base + suf + (n > 1 ? `_01…_${pad(n)}` : '') + '.' + (isImageP(cfg) ? (IEXT[(cfg.image || {}).format] || 'jpg') : isAudioP(cfg) ? (AEXT[cfg.audio.codec] || String(file).split('.').pop()) : extOut(cfg, file));
+    return base + suf + (n > 1 ? `_01…_${pad(n)}` : '') + '.' + (isGifP(cfg) ? 'gif' : isImageP(cfg) ? (IEXT[(cfg.image || {}).format] || 'jpg') : isAudioP(cfg) ? (AEXT[cfg.audio.codec] || String(file).split('.').pop()) : extOut(cfg, file));
   }
   // todos os arquivos que vão sair deste vídeo (um por trecho, se separados)
   function outNames(q) {
@@ -2273,7 +2322,7 @@
     }));
     $('#bLang').onclick = (e) => openMenu(e.currentTarget, LANGS.map(([v, n]) => ({ label: n, value: v, sel: S.set.lang === v })),
       (v) => { S.set.lang = v; saveSettings(); applyLang(); renderAll(); renderSheet(); });
-    $('#bSheetDef').onclick = (e) => openMenu(e.currentTarget, presetItems(S.set.defaultPreset).filter((i) => !isAudioP(presetOf(i.value)) && !isImageP(presetOf(i.value))), (v) => { S.set.defaultPreset = v; saveSettings(); renderSheet(); renderQueue(); });
+    $('#bSheetDef').onclick = (e) => openMenu(e.currentTarget, presetItems(S.set.defaultPreset).filter((i) => !isAudioP(presetOf(i.value)) && !isImageP(presetOf(i.value)) && !isGifP(presetOf(i.value))), (v) => { S.set.defaultPreset = v; saveSettings(); renderSheet(); renderQueue(); });
     const di = $('#bSheetDefI'); if (di) di.onclick = (e) => openMenu(e.currentTarget, presetItems(defaultImageId()).filter((i) => isImageP(presetOf(i.value))), (v) => { S.set.defaultImagePreset = v; saveSettings(); renderSheet(); });
     const da = $('#bSheetDefA'); if (da) da.onclick = (e) => openMenu(e.currentTarget, presetItems(defaultAudioId()).filter((i) => isAudioP(presetOf(i.value))), (v) => { S.set.defaultAudioPreset = v; saveSettings(); renderSheet(); });
     $('#bOpenLog').onclick = () => (REAL ? inv('open_log').catch((e) => toast(String(e))) : toast('render.log'));
@@ -3426,6 +3475,12 @@
       if (!S.set.imagePresetsAdded && imgDefs.length) {
         if (!S.presets.some(isImageP)) { S.presets.push(...clone(imgDefs)); savePresets(); }
         S.set.imagePresetsAdded = true; saveSettings();
+      }
+      // GIF entra uma vez para quem já usava o app (numa pasta "GIF")
+      const gifDefs = st.gifDefaults || []; S.gifDefaults = gifDefs;
+      if (!S.set.gifPresetsAdded && gifDefs.length) {
+        if (!S.presets.some(isGifP)) { S.presets.push(...clone(gifDefs)); savePresets(); }
+        S.set.gifPresetsAdded = true; saveSettings();
       }
       if (!st.engine.ffmpeg) S.engine.status = 'missing';
     } catch (e) { console.error(e); }

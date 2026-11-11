@@ -354,6 +354,7 @@ pub fn aac_quality(info: &MediaInfo, p: &Preset) -> (u32, u32) {
 }
 
 pub fn codec_tag(p: &Preset) -> &'static str {
+    if p.is_gif() { return "GIF"; }
     if p.is_image() { return match p.image.format.as_str() { "png" => "PNG", "webp" => "WEBP", _ => "JPG" }; }
     if p.is_audio() { return match p.audio.codec.as_str() { "wav" => "WAV", "mp3" => "MP3", "flac" => "FLAC", "aac" => "AAC", _ => "AUDIO" }; }
     if p.codec == "h264" { "H264" } else { "H265" }
@@ -396,11 +397,11 @@ pub struct Naming {
 pub fn tags(text: &str, info: Option<&MediaInfo>, p: &Preset, nm: &Naming) -> String {
     if !text.contains('{') { return text.to_string(); }
     let v = info.and_then(|i| i.video.as_ref());
-    let res = v.filter(|_| !p.is_audio()).map(|v| { let (w, h) = out_dims(v, p); format!("{w}x{h}") }).unwrap_or_default();
-    let fps = v.filter(|_| !p.is_audio() && !p.is_image()).map(|v| if p.fps.conform && p.fps.value != "source" && !p.fps.value.is_empty() { p.fps.value.clone() } else { source_fps(v) }).unwrap_or_default();
+    let res = v.filter(|_| !p.is_audio()).map(|v| { let (w, h) = match info.filter(|_| p.is_gif()) { Some(i) => out_dims(v, &gif_video_preset(i, p)), None => out_dims(v, p) }; format!("{w}x{h}") }).unwrap_or_default();
+    let fps = v.filter(|_| !p.is_audio() && !p.is_image()).map(|v| if p.is_gif() { info.map(|i| gif_fps(i, p)).unwrap_or_default() } else if p.fps.conform && p.fps.value != "source" && !p.fps.value.is_empty() { p.fps.value.clone() } else { source_fps(v) }).unwrap_or_default();
     let bits = if p.is_audio() {
         if p.audio.codec == "wav" || p.audio.codec == "flac" { format!("{}bit", p.audio.bits.max(16)) } else { String::new() }
-    } else if p.is_image() { String::new() } else {
+    } else if p.is_image() || p.is_gif() { String::new() } else {
         let b = if p.bits > 0 { p.bits } else { v.map_or(8, |v| if v.bit_depth >= 10 { 10 } else { 8 }) };
         format!("{b}bit")
     };
@@ -434,7 +435,7 @@ pub fn output_path_for(src: &Path, info: Option<&MediaInfo>, p: &Preset, nm: &Na
     if o.subfolder.on && !sub.is_empty() && sub != "." && sub != ".." { dir = dir.join(sub); }
     let stem = src.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "video".into());
     let suffix = if o.suffix.on { clean(&tags(&o.suffix.text, info, p, nm)) } else { String::new() };
-    let ext = if p.is_image() { image_ext(p).to_string() } else if p.is_audio() { audio_ext(src, p, "") } else {
+    let ext = if p.is_gif() { "gif".to_string() } else if p.is_image() { image_ext(p).to_string() } else if p.is_audio() { audio_ext(src, p, "") } else {
         match p.container.as_str() { "mov" => "mov", "source" => source_container(src), _ => "mp4" }.to_string()
     };
     let part = if nm.part > 0 { format!("_{:02}", nm.part) } else { String::new() };
@@ -549,7 +550,7 @@ pub fn concat_args(list: &Path, out: &Path, info: &MediaInfo, p: &Preset, timeco
 pub fn explain(err: &str) -> &'static str {
     let e = err.to_ascii_lowercase();
     let has = |xs: &[&str]| xs.iter().any(|x| e.contains(x));
-    for code in ["source-missing", "need-image-preset", "not-image", "no-audio", "ffmpeg-missing", "cancelled"] {
+    for code in ["source-missing", "need-image-preset", "not-image", "no-audio", "no-video", "ffmpeg-missing", "cancelled"] {
         if e.trim() == code { return code; }
     }
     if has(&["no space left", "not enough space", "os error 112", "os error 28", "disk full", "disk quota"]) { return "disk-full"; }
@@ -762,6 +763,63 @@ pub fn build_image(info: &MediaInfo, p: &Preset, output: &Path) -> Plan {
     args.extend(["-frames:v", "1", "-update", "1", "-an", "-progress", "pipe:1", "-nostats", "-y"].map(String::from));
     args.push(output.to_string_lossy().into_owned());
     Plan { args, output: output.to_path_buf(), width: w, height: h, warnings: vec![] }
+}
+
+/// Preset de vídeo equivalente ao GIF: largura, FPS e HDR → SDR (o GIF não tem HDR).
+pub fn gif_video_preset(info: &MediaInfo, p: &Preset) -> Preset {
+    let mut g = p.clone();
+    g.kind = "video".into(); g.bits = 8; g.chroma = "420".into(); g.hdr_to_sdr = true;
+    g.scale = "source".into();
+    if let Some(v) = info.video.as_ref() {
+        let (fw, _) = framed(v, p);
+        if p.gif.width > 0 && p.gif.width < fw { g.scale = "custom".into(); g.custom_w = p.gif.width; g.custom_h = 0; }
+    }
+    g.fps = crate::preset::Fps { conform: true, value: gif_fps(info, p) };
+    g
+}
+
+/// FPS do GIF: o escolhido, ou o do vídeo limitado a 50 (o GIF conta o tempo em centésimos).
+pub fn gif_fps(info: &MediaInfo, p: &Preset) -> String {
+    let v = p.gif.fps.trim();
+    if !v.is_empty() && v != "source" { return v.to_string(); }
+    match info.video.as_ref() {
+        Some(v) if v.fps > 50.0 => fmt_num((v.fps / 2.0).min(50.0).round()),
+        Some(v) if v.fps > 0.0 => source_fps(v),
+        _ => "15".into(),
+    }
+}
+
+/// Vídeo → GIF com paleta própria (as cores do próprio vídeo). `cuts` vazio = o vídeo inteiro;
+/// vários trechos saem colados num GIF só.
+pub fn build_gif(info: &MediaInfo, p: &Preset, output: &Path, cuts: &[(f64, f64)]) -> Plan {
+    let g = gif_video_preset(info, p);
+    let mut args: Vec<String> = vec!["-nostdin".into(), "-hide_banner".into(), "-v".into(), "error".into()];
+    let rot = info.video.as_ref().map_or(false, |v| v.rotation != 0);
+    let all = [(0.0, 0.0)];
+    let parts: &[(f64, f64)] = if cuts.is_empty() { &all } else { cuts };
+    for &(a, b) in parts {
+        if b > a { args.extend(["-ss".into(), format!("{a:.3}"), "-t".into(), format!("{:.3}", b - a)]); }
+        if rot { args.extend(["-display_rotation".into(), "0".into()]); }
+        args.extend(["-i".into(), info.path.to_string_lossy().into_owned()]);
+    }
+    let mut chain = video_filters(info, &g, &Encoder::Cpu { preset: "medium".into() }, None);
+    // reduz com lanczos (mais nítido em tamanho pequeno)
+    for f in chain.iter_mut() { if f.contains(":flags=bicubic:") { *f = f.replace(":flags=bicubic:", ":flags=lanczos:"); } }
+    let chain = chain.join(",");
+    let mut fc: Vec<String> = parts.iter().enumerate().map(|(i, _)| format!("[{i}:v:0]{chain}[v{i}]")).collect();
+    let src = if parts.len() > 1 {
+        let labels: String = (0..parts.len()).map(|i| format!("[v{i}]")).collect();
+        fc.push(format!("{labels}concat=n={}:v=1:a=0[c]", parts.len()));
+        "[c]"
+    } else { "[v0]" };
+    let (colors, dither) = if p.gif.quality == "small" { (128, "bayer:bayer_scale=4") } else { (256, "sierra2_4a") };
+    fc.push(format!("{src}split[s0][s1];[s0]palettegen=max_colors={colors}:stats_mode=diff[pal];[s1][pal]paletteuse=dither={dither}:diff_mode=rectangle[out]"));
+    args.extend(["-filter_complex".into(), fc.join(";"), "-map".into(), "[out]".into(), "-an".into(), "-sn".into(), "-dn".into()]);
+    args.extend(["-loop".into(), if p.gif.repeat { "0" } else { "-1" }.into()]);
+    args.extend(["-progress", "pipe:1", "-nostats", "-y"].map(String::from));
+    args.push(output.to_string_lossy().into_owned());
+    let (width, height) = info.video.as_ref().map_or((0, 0), |v| out_dims(v, &g));
+    Plan { args, output: output.to_path_buf(), width, height, warnings: vec![] }
 }
 
 /// Um quadro JPEG da prévia, no tempo `t` (segundos). `output = true` mostra o resultado do preset.
@@ -1058,9 +1116,9 @@ mod tests {
     fn defaults_for_new_users() {
         let d = Preset::defaults();
         let names: Vec<_> = d.iter().map(|p| p.name.as_str()).collect();
-        assert_eq!(names, vec!["RAW", "Backup", "Proxy", "Meta Glass", "WAV", "MP3 320", "AAC 256", "FLAC", "JPG 90", "PNG", "WebP 85"]);
+        assert_eq!(names, vec!["RAW", "Backup", "Proxy", "Meta Glass", "WAV", "MP3 320", "AAC 256", "FLAC", "JPG 90", "PNG", "WebP 85", "GIF"]);
         // Tudo que é vídeo roda pela placa em qualquer RTX 20+ e nada apaga o original sem o usuário pedir.
-        for p in d.iter().filter(|p| !p.is_audio() && !p.is_image()) {
+        for p in d.iter().filter(|p| !p.is_audio() && !p.is_image() && !p.is_gif()) {
             assert!(p.codec == "h265" && p.chroma == "420" && !p.output.delete_source && p.hdr_to_sdr, "{}", p.name);
             assert!(!needs_ext_encoder(&resolve(&iphone(90, "HLG"), p)), "{}", p.name);
         }

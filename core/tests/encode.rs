@@ -486,3 +486,46 @@ fn trim_only_keeps_format() {
     assert_eq!(names, vec!["Baixado do X_corte_01.mp4", "Baixado do X_corte_02.mp4"]);
     let _ = std::fs::remove_dir_all(&d);
 }
+
+/// Vídeo → GIF: largura e FPS escolhidos, em loop; um trecho; dois trechos colados num GIF só;
+/// vídeo deitado de 60 fps com "Original" sai a 30 fps.
+#[test]
+fn video_to_gif() {
+    use mec_core::render::{render, render_cuts, Engine, Hooks};
+    use std::sync::{atomic::AtomicBool, Mutex};
+    let (Some(ff), Some(fp)) = (tool("ffmpeg"), tool("ffprobe")) else { eprintln!("sem ffmpeg, pulando"); return };
+    let d = dir("gif");
+    let src = d.join("Clip.mp4");
+    run(&ff, &["-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=s=1280x720:r=60", "-f", "lavfi", "-i", "sine=f=440:r=48000", "-t", "4",
+        "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-c:a", "aac"].iter().map(|s| s.to_string())
+        .chain([src.to_string_lossy().into_owned()]).collect::<Vec<_>>());
+    let info = probe(&fp, &src).unwrap();
+    let e = Engine { ffmpeg: ff, ffprobe: fp.clone(), encoder: Encoder::Cpu { preset: "ultrafast".into() }, gpu: None };
+    let children = Mutex::new(std::collections::HashMap::new());
+    let cancel = AtomicBool::new(false);
+    let h = Hooks { id: 1, children: &children, cancel: &cancel, progress: &|_| {}, log: &|_| {}, started: &|_| {} };
+    let p = Preset::gif_defaults().remove(0);
+    let gdur = |f: &Path| -> f64 { String::from_utf8_lossy(&Command::new(&fp).args(["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0"]).arg(f).output().unwrap().stdout).trim().parse().unwrap_or(0.0) };
+    let r = render(&e, &info, &p, &mec_core::Naming::default(), None, &h).unwrap();
+    assert_eq!(r.output, d.join("Clip.gif"));
+    let o = probe(&fp, &r.output).unwrap();
+    let v = o.video.as_ref().unwrap();
+    assert_eq!((v.codec.as_str(), v.width, v.height), ("gif", 480, 270));
+    // o GIF guarda o tempo em centésimos: 15 fps vira 7,7,6… (média 16,7)
+    assert!((v.fps - 15.0).abs() < 2.0, "{}", v.fps);
+    assert!(o.audio.is_empty());
+    assert!((gdur(&r.output) - 4.0).abs() < 0.3, "{}", gdur(&r.output));
+    // um trecho
+    let r1 = render_cuts(&e, &info, &p, &mec_core::Naming::default(), &[(1.0, 2.5)], false, &h).unwrap();
+    assert!((gdur(&r1.output) - 1.5).abs() < 0.2, "{}", gdur(&r1.output));
+    // dois trechos colados, FPS Original (60 → 30), tamanho original
+    let mut p2 = p.clone(); p2.gif.fps = "source".into(); p2.gif.width = 0; p2.gif.quality = "small".into();
+    let r2 = render_cuts(&e, &info, &p2, &mec_core::Naming::default(), &[(0.2, 0.8), (2.0, 3.0)], true, &h).unwrap();
+    assert_eq!(r2.parts.len(), 1);
+    let o2 = probe(&fp, &r2.output).unwrap();
+    let v2 = o2.video.as_ref().unwrap();
+    assert_eq!((v2.width, v2.height), (1280, 720));
+    assert!((v2.fps - 30.0).abs() < 4.0, "{}", v2.fps);
+    assert!((gdur(&r2.output) - 1.6).abs() < 0.2, "{}", gdur(&r2.output));
+    let _ = std::fs::remove_dir_all(&d);
+}

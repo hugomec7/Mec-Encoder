@@ -1,5 +1,19 @@
 # Changelog · Novidades
 
+## 0.3.3
+
+**English**
+- **Video to GIF** in Convert: a new GIF preset (in the GIF folder) with width, fps, quality (High or Light), loop, aspect ratio and rotation. With cuts, only the cuts become a GIF; joined, they make a single GIF. HDR videos are converted to normal colors.
+- **Export in the Cutter now only cuts**: the video keeps everything from the original (codec, resolution, fps, bitrate, bit depth, chroma, file format and audio), with no HDR conversion, scaling or rotation, cut on the exact frame. It is saved next to the original as Video_corte.mp4 (several separate cuts: _corte_01, _corte_02…). The video's preset doesn't change; in the queue it shows as "Cut only".
+- **Convert** replaces Finish in the Cutter: it keeps the cuts and opens the Convert tab with the video selected, to choose the preset and render as you like.
+- **Play in the Cutter** with screen recordings and other files the player can't jump into: it used to play from the start (as if the cut were at the beginning, and "Skipping cuts" seemed to do nothing). Now it switches to the live preview and starts on the right frame.
+
+**Português**
+- **Vídeo para GIF** no Converter: preset novo de GIF (na pasta GIF) com largura, FPS, qualidade (Alta ou Leve), repetir, proporção e giro. Com cortes, só os trechos viram GIF; juntos, saem num GIF só. Vídeo HDR sai com as cores normais.
+- **Exportar no Cortador agora só corta**: o vídeo mantém tudo do original (codec, resolução, fps, bitrate, profundidade, croma, formato do arquivo e áudio), sem converter HDR, mudar o tamanho ou girar, cortado no quadro exato. Salva ao lado do original como Vídeo_corte.mp4 (vários cortes separados: _corte_01, _corte_02…). O preset do vídeo não muda; na fila aparece como "Só corte".
+- **Converter** substitui o Concluir no Cortador: guarda os cortes e abre a aba Converter com o vídeo selecionado, para escolher o preset e renderizar como quiser.
+- **Play no Cortador** com gravação de tela e outros arquivos em que o player não consegue pular para o meio: tocava do começo (como se o corte estivesse no início, e o "Pulando cortes" parecia não fazer nada). Agora passa para a prévia ao vivo e começa no quadro certo.
+
 ## 0.3.2
 
 **English**

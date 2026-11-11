@@ -1,6 +1,21 @@
 // Gerado por docs/release-notes/make_news.py — não edite à mão.
 window.MEC_NEWS = [
  {
+  "version": "0.3.3",
+  "en": [
+   "**Video to GIF** in Convert: a new GIF preset (in the GIF folder) with width, fps, quality (High or Light), loop, aspect ratio and rotation. With cuts, only the cuts become a GIF; joined, they make a single GIF. HDR videos are converted to normal colors.",
+   "**Export in the Cutter now only cuts**: the video keeps everything from the original (codec, resolution, fps, bitrate, bit depth, chroma, file format and audio), with no HDR conversion, scaling or rotation, cut on the exact frame. It is saved next to the original as Video_corte.mp4 (several separate cuts: _corte_01, _corte_02…). The video's preset doesn't change; in the queue it shows as \"Cut only\".",
+   "**Convert** replaces Finish in the Cutter: it keeps the cuts and opens the Convert tab with the video selected, to choose the preset and render as you like.",
+   "**Play in the Cutter** with screen recordings and other files the player can't jump into: it used to play from the start (as if the cut were at the beginning, and \"Skipping cuts\" seemed to do nothing). Now it switches to the live preview and starts on the right frame."
+  ],
+  "pt": [
+   "**Vídeo para GIF** no Converter: preset novo de GIF (na pasta GIF) com largura, FPS, qualidade (Alta ou Leve), repetir, proporção e giro. Com cortes, só os trechos viram GIF; juntos, saem num GIF só. Vídeo HDR sai com as cores normais.",
+   "**Exportar no Cortador agora só corta**: o vídeo mantém tudo do original (codec, resolução, fps, bitrate, profundidade, croma, formato do arquivo e áudio), sem converter HDR, mudar o tamanho ou girar, cortado no quadro exato. Salva ao lado do original como Vídeo_corte.mp4 (vários cortes separados: _corte_01, _corte_02…). O preset do vídeo não muda; na fila aparece como \"Só corte\".",
+   "**Converter** substitui o Concluir no Cortador: guarda os cortes e abre a aba Converter com o vídeo selecionado, para escolher o preset e renderizar como quiser.",
+   "**Play no Cortador** com gravação de tela e outros arquivos em que o player não consegue pular para o meio: tocava do começo (como se o corte estivesse no início, e o \"Pulando cortes\" parecia não fazer nada). Agora passa para a prévia ao vivo e começa no quadro certo."
+  ]
+ },
+ {
   "version": "0.3.2",
   "en": [
    "**Three tabs at the top: Convert · Cut · Download** (Ctrl+1, Ctrl+2, Ctrl+3). Note: Download moved from Ctrl+2 to Ctrl+3.",
@@ -172,29 +187,6 @@ window.MEC_NEWS = [
    "**Barra de zoom nova** embaixo da linha do tempo, com os trechos em miniatura: arraste o meio para andar, as pontas para dar zoom.",
    "**Atalhos** configuráveis em Configurações › Atalhos.",
    "**Correções**: arrastar a prévia com zoom para quando o botão é solto (antes continuava seguindo o mouse); o botão do meio do mouse também arrasta a prévia e a linha do tempo."
-  ]
- },
- {
-  "version": "0.2.7",
-  "en": [
-   "**Test version**: not offered by the app's automatic update yet. Download it from this page if you want to try it.",
-   "**Several cuts in the same video**: Ctrl+K (or the scissors button) starts a new cut at the playhead (inside a cut, it splits it in two); I and O move the start and end of the selected cut; drag the edges to adjust. Under the preview, the cuts menu chooses **one file per cut** (_01, _02...) or **join the cuts into one file**, and removes cuts. Joined cuts keep PCM audio from cameras like the FX30 and the camera timecode of the first cut.",
-   "**Timeline zoom**: mouse wheel over the timeline zooms where the mouse is; Shift+wheel (or the small bar under it) moves sideways; = and - zoom on the playhead; \\ shows everything. Up close each frame shows as a stripe, for frame-exact cuts.",
-   "**Preview zoom**: mouse wheel over the video zooms in (sharper preview); drag to move; double-click to go back. In Compare, both sides move together.",
-   "**The cut is yellow**: the marked part of the timeline is yellow, exactly what will be rendered. The blue area up to the playhead is gone.",
-   "**Studio theme** (Settings › Appearance): graphite, quieter colors, technical numbers in a monospaced font. The other themes did not change.",
-   "**Fixes**: image preview and thumbnail (JPG came out empty); a preset's color now changes right away, also while editing the preset.",
-   "Command line: `--trim` can be repeated for several cuts, and `--join` joins them. Jobs folder: `\"trim\"` accepts a list of cuts and `\"join\": true`."
-  ],
-  "pt": [
-   "**Versão de teste**: a atualização automática do app ainda não oferece esta versão. Baixe por esta página se quiser testar.",
-   "**Vários cortes no mesmo vídeo**: Ctrl+K (ou o botão da tesoura) começa um trecho novo na agulha (dentro de um trecho, divide em dois); I e O mudam o início e o fim do trecho escolhido; arraste as bordas para ajustar. Embaixo da prévia, o menu dos trechos escolhe **um arquivo por trecho** (_01, _02...) ou **juntar os trechos num arquivo**, e tira trechos. Trechos juntos mantêm o áudio PCM de câmeras como a FX30 e o timecode do primeiro trecho.",
-   "**Zoom na linha do tempo**: rodinha do mouse em cima da linha do tempo dá zoom onde o mouse está; Shift+rodinha (ou a barrinha embaixo) anda para os lados; = e - dão zoom na agulha; \\ mostra tudo. De perto cada quadro aparece como uma faixa, para cortar no quadro exato.",
-   "**Zoom na prévia**: rodinha em cima do vídeo aproxima (a prévia vem mais nítida); arraste para andar; duplo clique volta. No Comparar, os dois lados andam juntos.",
-   "**Trecho em amarelo**: a parte marcada da linha do tempo fica amarela, exatamente o que vai ser renderizado. Saiu a faixa azul até a agulha.",
-   "**Tema Estúdio** (Configurações › Aparência): grafite, cores mais calmas, números técnicos em fonte mono. Os outros temas não mudaram.",
-   "**Correções**: prévia e miniatura de imagem (JPG saía vazio); a cor do preset muda na hora, também editando o preset.",
-   "Linha de comando: `--trim` pode repetir para vários trechos, e `--join` junta. Pasta de tarefas: `\"trim\"` aceita uma lista de trechos e `\"join\": true`."
   ]
  }
 ];

@@ -736,6 +736,7 @@ fn get_state(app: AppHandle, state: State<'_, AppState>) -> Value {
         "presetsRecovered": loaded.recovered,
         "audioDefaults": Preset::audio_defaults(),
         "imageDefaults": Preset::image_defaults(),
+        "gifDefaults": Preset::gif_defaults(),
         "cameraPreset": Preset::camera_422(),
         "settings": store::load_settings(&app),
         "queue": store::load_queue(&app),

@@ -123,6 +123,7 @@ fn prepare(info: &MediaInfo, cfg: &Preset, cutting: bool) -> Result<Preset, Stri
     if info.is_image && !cfg.is_image() { return Err("need-image-preset".into()); }
     if cfg.is_image() && !info.is_image { return Err("not-image".into()); }
     if cfg.is_audio() && info.audio.is_empty() { return Err("no-audio".into()); }
+    if cfg.is_gif() && info.video.is_none() { return Err("no-video".into()); }
     Ok(cfg)
 }
 
@@ -152,6 +153,11 @@ pub fn render_cuts(e: &Engine, info: &MediaInfo, cfg: &Preset, nm: &Naming, cuts
     if cuts.len() <= 1 { return render(e, info, cfg, nm, cuts.first().copied(), h); }
     let total: f64 = cuts.iter().map(|(a, b)| b - a).sum();
     let cfg = prepare(info, cfg, true)?;
+    // GIF com os trechos colados: um comando só (cada trecho entra como uma entrada e o GIF sai com uma paleta só)
+    if cfg.is_gif() && join {
+        let out = out_path(info, &cfg, nm);
+        return render_gif(e, info, &cfg, &out, &cuts, h);
+    }
     let started = Instant::now();
     let mut done_secs = 0.0;
     let mut parts = Vec::new();
@@ -208,6 +214,7 @@ pub fn render_cuts(e: &Engine, info: &MediaInfo, cfg: &Preset, nm: &Naming, cuts
 /// Renderiza para um caminho já escolhido (preset já resolvido).
 /// `pcm`: grava o áudio em PCM (trechos que depois são colados: sem o atraso do AAC entre um e outro).
 fn render_to(e: &Engine, info: &MediaInfo, cfg: &Preset, out: &Path, trim: Option<(f64, f64)>, pcm: bool, h: &Hooks) -> Result<Done, String> {
+    if cfg.is_gif() { return render_gif(e, info, cfg, out, &trim.map(|t| vec![t]).unwrap_or_default(), h); }
     let name = info.path.display().to_string();
     let log = |s: String| (h.log)(&format!("{name} | {s}"));
     let dur = trim.map_or(info.duration, |(a, b)| b - a);
@@ -285,4 +292,33 @@ fn render_to(e: &Engine, info: &MediaInfo, cfg: &Preset, out: &Path, trim: Optio
         }
     }
     Err(last_err)
+}
+
+/// Vídeo → GIF (CPU; a paleta é feita com as cores do próprio vídeo). `cuts` vazio = o vídeo inteiro.
+fn render_gif(e: &Engine, info: &MediaInfo, cfg: &Preset, out: &Path, cuts: &[(f64, f64)], h: &Hooks) -> Result<Done, String> {
+    let name = info.path.display().to_string();
+    let log = |s: String| (h.log)(&format!("{name} | {s}"));
+    let dur = if cuts.is_empty() { info.duration } else { cuts.iter().map(|(a, b)| b - a).sum() };
+    if let Some(dir) = out.parent() { std::fs::create_dir_all(dir).map_err(|err| format!("{} ({})", err, dir.display()))?; }
+    (h.started)(out);
+    let started = Instant::now();
+    let plan = command::build_gif(info, cfg, out, cuts);
+    log(format!("gif | ffmpeg {}", plan.args.join(" ")));
+    let fail = |err: String| -> String {
+        let _ = std::fs::remove_file(out);
+        if err == "cancelled" { log("cancelled".into()); } else { log(format!("failed (gif): {}", err.replace('\n', " / "))); }
+        err
+    };
+    run_ffmpeg(&e.ffmpeg, &plan, dur, "gif", h).map_err(fail)?;
+    // o .gif é lido como imagem (sem duração): confere só que saiu um quadro com o tamanho certo
+    let check = probe::probe(&e.ffprobe, out).map_err(|err| format!("output check failed: {err}"))
+        .and_then(|o| match o.video.as_ref() {
+            Some(v) if plan.width == 0 || (v.width, v.height) == (plan.width, plan.height) => Ok(()),
+            Some(v) => Err(format!("output check failed: {}x{} vs {}x{}", v.width, v.height, plan.width, plan.height)),
+            None => Err("output check failed: output has no video".to_string()),
+        });
+    if let Err(err) = check { return Err(fail(err)); }
+    log(format!("ok (gif) | {:.1}s", started.elapsed().as_secs_f64()));
+    let size = std::fs::metadata(out).map(|m| m.len()).unwrap_or(0);
+    Ok(Done { output: out.to_path_buf(), size, warnings: vec![], mode: "gif".into(), seconds: started.elapsed().as_secs_f64(), delete_source: cfg.output.delete_source, parts: vec![out.to_path_buf()] })
 }

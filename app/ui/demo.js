@@ -40,6 +40,9 @@
     output: { suffix: { on: false, text: '' }, subfolder: { on: false, text: 'images' }, deleteSource: false } });
   const imageDefaults = [I('image-jpg', 'JPG 90', 'orange', 'jpg', 90), I('image-png', 'PNG', 'green', 'png', 100), I('image-webp', 'WebP 85', 'blue', 'webp', 85)];
   presets.push(...imageDefaults.map((p) => JSON.parse(JSON.stringify(p))));
+  const gifDefaults = [P({ kind: 'gif', id: 'gif-480', name: 'GIF', color: 'purple', container: '', folder: 'GIF', hdrToSdr: true, gif: { width: 480, fps: '15', quality: 'high', repeat: true },
+    output: { suffix: { on: false, text: '' }, subfolder: { on: false, text: 'gif' }, deleteSource: false } })];
+  presets.push(...gifDefaults.map((p) => JSON.parse(JSON.stringify(p))));
 
   // arquivos de exemplo (o que o ffprobe devolveria)
   const iphone = { w: 2160, h: 3840, codec: 'HEVC', bits: 10, fps: '59,93', fpsNom: 60, vfr: true, aud: [{ kbps: 107, rate: 48000 }], dur: '00:02:15:31', kbps: 49800, audio: 2 };
@@ -56,6 +59,6 @@
     { id: 5, file: 'IMG_4801.MOV', src: Object.assign({}, iphone, { hdr: false, rot: 0, mb: 1034 }), preset: 'iphone-4k60', status: 'done', hue: 330 },
   ];
 
-  const settings = { folders: ['Audio', 'Images'], lang: 'en', theme: 'oled', lastDark: 'oled', defaultPreset: 'iphone-4k60', clearWhenDone: true, notify: true };
-  window.MEC_DEMO = { presets, queue, settings, audioDefaults };
+  const settings = { folders: ['Audio', 'Images', 'GIF'], lang: 'en', theme: 'oled', lastDark: 'oled', defaultPreset: 'iphone-4k60', clearWhenDone: true, notify: true };
+  window.MEC_DEMO = { presets, queue, settings, audioDefaults, gifDefaults };
 })();

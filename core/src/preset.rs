@@ -54,6 +54,23 @@ impl Default for Image {
     fn default() -> Self { Self { format: "jpg".into(), quality: 90, lossless: false } }
 }
 
+/// GIF feito de um vídeo (preset "gif").
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(rename_all = "camelCase", default))]
+pub struct Gif {
+    /// Largura em pixels; 0 = a do vídeo (nunca aumenta).
+    pub width: u32,
+    /// Quadros por segundo: "10", "15", "24"... ou "source" (no máximo 50, o limite do GIF).
+    pub fps: String,
+    /// "high" (256 cores, pontilhado suave) ou "small" (128 cores, arquivo menor).
+    pub quality: String,
+    /// Toca em loop para sempre.
+    pub repeat: bool,
+}
+impl Default for Gif {
+    fn default() -> Self { Self { width: 480, fps: "15".into(), quality: "high".into(), repeat: true } }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(rename_all = "camelCase", default))]
 pub struct Toggle {
@@ -76,7 +93,7 @@ pub struct Output {
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(rename_all = "camelCase", default))]
 pub struct Preset {
-    /// "video", "audio" (converte só o áudio: WAV, MP3, AAC, FLAC) ou "image" (JPG, PNG, WebP).
+    /// "video", "audio" (converte só o áudio: WAV, MP3, AAC, FLAC), "image" (JPG, PNG, WebP) ou "gif" (vídeo → GIF).
     pub kind: String,
     pub id: String,
     pub name: String,
@@ -109,6 +126,7 @@ pub struct Preset {
     pub hdr_to_sdr: bool,
     pub audio: Audio,
     pub image: Image,
+    pub gif: Gif,
     pub output: Output,
     pub av_sync: bool,
     pub metadata: bool,
@@ -138,7 +156,7 @@ impl Default for Preset {
             kind: "video".into(), id: "preset".into(), name: "Preset".into(), icon: "phone".into(), color: "blue".into(),
             codec: "h265".into(), bits: 8, chroma: "420".into(), container: "mp4".into(), scale: "source".into(), aspect: "source".into(), aspect_mode: "crop".into(), rotate: 0, custom_w: 0, custom_h: 0, folder: String::new(),
             bitrate: Bitrate::default(), max_quality: false, fps: Fps::default(), hdr_to_sdr: false,
-            audio: Audio::default(), image: Image::default(), output: Output::default(), av_sync: true, metadata: true,
+            audio: Audio::default(), image: Image::default(), gif: Gif::default(), output: Output::default(), av_sync: true, metadata: true,
         }
     }
 }
@@ -177,7 +195,18 @@ impl Preset {
         ];
         v.extend(Self::audio_defaults());
         v.extend(Self::image_defaults());
+        v.extend(Self::gif_defaults());
         v
+    }
+
+    /// Preset de GIF (pasta "GIF"; também entra uma vez para quem já usa o app).
+    pub fn gif_defaults() -> Vec<Preset> {
+        vec![Preset {
+            kind: "gif".into(), id: "gif-480".into(), name: "GIF".into(), color: "purple".into(), container: String::new(), folder: "GIF".into(),
+            gif: Gif::default(), hdr_to_sdr: true,
+            output: Output { suffix: Toggle { on: false, text: String::new() }, subfolder: Toggle { on: false, text: "gif".into() }, delete_source: false, ..Output::default() },
+            ..Preset::default()
+        }]
     }
 
     /// Presets de imagem (pasta "Images"; também entram uma vez para quem já usa o app).
@@ -221,6 +250,7 @@ impl Preset {
 
     pub fn is_audio(&self) -> bool { self.kind == "audio" }
     pub fn is_image(&self) -> bool { self.kind == "image" }
+    pub fn is_gif(&self) -> bool { self.kind == "gif" }
 
     /// Frame rate como fração exata ("59.94" -> 60000/1001).
     pub fn fps_rational(&self) -> (u32, u32) { fps_rational(&self.fps.value) }

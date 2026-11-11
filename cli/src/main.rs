@@ -109,7 +109,7 @@ fn find_preset(list: &[Preset], key: &str) -> Option<Preset> {
 
 fn has(args: &[String], flag: &str) -> bool { args.iter().any(|a| a == flag) }
 
-fn kind_of(p: &Preset) -> &str { if p.is_audio() { "audio" } else if p.is_image() { "image" } else { "video" } }
+fn kind_of(p: &Preset) -> &str { if p.is_audio() { "audio" } else if p.is_image() { "image" } else if p.is_gif() { "gif" } else { "video" } }
 
 fn cmd_presets(args: &[String]) -> i32 {
     let list = load_presets();
