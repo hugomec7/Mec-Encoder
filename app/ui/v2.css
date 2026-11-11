@@ -965,3 +965,19 @@
 .dk-pk-link textarea::placeholder{font-family:var(--font);color:var(--text-3)}
 .dk-pk-link+.dk-pk-head{border-top:0}
 .dk-pk-url{font:400 12px var(--mono);color:var(--text-2)}
+
+.dk-quick{display:flex;gap:8px}
+.dk-quick .dk-pri{flex:1;min-width:0}
+.dk-quick .dk-qa{width:auto;flex:none;margin-top:0;padding:0 14px 0 12px;gap:8px}
+.dk-pk-caprow{display:flex;align-items:center;justify-content:space-between;margin:8px 0 6px}
+.dk-pk-caprow .dk-cap{margin:0}
+.dk-pk-web{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-2);cursor:pointer}
+.dk-pk-web .switch{transform:scale(.72);transform-origin:right center;margin-left:-8px}
+
+.dk-tabs{display:flex;gap:2px;background:var(--fill);border-radius:9px;padding:2px}
+.dk-tabs button{height:26px;padding:0 12px;border-radius:7px;font-size:12px;font-weight:500;color:var(--text-2);display:flex;align-items:center;gap:6px;
+  transition:color .16s var(--ease),background-color .16s var(--ease)}
+.dk-tabs button:hover{color:var(--text)}
+.dk-tabs button.on{background:var(--seg-pill);color:var(--text)}
+.dk-tabs button span{font:400 11px var(--mono);color:var(--text-3)}
+.dk-tabs button.on span{color:var(--text-2)}

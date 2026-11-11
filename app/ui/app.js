@@ -2404,7 +2404,7 @@
   /* ---------- aba Baixar ----------
      Dois botões rápidos pegam o link do Ctrl+C e baixam na maior qualidade, sem perguntar nada.
      Até 3 downloads ao mesmo tempo; a lista fica guardada neste PC (só os que terminaram). */
-  const DL = { list: [], running: 0, tools: null, setup: null, clip: [], seq: 0, entered: false, updating: false, accounts: [], logging: null };
+  const DL = { tab: 'active', list: [], running: 0, tools: null, setup: null, clip: [], seq: 0, entered: false, updating: false, accounts: [], logging: null };
   const DL_MAX = 3;
   // sempre o mesmo objeto (o switch e os seletores mudam este, não uma cópia)
   const dlSet = () => { if (!S.set.dl || typeof S.set.dl !== 'object') S.set.dl = {};
@@ -2535,7 +2535,7 @@
     urls.slice().reverse().forEach((url) => {
       DL.list.unshift(Object.assign({ id: ++DL.seq, url, kind, status: 'wait', meta: null, step: null, t: now, web: '' }, opts || {}));
     });
-    dlRender(); dlPump();
+    DL.tab = 'active'; dlRender(); dlPump();
   }
   function dlPump() {
     if (!DL.tools || !DL.tools.ytdlp || DL.setup || DL.updating) return;
@@ -2666,10 +2666,16 @@
   function dlFixImgs(scope) {
     $$('img[data-ph]', scope).forEach((img) => { img.onerror = () => { const s = document.createElement('span'); s.className = 'dk-ph'; s.innerHTML = DL_ICONS.film; img.replaceWith(s); }; });
   }
+  // abas da lista: Baixando (na fila, baixando, com erro ou cancelado) e Concluídos
+  const dlInTab = (it, tab) => ((tab || DL.tab) === 'done' ? it.status === 'done' : it.status !== 'done');
   function dlRenderHead() {
-    const n = DL.list.length;
-    $('#dlCount').textContent = n ? n : '';
-    $('#bDlClear').hidden = !DL.list.some((it) => ['done', 'err', 'cancel'].includes(it.status));
+    const na = DL.list.filter((it) => dlInTab(it, 'active')).length; const nd = DL.list.filter((it) => dlInTab(it, 'done')).length;
+    $('#dlTabs').innerHTML = [['active', L.dlTabActive, na], ['done', L.dlTabDone, nd]].map(([k, t, n]) =>
+      `<button data-tab="${k}" class="${DL.tab === k ? 'on' : ''}">${esc(t)}${n ? `<span>${n}</span>` : ''}</button>`).join('');
+    $$('#dlTabs button').forEach((b) => { b.onclick = () => { if (DL.tab !== b.dataset.tab) { DL.tab = b.dataset.tab; dlRender(); } }; });
+    const b = $('#bDlClear');
+    b.hidden = DL.tab === 'done' ? !nd : !DL.list.some((it) => ['err', 'cancel'].includes(it.status));
+    b.textContent = DL.tab === 'done' ? L.dlClearList : L.dlClearFailed;
   }
   function dlRender() {
     dlRenderHead();
@@ -2686,19 +2692,24 @@
           <div class="dk-bar"><i style="--p:${p}"></i></div></div>`;
       }
     }
-    if (!DL.list.length && !DL.setup) {
+    const shown = DL.list.filter((it) => dlInTab(it));
+    if (!shown.length && !DL.setup) {
       rows.classList.add('is-empty');
-      rows.innerHTML = `<div class="dk-empty"><div>${DL_ICONS.folder}<b>${esc(L.dlEmptyT)}</b><span>${dlKf(L.dlEmptyS)}</span></div></div>`;
+      rows.innerHTML = DL.tab === 'done' && DL.list.length
+        ? `<div class="dk-empty"><div>${DL_ICONS.ok}<b>${esc(L.dlDoneEmpty)}</b></div></div>`
+        : DL.tab === 'done' ? `<div class="dk-empty"><div>${DL_ICONS.folder}<b>${esc(L.dlEmptyT)}</b><span>${dlKf(L.dlEmptyS)}</span></div></div>`
+          : `<div class="dk-empty"><div>${DL_ICONS.folder}<b>${esc(DL.list.length ? L.dlActiveEmpty : L.dlEmptyT)}</b><span>${dlKf(L.dlEmptyS)}</span></div></div>`;
       return;
     }
     rows.classList.remove('is-empty');
-    rows.innerHTML = html + DL.list.map(dlRowHtml).join('');
+    rows.innerHTML = (DL.tab === 'active' ? html : '') + shown.map(dlRowHtml).join('');
     dlFixImgs(rows);
     const r = $('#bDlSetupRetry'); if (r) r.onclick = dlInstall;
   }
   function dlPatch(it) {
     const row = $(`.dk-row[data-dl="${it.id}"]`);
-    if (!row) { dlRender(); return; }
+    // terminou (ou voltou a baixar): muda de aba
+    if (!row || !dlInTab(it)) { if (row || dlInTab(it)) dlRender(); else dlRenderHead(); return; }
     const tmp = document.createElement('div'); tmp.innerHTML = dlRowHtml(it); const fresh = tmp.firstElementChild;
     // troca só o que mudou (a miniatura não pisca)
     const oldImg = row.querySelector('.dk-th img'); const newImg = fresh.querySelector('.dk-th img');
@@ -2743,16 +2754,19 @@
     if (!REAL) { toast(L.dlPlay); return; }
     inv('dl_play', { path: (it.files || [])[0] }).catch((e) => toast(L.errs[String(e)] || String(e)));
   }
-  $('#bDlClear').onclick = () => { DL.list = DL.list.filter((it) => !['done', 'err', 'cancel'].includes(it.status)); dlSave(); dlRender(); };
+  $('#bDlClear').onclick = () => { const drop = DL.tab === 'done' ? ['done'] : ['err', 'cancel']; DL.list = DL.list.filter((it) => !drop.includes(it.status)); dlSave(); dlRender(); };
   $('#bDlOpen').onclick = () => { if (REAL) inv('dl_open_dir', { path: dlSet().dir || null }).catch((e) => toast(String(e))); else toast(L.revealToast); };
   $('#bDlVideo').onclick = () => dlQuick('video');
+  $('#bDlAudio').onclick = () => dlQuick('audio');
 
   // teclas configuradas viram keycaps nos botões
   const dlKeycaps = (a) => { const k = keyOf(a); return k ? k.split('+').map((p) => `<kbd>${esc(keyLabel(p))}</kbd>`).join('') : ''; };
   const dlKf = (str) => esc(String(str)).replace(/\{(dlv|dla)\}/g, (m, k) => dlKeycaps(k === 'dlv' ? 'dlVideo' : 'dlAudio'));
   function dlRenderSide() {
     const set = dlSet();
-    $('#lDlVideo').textContent = L.dlQuick; $('#lDlCap').textContent = L.dlQuickSub;
+    $('#lDlVideo').textContent = L.dlQuick; $('#lDlCap').textContent = L.dlQuickSub2(String(set.audio).toUpperCase());
+    $('#lDlAudio').textContent = L.dlAudioShort;
+    $('#bDlAudio').title = `${L.act.dlAudio} (${keyLabel(keyOf('dlAudio'))})`;
     $('#kDlVideo').innerHTML = dlKeycaps('dlVideo');
     $('#lDlPick').textContent = L.dlPickBtn; $('#lDlPickSub').textContent = L.dlPickSub;
     const dir = set.dir || (DL.tools && DL.tools.defaultDir) || (REAL ? '' : 'C:\\Users\\Hugo\\Downloads\\Mec Encoder');
@@ -2763,7 +2777,7 @@
       if (REAL) { try { d = await inv('pick_dir', { start: dir || null }); } catch (e) { toast(String(e)); } } else d = 'D:\\Referencias';
       if (d) { set.dir = d; saveSettings(); dlRenderSide(); }
     };
-    $('#lDlTitle').textContent = L.dlTitle; $('#bDlClear').textContent = L.dlClear; $('#lDlOpen').textContent = L.dlOpen;
+    $('#lDlOpen').textContent = L.dlOpen;
     $('#lDlOpts').textContent = L.dlOptions;
     const t = DL.tools;
     $('#dlFoot').innerHTML = t && t.ytdlp ? `<i></i>${esc(L.dlVer(t.ytdlp, dlWhen(S.set.dlUpdated)))}` : t ? `<i class="off"></i>${esc(L.dlNotReady)}` : '';
@@ -2898,7 +2912,8 @@
     const curSub = subs.find((x) => x.lang === (PK.sub || PK.subDefault));
     el.innerHTML = head(info.title || dlShort(PK.url), esc([site, info.duration ? dlDur(info.duration) : ''].filter(Boolean).join(' · ')), info.thumbnail) + `
       <div class="dk-pk-body">
-        ${vrows.length ? `<p class="dk-cap">${esc(L.dlPickVideo)}${set.web ? ` · ${esc(L.dlWeb)}` : ''}</p><div class="dk-pk-group">${vrows.join('')}</div>` : ''}
+        ${vrows.length ? `<div class="dk-pk-caprow"><p class="dk-cap">${esc(L.dlPickVideo)}</p><label class="dk-pk-web" title="${esc(L.dlWebSub)}">${esc(L.dlWeb)}<span class="switch ${set.web ? 'on' : ''}" id="pkWeb"></span></label></div>
+          <div class="dk-pk-group">${vrows.join('')}</div>` : ''}
         <p class="dk-cap">${esc(L.dlPickOther)}</p><div class="dk-pk-group">
           ${opt('a', esc(L.dlPickAudio), sm.audio && sm.audio.size, esc(aFmt))}
           ${info.thumbnail ? opt('t', esc(L.dlPickThumb), 0, 'JPG') : ''}
@@ -2917,6 +2932,8 @@
     $$('input[name="pk"]', el).forEach((r) => { r.onchange = () => { PK.choice = r.value; const sc = $('.dk-pk-body', el).scrollTop; dlPickRender(); $('.dk-pk-body', el).scrollTop = sc; }; });
     const ps = $('#pkSub'); if (ps && subs.length) ps.onclick = () => { PK.sub = PK.sub ? '' : PK.subDefault; dlPickRender(); };
     const pt = $('#pkThumb'); if (pt) pt.onclick = () => { PK.thumb = !PK.thumb; dlPickRender(); };
+    // o mesmo ajuste das Opções: muda lá também (e muda o formato e o tamanho mostrados aqui)
+    const pw = $('#pkWeb'); if (pw) pw.onclick = (e) => { e.preventDefault(); set.web = !set.web; saveSettings(); const sc = $('.dk-pk-body', el).scrollTop; dlPickRender(); $('.dk-pk-body', el).scrollTop = sc; dlRenderOpts(); };
     const pc = $('#pkSec'); if (pc) pc.onclick = () => { PK.sec = !PK.sec; dlPickRender(); if (PK.sec) $('#pkFrom').select(); };
     ['pkFrom', 'pkTo'].forEach((idn) => { const i = $('#' + idn); if (!i) return;
       i.addEventListener('input', () => { PK[idn === 'pkFrom' ? 'from' : 'to'] = i.value; i.classList.remove('bad'); });
@@ -2971,7 +2988,7 @@
       const now = Date.now();
       pick.slice().reverse().forEach((e) => DL.list.unshift({ id: ++DL.seq, url: e.url, kind: PK.listKind, status: 'wait', t: now, web: '',
         height: PK.listKind === 'video' ? PK.listQ : 0, meta: e.title ? { title: e.title, duration: e.duration || 0, thumbnail: e.thumbnail || '', site: info.extractor_key } : null }));
-      dlPickClose(); dlRender(); dlPump();
+      dlPickClose(); DL.tab = 'active'; dlRender(); dlPump();
     };
   }
   function dlDemoList() {
