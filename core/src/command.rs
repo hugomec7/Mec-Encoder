@@ -471,10 +471,18 @@ pub fn shift_timecode(tc: &str, secs: f64, fps: f64) -> String {
 
 /// Corta o plano para o trecho: `-ss` antes do arquivo (pula rápido e continua exato, porque reconverte)
 /// e `-t` com a duração antes da saída. O timecode da câmera acompanha o início.
+/// Quanto antes do corte o FFmpeg pula (no -ss antes do -i). O resto até o corte é lido e descartado
+/// (-ss depois do -i), no quadro exato: em HEVC com GOP aberto, o -ss sozinho caía no quadro-chave
+/// seguinte quando o corte começava 1-3 quadros antes dele.
+pub const SEEK_PREROLL: f64 = 3.0;
+
 pub fn apply_trim(plan: &mut Plan, info: &MediaInfo, a: f64, b: f64) {
     let fmt = |x: f64| format!("{x:.3}");
+    let pre = (a - SEEK_PREROLL).max(0.0);
     if let Some(i) = plan.args.iter().position(|x| x == "-i") {
-        plan.args.splice(i..i, ["-ss".to_string(), fmt(a)]);
+        // depois do caminho do arquivo: -ss de saída (lê e descarta até o quadro exato)
+        if a - pre > 0.0005 { plan.args.splice(i + 2..i + 2, ["-ss".to_string(), format!("{:.6}", a - pre)]); }
+        if pre > 0.0 { plan.args.splice(i..i, ["-ss".to_string(), fmt(pre)]); }
     }
     if let Some(i) = plan.args.iter().position(|x| x == "-timecode") {
         let fps = info.video.as_ref().map_or(30.0, |v| if v.fps_nominal > 0.0 { v.fps_nominal } else { v.fps });
@@ -798,7 +806,9 @@ pub fn build_gif(info: &MediaInfo, p: &Preset, output: &Path, cuts: &[(f64, f64)
     let all = [(0.0, 0.0)];
     let parts: &[(f64, f64)] = if cuts.is_empty() { &all } else { cuts };
     for &(a, b) in parts {
-        if b > a { args.extend(["-ss".into(), format!("{a:.3}"), "-t".into(), format!("{:.3}", b - a)]); }
+        // pula para um pouco antes e corta no quadro exato no filtro (ver SEEK_PREROLL)
+        let pre = (a - SEEK_PREROLL).max(0.0);
+        if b > a { args.extend(["-ss".into(), format!("{pre:.3}"), "-t".into(), format!("{:.3}", b - pre)]); }
         if rot { args.extend(["-display_rotation".into(), "0".into()]); }
         args.extend(["-i".into(), info.path.to_string_lossy().into_owned()]);
     }
@@ -806,7 +816,11 @@ pub fn build_gif(info: &MediaInfo, p: &Preset, output: &Path, cuts: &[(f64, f64)
     // reduz com lanczos (mais nítido em tamanho pequeno)
     for f in chain.iter_mut() { if f.contains(":flags=bicubic:") { *f = f.replace(":flags=bicubic:", ":flags=lanczos:"); } }
     let chain = chain.join(",");
-    let mut fc: Vec<String> = parts.iter().enumerate().map(|(i, _)| format!("[{i}:v:0]{chain}[v{i}]")).collect();
+    let mut fc: Vec<String> = parts.iter().enumerate().map(|(i, &(a, b))| {
+        let skip = if b > a { a - (a - SEEK_PREROLL).max(0.0) } else { 0.0 };
+        let trim = if skip > 0.0005 { format!("trim=start={skip:.6},setpts=PTS-STARTPTS,") } else { String::new() };
+        format!("[{i}:v:0]{trim}{chain}[v{i}]")
+    }).collect();
     let src = if parts.len() > 1 {
         let labels: String = (0..parts.len()).map(|i| format!("[v{i}]")).collect();
         fc.push(format!("{labels}concat=n={}:v=1:a=0[c]", parts.len()));
@@ -1202,8 +1216,13 @@ mod tests {
         let mut plan = build_mode(&i, &p, &Encoder::Nvenc, Path::new("/o/x.mp4"), Decode::Gpu);
         apply_trim(&mut plan, &i, 2.5, 7.0);
         let s = plan.args.join(" ");
-        assert!(s.contains("-ss 2.500 -i /v/IMG_0001.MOV"), "{s}");
+        // a 2,5 s: começa do início e descarta até o quadro exato
+        assert!(s.contains("-i /v/IMG_0001.MOV -ss 2.500000"), "{s}");
         assert!(s.ends_with("-t 4.500 /o/x.mp4"), "{s}");
+        let mut plan2 = build_mode(&i, &p, &Encoder::Nvenc, Path::new("/o/x.mp4"), Decode::Gpu);
+        apply_trim(&mut plan2, &i, 7.0, 9.0);
+        let s2 = plan2.args.join(" ");
+        assert!(s2.contains("-ss 4.000 ") && s2.contains("-i /v/IMG_0001.MOV -ss 3.000000"), "{s2}");
         assert!(s.contains("-timecode 07:51:10:16"), "{s}");
         assert_eq!(shift_timecode("00:00:59:59", 1.0 / 60.0, 60.0), "00:01:00:00");
         assert_eq!(shift_timecode("01:00:00;00", 1.0, 29.97), "01:00:01;00");

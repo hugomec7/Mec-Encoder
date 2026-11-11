@@ -529,3 +529,49 @@ fn video_to_gif() {
     assert!((gdur(&r2.output) - 1.6).abs() < 0.2, "{}", gdur(&r2.output));
     let _ = std::fs::remove_dir_all(&d);
 }
+
+/// Corte que começa logo antes de um quadro-chave em HEVC com GOP aberto (padrão do x265): o -ss do
+/// FFmpeg antes do -i pulava para o quadro-chave e o corte saía 1-3 quadros atrasado. O primeiro quadro
+/// do arquivo cortado tem de ser o quadro pedido (comparado com o vídeo lido do começo).
+#[test]
+fn cut_before_keyframe_open_gop() {
+    use mec_core::preset::{Audio, Bitrate, Fps, Output, Toggle};
+    use mec_core::render::{render_cuts, Engine, Hooks};
+    use std::sync::{atomic::AtomicBool, Mutex};
+    let (Some(ff), Some(fp)) = (tool("ffmpeg"), tool("ffprobe")) else { eprintln!("sem ffmpeg, pulando"); return };
+    let d = dir("opengop");
+    let src = d.join("open.mov");
+    // testsrc mostra o número do quadro: dá para ver qual quadro saiu
+    run(&ff, &["-v", "error", "-y", "-f", "lavfi", "-i", "testsrc=s=320x240:r=30", "-t", "4", "-c:v", "libx265", "-preset", "ultrafast",
+        "-x265-params", "keyint=30:min-keyint=30:log-level=error", "-tag:v", "hvc1"].iter().map(|s| s.to_string())
+        .chain([src.to_string_lossy().into_owned()]).collect::<Vec<_>>());
+    let info = probe(&fp, &src).unwrap();
+    let e = Engine { ffmpeg: ff.clone(), ffprobe: fp.clone(), encoder: Encoder::Cpu { preset: "ultrafast".into() }, gpu: None };
+    let children = Mutex::new(std::collections::HashMap::new());
+    let cancel = AtomicBool::new(false);
+    let h = Hooks { id: 1, children: &children, cancel: &cancel, progress: &|_| {}, log: &|_| {}, started: &|_| {} };
+    let p = Preset {
+        codec: "source".into(), bits: 0, chroma: "source".into(), container: "source".into(), scale: "source".into(), aspect: "source".into(),
+        bitrate: Bitrate { mode: "source".into(), kbps: 20_000, rc: "cbr".into(), level: String::new() }, max_quality: true,
+        fps: Fps { conform: false, value: "source".into() }, hdr_to_sdr: false,
+        audio: Audio { codec: "copy".into(), channels: "source".into(), ..Audio::default() },
+        output: Output { suffix: Toggle { on: true, text: "_corte".into() }, subfolder: Toggle::default(), delete_source: false, folder: Toggle::default(), keep_tree: false },
+        ..Preset::default()
+    };
+    let gray = |path: &Path, sel: Option<u32>| -> Vec<u8> {
+        let vf = match sel { Some(n) => format!("select=eq(n\\,{n}),format=gray"), None => "format=gray".into() };
+        Command::new(&ff).args(["-v", "error", "-i"]).arg(path).args(["-vf", &vf, "-frames:v", "1", "-f", "rawvideo", "-"]).output().unwrap().stdout
+    };
+    let diff = |a: &[u8], b: &[u8]| -> f64 { if a.len() != b.len() || a.is_empty() { return 255.0 } a.iter().zip(b).map(|(x, y)| (*x as f64 - *y as f64).abs()).sum::<f64>() / a.len() as f64 };
+    for n in [27u32, 28, 29, 31, 45] {
+        let a = n as f64 / 30.0;
+        let r = render_cuts(&e, &info, &p, &mec_core::Naming::default(), &[(a, a + 0.5)], false, &h).unwrap();
+        let first = gray(&r.output, None);
+        let want = gray(&src, Some(n));
+        let near: Vec<f64> = [n.saturating_sub(1), n + 1, n + 2, n + 3].iter().map(|m| diff(&first, &gray(&src, Some(*m)))).collect();
+        let d0 = diff(&first, &want);
+        assert!(d0 < near.iter().cloned().fold(f64::MAX, f64::min), "corte no quadro {n}: o primeiro quadro não é o {n} (diferença {d0:.2}, vizinhos {near:?})");
+        let _ = std::fs::remove_file(&r.output);
+    }
+    let _ = std::fs::remove_dir_all(&d);
+}

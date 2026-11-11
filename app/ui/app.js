@@ -1142,6 +1142,9 @@
   // um pedido por lado: Resultado (out) e Original (in, no Comparar)
   const VW = { out: { busy: false, want: null }, in: { busy: false, want: null }, off: false, n: 0 };
   const viewNote = (line) => { inv('view_note', { line }).catch(() => {}); };
+  // RAM da memória de quadros do motor (padrão 2 GB)
+  const viewMemGB = () => ([1, 2, 4, 8].includes(+S.set.viewMem) ? +S.set.viewMem : 2);
+  const viewCache = () => { if (REAL) inv('view_cache', { mb: viewMemGB() * 1024 }).catch(() => {}); };
   function viewRequest(q, t, max, out = true) {
     const side = out ? 'out' : 'in'; const V = VW[side];
     V.want = { q, t, max, out }; pvSt[side].busy = true;
@@ -1163,7 +1166,7 @@
         if (w.out) {
           const ms = performance.now() - t0; const fl = dv.getUint32(44, true); const hw = fl & 1; const mem = fl & 2; const n = dv.getUint32(20, true);
           const st = $('#pvStat');
-          if (st) { st.hidden = false; st.textContent = `${L.viewEngine} · ${Math.round(ms)} ms · ${mem ? L.viewMem : `${hw ? L.viewGpu : L.viewCpu}${n ? ` · ${L.viewFrames(n)}` : ''}`} · ${fw}×${fh}`; }
+          if (st && S.set.viewStats) { st.hidden = false; st.textContent = `${L.viewEngine} · ${Math.round(ms)} ms · ${mem ? L.viewMem : `${hw ? L.viewGpu : L.viewCpu}${n ? ` · ${L.viewFrames(n)}` : ''}`} · ${fw}×${fh}`; }
           viewNote(`motor | ${S.cutter ? 'Cortador' : 'Converter'} | ${w.q.name} t=${w.t.toFixed(3)} | ${Math.round(ms)} ms até aparecer (motor ${Math.round(dv.getFloat32(36, true))} ms, ${mem ? 'da memória' : `${n} quadros, ${hw ? 'placa' : 'CPU'}`}, ${fw}x${fh})`);
         }
       }
@@ -2403,8 +2406,8 @@
       <div class="group">
         ${row(L.playQ, segH('viewPlay', qPlay(), QDIV.map((d) => [d, d === 'auto' ? 'Auto' : qTxt(d)])), L.playQSub)}
         ${row(L.previewsSaved, `<span class="val tnum" id="prevSize">…</span><button class="field pick" id="bClearPrev">${L.clearPreviews}</button>`, L.previewsSub)}
-        ${row(L.previewsAge, segH('previewDays', String(prevDays()), [['1', L.days(1)], ['7', L.days(7)], ['30', L.days(30)], ['0', L.never]]), L.previewsAgeSub)}
-        ${row(L.previewsLimit, segH('previewGB', String(+S.set.previewGB || 5), [['2', '2 GB'], ['5', '5 GB'], ['10', '10 GB'], ['20', '20 GB']]))}
+        ${row(L.viewMemL, segH('viewMem', String(viewMemGB()), [['1', '1 GB'], ['2', '2 GB'], ['4', '4 GB'], ['8', '8 GB']]), L.viewMemSub)}
+        ${row(L.viewStatsL, `<button class="switch ${S.set.viewStats ? 'on' : ''}" id="swViewStats"></button>`, L.viewStatsSub)}
       </div>
       <div class="sec-label">${L.watchTitle}</div>
       <div class="group watch-list">
@@ -2438,7 +2441,7 @@
       if (s.dataset.k === 'theme') { setTheme(v); return; }
       if (s.dataset.k === 'parallel') { S.set.parallel = +v; saveSettings(); return; }
       if (s.dataset.k === 'viewPlay') { S.set.viewPlay = v; S.queue.forEach((q) => { delete q.liveH; }); saveSettings(); renderQual(); return; }
-      if (s.dataset.k === 'previewGB') { S.set.previewGB = +v; saveSettings(); return; }
+      if (s.dataset.k === 'viewMem') { S.set.viewMem = +v; saveSettings(); viewCache(); return; }
       if (s.dataset.k === 'previewDays') { S.set.previewDays = +v; saveSettings(); prunePreviews(); return; }
     }));
     $('#bLang').onclick = (e) => openMenu(e.currentTarget, LANGS.map(([v, n]) => ({ label: n, value: v, sel: S.set.lang === v })),
@@ -2451,6 +2454,7 @@
     $('#swAutoUpd').onclick = () => { S.set.autoUpdate = !autoUpd(); saveSettings(); renderSheet(); renderUpdCard(); if (autoUpd()) checkUpdate(false); };
     const su = $('#bSheetUpdate'); if (su) su.onclick = installUpdate;
     $('#bAddWatch').onclick = addWatch;
+    $('#swViewStats').onclick = () => { S.set.viewStats = !S.set.viewStats; saveSettings(); renderSheet(); if (!S.set.viewStats) $('#pvStat').hidden = true; };
     const showPrev = (n) => { const el = $('#prevSize'); if (el) el.textContent = n > 0 ? fmtMB(n / 1e6) : L.none; };
     if (REAL) inv('previews_size').then(showPrev).catch(() => showPrev(0)); else showPrev(1.8e9);
     $('#bClearPrev').onclick = () => {
@@ -3593,6 +3597,7 @@
       if (st.settings && typeof st.settings === 'object') Object.assign(S.set, st.settings); // primeira vez: idioma do Windows e tema Estúdio (padrões acima)
       if (!presetOf(S.set.defaultPreset) && S.presets[0]) S.set.defaultPreset = S.presets[0].id;
       S.engine = Object.assign(S.engine, st.engine); S.version = st.version;
+      viewCache();
       S.audioDefaults = st.audioDefaults || []; S.imageDefaults = st.imageDefaults || []; S.cameraPreset = st.cameraPreset; S.firstRun = !!st.firstRun;
       // Novidades: abre sozinha uma vez depois de atualizar (não na primeira instalação)
       if (S.set.seenVersion !== S.version) {

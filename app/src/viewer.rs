@@ -26,6 +26,8 @@ pub struct Viewer {
     proc: Mutex<Option<Proc>>,
     /// porta e senha da transmissão do play (motor atual)
     serve: Mutex<Option<(u16, String)>>,
+    /// RAM da memória de quadros (MB; 0 = a do motor, 1,5 GB)
+    cache_mb: std::sync::atomic::AtomicU32,
 }
 
 pub struct Frame {
@@ -85,6 +87,25 @@ impl Viewer {
         Ok(Proc { child, stdin, out, open: HashMap::new() })
     }
 
+    fn start(&self, exe: &Path) -> Result<Proc, String> {
+        let mut p = Self::spawn(exe)?;
+        let mb = self.cache_mb.load(std::sync::atomic::Ordering::Relaxed);
+        if mb > 0 { Self::send_cache(&mut p, mb)?; }
+        Ok(p)
+    }
+
+    fn send_cache(p: &mut Proc, mb: u32) -> Result<(), String> {
+        writeln!(p.stdin, "cache {mb}").map_err(|e| format!("io: {e}"))?;
+        p.stdin.flush().map_err(|e| format!("io: {e}"))?;
+        Self::line(&mut p.out).map(|_| ())
+    }
+
+    /// Quanto de RAM a memória de quadros pode usar (vale já, e para o motor que abrir depois).
+    pub fn set_cache(&self, mb: u32) {
+        self.cache_mb.store(mb, std::sync::atomic::Ordering::Relaxed);
+        if let Some(p) = self.proc.lock().unwrap().as_mut() { let _ = Self::send_cache(p, mb); }
+    }
+
     /// Quadro do vídeo `id` no tempo `t`, passado pelo filtro da prévia (resultado ou original) com o lado maior `max`.
     pub fn frame(&self, exe: &Path, id: u64, info: &MediaInfo, cfg: &Preset, t: f64, output: bool, max: u32, hw: bool) -> Result<Frame, String> {
         let started = Instant::now();
@@ -93,7 +114,7 @@ impl Viewer {
         let mut guard = self.proc.lock().unwrap();
         // uma tentativa de novo se o motor tiver caído
         for attempt in 0..2 {
-            if guard.is_none() { *guard = Some(Self::spawn(exe)?); *self.serve.lock().unwrap() = None; }
+            if guard.is_none() { *guard = Some(self.start(exe)?); *self.serve.lock().unwrap() = None; }
             let p = guard.as_mut().unwrap();
             match Self::ask(p, id, info, &vf, t, hw) {
                 Ok(mut f) => { f.ms_total = started.elapsed().as_secs_f32() * 1000.0; return Ok(f); }
@@ -143,7 +164,7 @@ impl Viewer {
         let mut guard = self.proc.lock().unwrap();
         let mut serve = self.serve.lock().unwrap();
         for attempt in 0..2 {
-            if guard.is_none() { *guard = Some(Self::spawn(exe)?); *serve = None; }
+            if guard.is_none() { *guard = Some(self.start(exe)?); *serve = None; }
             if serve.is_none() {
                 let p = guard.as_mut().unwrap();
                 let r = (|| -> Result<(u16, String), String> {

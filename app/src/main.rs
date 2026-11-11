@@ -480,6 +480,13 @@ async fn view_play(state: State<'_, AppState>, id: u64, cfg: Preset, parts: Vec<
         .await.map_err(|e| e.to_string())?
 }
 
+/// RAM da memória de quadros do motor, em MB (Configurações → Memória de quadros).
+#[tauri::command]
+async fn view_cache(state: State<'_, AppState>, mb: u32) -> Result<(), String> {
+    let v = state.viewer.clone();
+    tauri::async_runtime::spawn_blocking(move || v.set_cache(mb.clamp(256, 16384))).await.map_err(|e| e.to_string())
+}
+
 /// Linha no player.log (tempos do motor e da tela, para comparar com a prévia por imagem).
 #[tauri::command]
 fn view_note(app: AppHandle, line: String) { view_log(&app, &line); }
@@ -1030,7 +1037,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             pick, add, pick_dir, save_queue, restore_queue, power, set_watch, job_status, open_jobs_dir, automation_info, forget, duplicate, preview, waveform, render, stop, get_state, save_presets, save_settings,
-            default_presets, view_frame, view_play, view_note, play_file, play_live, play_stop, play_proxy, previews_size, previews_clear, previews_prune, import_enc, export_presets, import_presets, reveal, open_data_dir, open_log, open_url, notify, ready, check_update, install_update,
+            default_presets, view_frame, view_play, view_cache, view_note, play_file, play_live, play_stop, play_proxy, previews_size, previews_clear, previews_prune, import_enc, export_presets, import_presets, reveal, open_data_dir, open_log, open_url, notify, ready, check_update, install_update,
             downloader::dl_status, downloader::dl_install, downloader::dl_update, downloader::dl_start, downloader::dl_cancel, downloader::dl_open_dir, downloader::dl_clipboard, downloader::dl_play, downloader::dl_rename, downloader::dl_accounts, downloader::dl_login, downloader::dl_logout, downloader::dl_info
         ])
         .build(tauri::generate_context!())
