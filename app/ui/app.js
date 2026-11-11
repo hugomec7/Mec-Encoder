@@ -1133,7 +1133,7 @@
         if (seq !== st.seq) return;
         const el = fr.querySelector('img');
         // troca quando a imagem nova já está decodificada (sem piscar ao pausar)
-        if (el) { const im = new Image(); im.onload = im.onerror = () => { if (seq === st.seq) { el.src = img; done(); if (out) viewNote(`imagem (FFmpeg) | ${q.name} t=${t.toFixed(3)} | ${Math.round(performance.now() - t0)} ms até aparecer`); } }; im.src = img; } else done();
+        if (el) { const im = new Image(); im.onload = im.onerror = () => { if (seq === st.seq) { el.src = img; done(); if (out) viewNote(`imagem (FFmpeg) | ${q.file || ""} t=${t.toFixed(3)} | ${Math.round(performance.now() - t0)} ms até aparecer`); } }; im.src = img; } else done();
       }).catch(done);
     }, 70);
   }
@@ -1167,7 +1167,7 @@
           const ms = performance.now() - t0; const fl = dv.getUint32(44, true); const hw = fl & 1; const mem = fl & 2; const n = dv.getUint32(20, true);
           const st = $('#pvStat');
           if (st && S.set.viewStats) { st.hidden = false; st.textContent = `${L.viewEngine} · ${Math.round(ms)} ms · ${mem ? L.viewMem : `${hw ? L.viewGpu : L.viewCpu}${n ? ` · ${L.viewFrames(n)}` : ''}`} · ${fw}×${fh}`; }
-          viewNote(`motor | ${S.cutter ? 'Cortador' : 'Converter'} | ${w.q.name} t=${w.t.toFixed(3)} | ${Math.round(ms)} ms até aparecer (motor ${Math.round(dv.getFloat32(36, true))} ms, ${mem ? 'da memória' : `${n} quadros, ${hw ? 'placa' : 'CPU'}`}, ${fw}x${fh})`);
+          viewNote(`motor | ${S.cutter ? 'Cortador' : 'Converter'} | ${w.q.src.name || w.q.file || ''} t=${w.t.toFixed(3)} | ${Math.round(ms)} ms até aparecer (motor ${Math.round(dv.getFloat32(36, true))} ms, ${mem ? 'da memória' : `${n} quadros, ${hw ? 'placa' : 'CPU'}`}, ${fw}x${fh})`);
         }
       }
     } catch (e) {
@@ -1820,11 +1820,13 @@
         const url = await inv('view_play', { id: q.id, cfg: q.cfg, parts, max: playMax(q), rate: PL.rate, dir: PL.dir || 1 });
         if (seq !== PL.seq) return;
         vid.pause(); vid.remove(); $('#frame').append(glc); applyPz();
+        // até chegar o primeiro quadro, a tela do play guarda o último de antes: mostra o quadro parado (já no ponto novo)
+        stage.classList.add('gl-wait');
         if (!EP) EP = new MecEnginePlayer(glc, actx, engIn || null);
         EP.start(url, {
           onTime: (ts) => {
             if (seq !== PL.seq || !PL.on) return;
-            if (!PL.started) { PL.started = true; PL.t0 = performance.now(); stage.classList.remove('buffering'); }
+            if (!PL.started) { PL.started = true; PL.t0 = performance.now(); stage.classList.remove('buffering', 'gl-wait'); }
             PL.engT = ts; setT(ts / fullDur(q), true); renderPlayInfo(ts); meterTick();
           },
           onEnd: () => { if (seq === PL.seq && PL.on) plFinish(); },
@@ -1899,6 +1901,7 @@
     if (REAL && PL.mode === 'live') inv('play_stop').catch(() => {});
     // fechar a leitura já encerra a transmissão no motor
     if (REAL && PL.mode === 'engine' && EP) EP.stop(true);
+    stage.classList.remove('gl-wait');
     if (q && selItem() === q) setT(t / fullDur(q), quiet);
     const hide = () => {
       if (PL.on) return;
