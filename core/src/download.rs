@@ -35,6 +35,8 @@ pub enum Kind {
     Audio,
     /// Só a miniatura (JPG).
     Thumb,
+    /// Baixa o vídeo e entrega um .gif (o "GIF" do X, por exemplo, é um .mp4 sem som).
+    Gif,
 }
 
 /// Um download pedido pela interface.
@@ -56,6 +58,8 @@ pub struct Job {
     pub thumb: bool,
     /// Só um trecho (início, fim) em segundos: baixa só esse pedaço, cortado no quadro certo.
     pub section: Option<(f64, f64)>,
+    /// GIF: largura, quadros por segundo, qualidade e loop (como o preset GIF do Converter).
+    pub gif: crate::preset::Gif,
 }
 
 /// "1m20s" para o nome do arquivo de um trecho (dois-pontos não pode em nome de arquivo).
@@ -174,13 +178,17 @@ pub fn ytdlp_args(job: &Job, t: &Tools, work: &Path) -> Vec<String> {
             a.extend(["--merge-output-format".into(), "mp4/mkv".into()]);
         }
         Kind::Thumb => a.push("--skip-download".into()),
+        Kind::Gif => {
+            // só a imagem (sem som); o GIF sai pequeno, então não precisa baixar mais que 1080p
+            a.extend(["-f".into(), "bv*/b".into(), "-S".into(), "res:1080,fps".into(), "--merge-output-format".into(), "mp4/mkv".into()]);
+        }
         Kind::Audio => {
             let fmt = match job.audio.as_str() { "m4a" | "mp3" | "flac" | "wav" => job.audio.as_str(), _ => "wav" };
             a.extend(["-f".into(), "ba/b".into(), "-x".into(), "--audio-format".into(), fmt.into()]);
             match fmt { "mp3" => a.extend(["--audio-quality".into(), "320K".into()]), "m4a" => a.extend(["--audio-quality".into(), "256K".into()]), _ => {} }
         }
     }
-    if !job.subs.is_empty() && job.kind != Kind::Thumb {
+    if !job.subs.is_empty() && !matches!(job.kind, Kind::Thumb | Kind::Gif) {
         a.extend(["--write-subs".into(), "--write-auto-subs".into(), "--sub-langs".into(), job.subs.join(","), "--convert-subs".into(), "srt".into()]);
     }
     if job.thumb || job.kind == Kind::Thumb { a.extend(["--write-thumbnail".into(), "--convert-thumbnails".into(), "jpg".into()]); }
@@ -503,7 +511,23 @@ fn run_inner(job: &Job, t: &Tools, work: &Path, h: &Hooks, on: &(dyn Fn(Event) +
     for f in files {
         let stem = f.file_stem().map(|x| x.to_string_lossy().into_owned()).unwrap_or_default();
         let ext = f.extension().map(|x| x.to_string_lossy().to_lowercase()).unwrap_or_default();
-        let finished = if job.kind == Kind::Video && job.web && !is_image(&f) {
+        let finished = if job.kind == Kind::Gif && !is_image(&f) && ext != "gif" {
+            let info = probe(&t.ffprobe, &f).map_err(|e| format!("output check failed: {e}"))?;
+            if info.video.is_none() { return Err("no-video".into()); }
+            let dest = free_path(&job.dest, &stem, "gif");
+            let tmp = work.join(format!("gif-{}.gif", out.files.len()));
+            let p = crate::preset::Preset { kind: "gif".into(), gif: job.gif.clone(), hdr_to_sdr: true, ..Default::default() };
+            let plan = crate::command::build_gif(&info, &p, &tmp, &[]);
+            on(Event::Step(Step { stage: "gif".into(), p: 0.0, done: 0, total: 0, speed: 0.0, eta: None }));
+            let progress = |tk: &Tick| on(Event::Step(Step { stage: "gif".into(), p: tk.p, done: 0, total: 0, speed: tk.speed, eta: tk.eta }));
+            let hh = Hooks { id: h.id, children: h.children, cancel: h.cancel, progress: &progress, log: h.log, started: h.started };
+            (h.log)(&format!("download | {} | gif | ffmpeg {}", job.url, plan.args.join(" ")));
+            run_ffmpeg(&t.ffmpeg, &plan, info.duration, "gif", &hh)?;
+            if !tmp.is_file() { return Err("output check failed: no gif".into()); }
+            out.web = "gif".into();
+            move_file(&tmp, &dest)?;
+            dest
+        } else if job.kind == Kind::Video && job.web && !is_image(&f) {
             let info = probe(&t.ffprobe, &f).map_err(|e| format!("output check failed: {e}"))?;
             if info.video.is_none() && info.audio.is_empty() { return Err("output check failed: empty file".into()); }
             let dest = free_path(&job.dest, &stem, "mp4");
@@ -636,6 +660,8 @@ mod tests {
         assert!(qa.contains("--write-subs --write-auto-subs --sub-langs pt,en-orig --convert-subs srt"), "{qa}");
         assert!(qa.contains("--write-thumbnail --convert-thumbnails jpg"), "{qa}");
         let qn = ytdlp_args(&Job { height: 720, ..job(Kind::Video, false) }, &tools_(), Path::new("/w")).join(" ");
+        let g = ytdlp_args(&Job { subs: vec!["pt".into()], ..job(Kind::Gif, false) }, &tools_(), Path::new("/w")).join(" ");
+        assert!(g.contains("-f bv*/b -S res:1080,fps") && !g.contains("--write-subs") && !g.contains("-x "), "{g}");
         assert!(qn.contains("-S res:720 "), "{qn}");
         let inf = info_args("https://youtu.be/x", &tools_()).join(" ");
         assert!(inf.contains("-J") && inf.contains("--no-playlist") && inf.ends_with("-- https://youtu.be/x"), "{inf}");

@@ -81,6 +81,21 @@ fn video_web_ready_and_audio() {
     let r3 = get(&t, &Job { url: srv.file("ok", &mp4), ..job.clone() }, &d.join("w3"), &ev).unwrap();
     assert_eq!(r3.web, "remux");
 
+    // GIF: o "GIF" do X é um .mp4 sem som; sai um .gif na largura pedida, em loop
+    let gmp4 = d.join("gif.mp4");
+    assert!(Command::new(&ff).args(["-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=s=480x270:r=30", "-t", "1.5", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-an"])
+        .arg(&gmp4).status().unwrap().success());
+    let ev = Mutex::new(Vec::new());
+    let gif = mec_core::preset::Gif { width: 320, fps: "15".into(), quality: "high".into(), repeat: true };
+    let rg = get(&t, &Job { url: srv.file("gif", &gmp4), kind: Kind::Gif, gif, ..job.clone() }, &d.join("w6"), &ev).unwrap();
+    assert_eq!(rg.files.len(), 1);
+    assert_eq!(rg.web, "gif");
+    assert_eq!(rg.files[0].extension().unwrap(), "gif");
+    let ig = probe(&t.ffprobe, &rg.files[0]).unwrap();
+    let vg = ig.video.as_ref().unwrap();
+    assert_eq!((vg.codec.as_str(), vg.width, vg.height), ("gif", 320, 180));
+    assert!(ev.into_inner().unwrap().iter().any(|e| matches!(e, Event::Step(s) if s.stage == "gif")));
+
     // só áudio em WAV, com um arquivo de sessão (o yt-dlp tem que aceitar o formato)
     let ck = d.join("cookies.txt");
     let sess = download::netscape(&[download::Cookie { name: "sessionid".into(), value: "abc".into(), domain: ".instagram.com".into(), path: "/".into(),

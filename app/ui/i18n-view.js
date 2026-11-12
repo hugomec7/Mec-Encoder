@@ -101,3 +101,20 @@
   };
   Object.entries(T).forEach(([lang, v]) => { const L = window.MEC_I18N[lang]; if (L) K.forEach((k, i) => { L[k] = v[i]; }); });
 })();
+// GIF no Downloader
+(() => {
+  const K = ['dlGifTip', 'dlPickGif', 'dlGifing', 'dlMakeGif'];
+  const T = {
+    en: [(s) => `Download the link as a GIF${s ? ` (${s}, like the GIF preset)` : ''}`, 'GIF', 'Making the GIF', 'Make a GIF of this link'],
+    pt: [(s) => `Baixar o link como GIF${s ? ` (${s}, igual ao preset GIF)` : ''}`, 'GIF', 'Fazendo o GIF', 'Fazer GIF deste link'],
+    es: [(s) => `Descargar el enlace como GIF${s ? ` (${s}, como el preset GIF)` : ''}`, 'GIF', 'Creando el GIF', 'Hacer un GIF de este enlace'],
+    fr: [(s) => `Télécharger le lien en GIF${s ? ` (${s}, comme le préréglage GIF)` : ''}`, 'GIF', 'Création du GIF', 'Faire un GIF de ce lien'],
+    de: [(s) => `Link als GIF laden${s ? ` (${s}, wie die GIF-Vorgabe)` : ''}`, 'GIF', 'GIF wird erstellt', 'GIF aus diesem Link machen'],
+    it: [(s) => `Scarica il link come GIF${s ? ` (${s}, come il preset GIF)` : ''}`, 'GIF', 'Creazione della GIF', 'Fai una GIF da questo link'],
+    ru: [(s) => `Скачать ссылку как GIF${s ? ` (${s}, как пресет GIF)` : ''}`, 'GIF', 'Делаю GIF', 'Сделать GIF из этой ссылки'],
+    ja: [(s) => `リンクをGIFでダウンロード${s ? `（${s}、GIFプリセットと同じ）` : ''}`, 'GIF', 'GIFを作成中', 'このリンクからGIFを作る'],
+    ko: [(s) => `링크를 GIF로 다운로드${s ? ` (${s}, GIF 프리셋과 같음)` : ''}`, 'GIF', 'GIF 만드는 중', '이 링크로 GIF 만들기'],
+    zh: [(s) => `将链接下载为 GIF${s ? `（${s}，与 GIF 预设相同）` : ''}`, 'GIF', '正在制作 GIF', '用此链接制作 GIF'],
+  };
+  Object.entries(T).forEach(([lang, v]) => { const L = window.MEC_I18N[lang]; if (L) K.forEach((k, i) => { L[k] = v[i]; }); });
+})();

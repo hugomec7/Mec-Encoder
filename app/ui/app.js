@@ -2852,7 +2852,7 @@
 
   function dlSave() {
     const keep = DL.list.filter((it) => ['done', 'err', 'cancel'].includes(it.status)).slice(0, 60)
-      .map(({ id, url, kind, status, meta, files, size, web, err, errCode, t, extras, height, subs, thumb, audioFmt, section }) => ({ id, url, kind, status, meta, files, size, web, err, errCode, t, extras, height, subs, thumb, audioFmt, section }));
+      .map(({ id, url, kind, status, meta, files, size, web, err, errCode, t, extras, height, subs, thumb, audioFmt, section, gif }) => ({ id, url, kind, status, meta, files, size, web, err, errCode, t, extras, height, subs, thumb, audioFmt, section, gif }));
     store.set('mec.downloads', JSON.stringify(keep));
   }
   function dlLoad() {
@@ -2947,8 +2947,15 @@
     return false;
   }
   // opts (de "Escolher qualidade…"): { height, subs, thumb }; sem opts, vale a Qualidade das opções
+  // GIF do Downloader: com o mesmo ajuste do preset GIF do Converter (largura, fps, qualidade)
+  function dlGifCfg() {
+    const p = S.presets.find((x) => isGifP(x));
+    const g = (p && p.gif) || {}; return { width: g.width != null ? g.width : 480, fps: g.fps || '15', quality: g.quality || 'high', repeat: g.repeat !== false };
+  }
+  const dlGifTxt = (g) => [g.width ? `${g.width} px` : '', g.fps && g.fps !== 'source' ? `${g.fps} fps` : ''].filter(Boolean).join(' · ');
   function dlAdd(urls, kind, opts) {
     const now = Date.now();
+    if (kind === 'gif') opts = Object.assign({ gif: dlGifCfg() }, opts || {});
     urls.slice().reverse().forEach((url) => {
       DL.list.unshift(Object.assign({ id: ++DL.seq, url, kind, status: 'wait', meta: null, step: null, t: now, web: '' }, opts || {}));
     });
@@ -2968,7 +2975,7 @@
     try {
       const height = it.height != null ? it.height : 0;
       const d = await inv('dl_start', { id: it.id, url: it.url, kind: it.kind, web: !!set.web, audio: set.audio, dest: set.dir || null,
-        height, subs: it.subs || [], thumb: !!it.thumb, section: it.section || null });
+        height, subs: it.subs || [], thumb: !!it.thumb, section: it.section || null, gif: it.kind === 'gif' ? (it.gif || dlGifCfg()) : null });
       Object.assign(it, { status: 'done', files: d.files, size: d.size, web: d.web, extras: d.extras || [], meta: Object.assign({}, it.meta, d.meta.title ? d.meta : {}) });
       notify(L.dlDone((it.meta && it.meta.title) || dlShort(it.url)));
     } catch (e) {
@@ -3003,6 +3010,7 @@
     const m = it.meta || {}; const site = dlSite(it); const p = [];
     if (it.kind === 'audio') { p.push(String(it.audioFmt || dlSet().audio).toUpperCase()); }
     else if (it.kind === 'thumb') { p.push('JPG'); }
+    else if (it.kind === 'gif') { p.push(['GIF', dlGifTxt(it.gif || dlGifCfg())].filter(Boolean).join(' · ')); }
     else {
       if (m.width && m.height) p.push(`${m.width}×${m.height}`);
       if (m.fps) p.push(`${num(m.fps, 2)} fps`);
@@ -3030,17 +3038,24 @@
         return `<div class="dk-st-top"><span>${esc(L.dlWebing)}</span><span class="dk-pct">${pct(st.p)}</span>${xBtn}</div>
           <div class="dk-bar dk-web"><i style="--p:${clamp(st.p || 0, 0, 1)}"></i></div><div class="dk-st-sub">${esc(sub)}</div>`;
       }
+      if (stage === 'gif') {
+        return `<div class="dk-st-top"><span>${esc(L.dlGifing)}</span><span class="dk-pct">${pct(st.p)}</span>${xBtn}</div>
+          <div class="dk-bar dk-web"><i style="--p:${clamp(st.p || 0, 0, 1)}"></i></div><div class="dk-st-sub">${esc(dlGifTxt(it.gif || dlGifCfg()))}</div>`;
+      }
       const label = stage === 'merge' ? L.dlMerging : stage === 'audio' ? L.dlConverting(String(it.audioFmt || dlSet().audio).toUpperCase()) : stage === 'update' ? L.dlUpdating : L.dlDownloading;
       return `<div class="dk-st-top"><span>${esc(label)}</span>${xBtn}</div><div class="dk-bar dk-web"><i style="--p:1"></i></div><div class="dk-st-sub"> </div>`;
     }
     const rm = `<button class="dk-ib x hov" data-act="remove" title="${esc(L.dlRemove)}">${ICONS.x}</button>`;
     if (it.status === 'done') {
-      const toCut = it.kind !== 'thumb' ? `<button class="dk-ib" data-act="cut" title="${esc(L.dlToCutter)}">${ICONS.cut}</button>` : '';
+      const vid = it.kind === 'video' || it.kind === 'audio';
+      // vídeo baixado: vira GIF (baixa de novo só a imagem e converte)
+      const toGif = it.kind === 'video' && it.url ? `<button class="dk-ib dk-gifb" data-act="gif" title="${esc(L.dlMakeGif)}">GIF</button>` : '';
+      const toCut = vid ? `<button class="dk-ib" data-act="cut" title="${esc(L.dlToCutter)}">${ICONS.cut}</button>` : '';
       // o link fica guardado: copiar ou baixar de novo (escolhendo qualidade, só áudio...)
       const links = it.url ? `<button class="dk-ib" data-act="again" title="${esc(L.dlAgain)}">${ICONS.again}</button><button class="dk-ib" data-act="copylink" title="${esc(L.dlCopyLink)}">${DL_ICONS.link}</button>` : '';
-      const toQ = it.kind !== 'thumb' ? `<button class="dk-ib" data-act="queue" title="${esc(L.dlToQueue)}">${DL_ICONS.queue}</button>` : '';
+      const toQ = vid ? `<button class="dk-ib" data-act="queue" title="${esc(L.dlToQueue)}">${DL_ICONS.queue}</button>` : '';
       const ex = (it.extras || []).map((x) => String(x).split('.').pop().toUpperCase()).filter((v, i, a) => a.indexOf(v) === i);
-      return `<div class="dk-done">${DL_ICONS.ok}${esc(L.dlReady)}<span class="dk-sz">${it.size ? dlBytes(it.size) : ''}${ex.length ? ' · +' + esc(ex.join(' +')) : ''}</span><span class="dk-acts">${links}${toCut}${toQ}<button class="dk-ib" data-act="show" title="${esc(L.showInFolder)}">${DL_ICONS.folder}</button>${rm}</span></div>`;
+      return `<div class="dk-done">${DL_ICONS.ok}${esc(L.dlReady)}<span class="dk-sz">${it.size ? dlBytes(it.size) : ''}${ex.length ? ' · +' + esc(ex.join(' +')) : ''}</span><span class="dk-acts">${links}${toGif}${toCut}${toQ}<button class="dk-ib" data-act="show" title="${esc(L.showInFolder)}">${DL_ICONS.folder}</button>${rm}</span></div>`;
     }
     const acts = `<div class="dk-err-acts"><button class="link" data-act="retry">${esc(L.dlRetry)}</button><button class="link" data-act="remove">${esc(L.dlRemove)}</button></div>`;
     if (it.status === 'cancel') return `<span class="dk-muted">${esc(L.dlCancelled)}</span>${acts}`;
@@ -3158,6 +3173,7 @@
     }
     else if (a === 'login') { const acc = dlAccOf(it); if (acc) dlLogin(acc.id); }
     else if (a === 'copylink') copyText(it.url, L.dlLinkCopied);
+    else if (a === 'gif') dlAdd([it.url], 'gif', { meta: Object.assign({}, it.meta), section: it.section || null });
     else if (a === 'again') dlPickOpen(it.url, it.kind === 'audio' ? 'audio' : 'video');
     else if (a === 'retry') dlRetry(it);
     else if (a === 'remove') dlRemove(it);
@@ -3185,6 +3201,7 @@
   $('#bDlOpen').onclick = () => { if (REAL) inv('dl_open_dir', { path: dlSet().dir || null }).catch((e) => toast(String(e))); else toast(L.revealToast); };
   $('#bDlVideo').onclick = () => dlQuick('video');
   $('#bDlAudio').onclick = () => dlQuick('audio');
+  $('#bDlGif').onclick = () => dlQuick('gif');
 
   // teclas configuradas viram keycaps nos botões
   const dlKeycaps = (a) => { const k = keyOf(a); return k ? k.split('+').map((p) => `<kbd>${esc(keyLabel(p))}</kbd>`).join('') : ''; };
@@ -3192,7 +3209,7 @@
   function dlRenderSide() {
     const set = dlSet();
     $('#lDlVideo').textContent = L.dlQuick; $('#lDlCap').textContent = L.dlQuickSub2(String(set.audio).toUpperCase());
-    $('#lDlAudio').textContent = L.dlAudioShort;
+    $('#lDlAudio').textContent = L.dlAudioShort; $('#bDlGif').title = L.dlGifTip(dlGifTxt(dlGifCfg()));
     $('#bDlAudio').title = `${L.act.dlAudio} (${keyLabel(keyOf('dlAudio'))})`;
     $('#kDlVideo').innerHTML = dlKeycaps('dlVideo');
     $('#lDlPick').textContent = L.dlPickBtn; $('#lDlPickSub').textContent = L.dlPickSub;
@@ -3343,12 +3360,13 @@
           <div class="dk-pk-group">${vrows.join('')}</div>` : ''}
         <p class="dk-cap">${esc(L.dlPickOther)}</p><div class="dk-pk-group">
           ${opt('a', esc(L.dlPickAudio), sm.audio && sm.audio.size, esc(aFmt))}
+          ${vrows.length ? opt('g', esc(L.dlPickGif), 0, esc(['GIF', dlGifTxt(dlGifCfg())].join(' · '))) : ''}
           ${info.thumbnail ? opt('t', esc(L.dlPickThumb), 0, 'JPG') : ''}
         </div>
         ${PK.choice !== 't' ? `<p class="dk-cap">${esc(L.dlExtras)}</p><div class="dk-pk-group">
-          <div class="dk-pk-opt dk-pk-check ${subs.length ? '' : 'off'}"><span class="switch ${PK.sub ? 'on' : ''}" id="pkSub" ${subs.length ? '' : 'aria-disabled="true"'}></span><span class="dk-pk-l">${esc(L.dlWithSubs)}</span>
+          ${PK.choice === 'g' ? '' : `<div class="dk-pk-opt dk-pk-check ${subs.length ? '' : 'off'}"><span class="switch ${PK.sub ? 'on' : ''}" id="pkSub" ${subs.length ? '' : 'aria-disabled="true"'}></span><span class="dk-pk-l">${esc(L.dlWithSubs)}</span>
             ${subs.length ? `<button class="field pick dd" id="pkLang" data-menu="1">${esc(curSub ? curSub.label : '')}${ICONS.chev || ''}</button>` : `<span class="dk-pk-x">${esc(L.dlNoSubs)}</span>`}</div>
-          ${info.thumbnail ? `<div class="dk-pk-opt dk-pk-check"><span class="switch ${PK.thumb ? 'on' : ''}" id="pkThumb"></span><span class="dk-pk-l">${esc(L.dlWithThumb)}</span></div>` : ''}
+          ${info.thumbnail ? `<div class="dk-pk-opt dk-pk-check"><span class="switch ${PK.thumb ? 'on' : ''}" id="pkThumb"></span><span class="dk-pk-l">${esc(L.dlWithThumb)}</span></div>` : ''}`}
           ${info.duration ? `<div class="dk-pk-opt dk-pk-check"><span class="switch ${PK.sec ? 'on' : ''}" id="pkSec"></span><span class="dk-pk-l">${esc(L.dlSection)}</span>
             ${PK.sec ? `<span class="dk-pk-sec">${esc(L.dlFrom)} <input class="dk-tc" id="pkFrom" value="${esc(PK.from)}" spellcheck="false"> ${esc(L.dlTo)} <input class="dk-tc" id="pkTo" value="${esc(PK.to)}" spellcheck="false"></span>` : ''}</div>` : ''}
         </div>` : ''}
@@ -3368,7 +3386,7 @@
     const pl = $('#pkLang'); if (pl) pl.onclick = (e) => openMenu(e.currentTarget, subs.map((x) => ({ label: x.label, value: x.lang, sel: x.lang === (PK.sub || PK.subDefault) })),
       (v) => { PK.subDefault = v; PK.sub = v; dlPickRender(); });
     $('#bPkGo').onclick = () => {
-      const c = PK.choice; const opts = { subs: PK.sub && c !== 't' ? [PK.sub] : [], thumb: PK.thumb && c !== 't' };
+      const c = PK.choice; const opts = { subs: PK.sub && c !== 't' && c !== 'g' ? [PK.sub] : [], thumb: PK.thumb && c !== 't' && c !== 'g' };
       if (PK.sec && c !== 't') {
         const a = dlParseTime(PK.from); const b = dlParseTime(PK.to); const dur = info.duration || Infinity;
         if (a == null || b == null || b <= a || a >= dur) { ['pkFrom', 'pkTo'].forEach((x) => $('#' + x).classList.add('bad')); toast(L.dlSectionBad); return; }
@@ -3376,9 +3394,9 @@
       }
       const title = info.title || '';
       let kind = 'video';
-      if (c === 'a') kind = 'audio'; else if (c === 't') kind = 'thumb'; else opts.height = c === 'v0' ? 0 : +c.slice(1);
+      if (c === 'a') kind = 'audio'; else if (c === 't') kind = 'thumb'; else if (c === 'g') kind = 'gif'; else opts.height = c === 'v0' ? 0 : +c.slice(1);
       dlAdd([PK.url], kind, Object.assign(opts, { meta: { title, site: info.extractor_key, duration: info.duration, thumbnail: info.thumbnail,
-        width: best && kind === 'video' ? (sm.rows.find((r) => 'v' + r.p === c) || best).w : 0, height: best && kind === 'video' ? (sm.rows.find((r) => 'v' + r.p === c) || best).h : 0 } }));
+        width: best && (kind === 'video' || kind === 'gif') ? (sm.rows.find((r) => 'v' + r.p === c) || best).w : 0, height: best && (kind === 'video' || kind === 'gif') ? (sm.rows.find((r) => 'v' + r.p === c) || best).h : 0 } }));
       dlPickClose();
     };
   }
@@ -3486,8 +3504,9 @@
     it.timer = setInterval(() => {
       p += 0.07;
       if (p < 1) it.step = { stage: 'download', p, done: total * p, total, speed: 8.2e6, eta: (1 - p) * 4 };
+      else if (p < 1.6 && it.kind === 'gif') it.step = { stage: 'gif', p: (p - 1) / 0.6, speed: 3, eta: null };
       else if (p < 1.6 && it.kind === 'video' && it.meta.vcodec !== 'h264') it.step = { stage: 'web', p: (p - 1) / 0.6, speed: 6.1, eta: null };
-      else { clearInterval(it.timer); Object.assign(it, { status: 'done', size: total * 0.48, files: ['C:\\Users\\Hugo\\Downloads\\Mec Encoder\\' + it.meta.title + (it.kind === 'audio' ? '.wav' : '.mp4')] }); it.step = null; DL.running--; dlSave(); dlPump(); }
+      else { clearInterval(it.timer); Object.assign(it, { status: 'done', size: total * 0.48, files: ['C:\\Users\\Hugo\\Downloads\\Mec Encoder\\' + it.meta.title + (it.kind === 'audio' ? '.wav' : it.kind === 'gif' ? '.gif' : '.mp4')] }); it.step = null; DL.running--; dlSave(); dlPump(); }
       dlPatch(it);
     }, 250);
   }
