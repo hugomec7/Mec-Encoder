@@ -1,6 +1,21 @@
 // Gerado por docs/release-notes/make_news.py — não edite à mão.
 window.MEC_NEWS = [
  {
+  "version": "0.3.5",
+  "en": [
+   "**Crop in the Cutter**, like Premiere's Crop: press **C** (or the Crop button) and drag the box to keep only part of the picture, for example just the video of a meme, without the black bars and the text. 8 handles, drag inside to move, drag outside to draw a new box; ratio Free, Original, 9:16, 16:9, 1:1 or 4:5; or type how many pixels to remove from each side. The video comes out at the crop size, in Export and in Convert, and the preview and play already show the result.",
+   "**Export saves right in the Cutter**: it no longer goes through the Convert queue nor shows a preset. The video stays exactly like the original, only without the parts you cut (and cropped, if you cropped). Progress shows in the button itself (click to cancel), and when it finishes you can play it or show it in the folder.",
+   "**\"Go to Convert\"** replaces the \"Convert\" button in the Cutter, so it doesn't look like it converts right away.",
+   "**Download as GIF**: new GIF button next to Audio (and a GIF option in \"Download…\", with a part of the video if you want). It downloads only the picture and delivers a .gif with the settings of the GIF preset from Convert. The \"GIF\" on X, which is actually a video, now comes as a real GIF. Videos you already downloaded have a GIF button in their row."
+  ],
+  "pt": [
+   "**Crop no Cortador**, como o Corte do Premiere: aperte **C** (ou o botão Crop) e arraste o retângulo para ficar só com uma parte da imagem, por exemplo só o vídeo de um meme, sem as bordas pretas e o texto. 8 alças, arrastar dentro move, arrastar fora desenha um novo; proporção Livre, Original, 9:16, 16:9, 1:1 ou 4:5; ou digite quantos pixels tirar de cada lado. O vídeo sai no tamanho do recorte, no Exportar e no Converter, e a prévia e o play já mostram o resultado.",
+   "**Exportar salva ali mesmo no Cortador**: não passa mais pela fila do Converter nem mostra preset. O vídeo fica exatamente como o original, só sem os trechos que você cortou (e recortado, se usou o crop). O andamento aparece no próprio botão (clique para cancelar) e no fim dá para tocar ou mostrar na pasta.",
+   "**\"Ir para o Conversor\"** no lugar do botão \"Converter\" do Cortador, para não parecer que converte na hora.",
+   "**Baixar como GIF**: botão GIF novo ao lado de Áudio (e opção GIF em \"Baixar...\", com trecho se quiser). Baixa só a imagem e entrega um .gif com o ajuste do preset GIF do Converter. O \"GIF\" do X, que na verdade é vídeo, agora vem como GIF de verdade. Os vídeos já baixados têm um botão GIF na linha."
+  ]
+ },
+ {
   "version": "0.3.4",
   "en": [
    "**New player, like a video editor**: clicking or dragging on the timeline, the arrow keys and play no longer open FFmpeg each time. A player engine keeps the video open, reads it on the graphics card (GPU) when it can, and keeps the frames around the playhead ready in memory, so nearby frames show instantly. Works in the Cutter and in Convert (both sides of Compare).",
@@ -150,35 +165,6 @@ window.MEC_NEWS = [
    "Os botões de **Início** e **Fim** voltaram a ser só o ícone.",
    "No app em português, **trecho** virou **corte**: \"Novo corte\", a lista de \"Cortes\" etc.",
    "**Correção**: tirar um corte pelo × atualiza a lista na hora (antes só sumia da linha do tempo)."
-  ]
- },
- {
-  "version": "0.2.9",
-  "en": [
-   "**Test version**: not offered by the app's automatic update. Download it from this page.",
-   "**Play button** in the converter and in the Cutter, with sound. **Space** plays and pauses; **J K L** like Premiere (L again: 2×, 4×; K pauses; J goes back 1 second). Pausing snaps the playhead to the frame and shows the exact image of the original.",
-   "Phone videos play right away. Files the player can't open (Sony FX30 10-bit 4:2:2, HDR, ProRes…) are converted while they play, on the graphics card (NVIDIA, AMD or Intel) or on the CPU, starting in about a second.",
-   "**Auto** quality starts at 720p and lowers itself if the PC can't keep up. If not even 360p keeps up, a light preview is prepared once and plays right away the next time.",
-   "**Play one cut**: hover over the cut number (1, 2, 3…) in the Cutter list and click ▶. It plays from the first to the last frame of the cut and stops there, with the time played and the cut's duration on top of the preview.",
-   "**▶ Cuts** (**Shift+Space**) plays only the cuts, one after the other, like the joined file.",
-   "**Repeat**, **speed** (0.25× to 4×), **volume** and an **audio meter** next to the timecode.",
-   "**Timecode ruler** above the timeline: the numbers follow the zoom (minutes, seconds, frames). Click or drag on it to move the playhead.",
-   "**Magnet**: dragging the playhead near the start or the end of a cut snaps it to the first or last frame. Hold **Alt** to drag without the magnet.",
-   "New shortcuts (all can be changed in Settings › Shortcuts): **Shift+I / Shift+O** go to the start or the last frame of the cut, **Home / End** go to the beginning or the end, **Ctrl+L** turns Repeat on and off.",
-   "Settings › **Playback**: preview quality, space for saved previews and **Delete** previews."
-  ],
-  "pt": [
-   "**Versão de teste**: a atualização automática do app não oferece esta versão. Baixe por esta página.",
-   "**Botão de play** no conversor e no Cortador, com som. **Espaço** toca e pausa; **J K L** como no Premiere (L de novo: 2×, 4×; K pausa; J volta 1 segundo). Ao pausar, a agulha prende no quadro e volta a imagem exata do original.",
-   "Vídeos de celular tocam na hora. Arquivos que o player não abre (Sony FX30 10-bit 4:2:2, HDR, ProRes…) são convertidos enquanto tocam, na placa de vídeo (NVIDIA, AMD ou Intel) ou na CPU, começando em cerca de 1 segundo.",
-   "A qualidade **Auto** começa em 720p e baixa sozinha se o PC não acompanhar. Se nem 360p acompanhar, uma prévia leve é preparada uma vez e da próxima vez toca na hora.",
-   "**Tocar um trecho**: passe o mouse no número do trecho (1, 2, 3…) na lista do Cortador e clique no ▶. Ele toca do primeiro ao último quadro do trecho e para ali, com o tempo tocado e a duração do trecho em cima da prévia.",
-   "**▶ Trechos** (**Shift+Espaço**) toca só os trechos, um atrás do outro, como o arquivo juntado.",
-   "**Repetir**, **velocidade** (0,25× a 4×), **volume** e **medidor de áudio** ao lado do timecode.",
-   "**Régua de timecode** em cima da linha do tempo: os números acompanham o zoom (minutos, segundos, quadros). Clique ou arraste nela para mover a agulha.",
-   "**Ímã**: arrastando a agulha perto do início ou do fim de um trecho, ela gruda no primeiro ou no último quadro. Segure **Alt** para arrastar sem ímã.",
-   "Atalhos novos (todos dá para trocar em Configurações › Atalhos): **Shift+I / Shift+O** vão ao início ou ao último quadro do trecho, **Home / End** vão ao começo ou ao fim, **Ctrl+L** liga e desliga o Repetir.",
-   "Configurações › **Reprodução**: qualidade da prévia, espaço para as prévias guardadas e **Apagar** prévias."
   ]
  }
 ];

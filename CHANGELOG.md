@@ -1,5 +1,19 @@
 # Changelog · Novidades
 
+## 0.3.5
+
+**English**
+- **Crop in the Cutter**, like Premiere's Crop: press **C** (or the Crop button) and drag the box to keep only part of the picture, for example just the video of a meme, without the black bars and the text. 8 handles, drag inside to move, drag outside to draw a new box; ratio Free, Original, 9:16, 16:9, 1:1 or 4:5; or type how many pixels to remove from each side. The video comes out at the crop size, in Export and in Convert, and the preview and play already show the result.
+- **Export saves right in the Cutter**: it no longer goes through the Convert queue nor shows a preset. The video stays exactly like the original, only without the parts you cut (and cropped, if you cropped). Progress shows in the button itself (click to cancel), and when it finishes you can play it or show it in the folder.
+- **"Go to Convert"** replaces the "Convert" button in the Cutter, so it doesn't look like it converts right away.
+- **Download as GIF**: new GIF button next to Audio (and a GIF option in "Download…", with a part of the video if you want). It downloads only the picture and delivers a .gif with the settings of the GIF preset from Convert. The "GIF" on X, which is actually a video, now comes as a real GIF. Videos you already downloaded have a GIF button in their row.
+
+**Português**
+- **Crop no Cortador**, como o Corte do Premiere: aperte **C** (ou o botão Crop) e arraste o retângulo para ficar só com uma parte da imagem, por exemplo só o vídeo de um meme, sem as bordas pretas e o texto. 8 alças, arrastar dentro move, arrastar fora desenha um novo; proporção Livre, Original, 9:16, 16:9, 1:1 ou 4:5; ou digite quantos pixels tirar de cada lado. O vídeo sai no tamanho do recorte, no Exportar e no Converter, e a prévia e o play já mostram o resultado.
+- **Exportar salva ali mesmo no Cortador**: não passa mais pela fila do Converter nem mostra preset. O vídeo fica exatamente como o original, só sem os trechos que você cortou (e recortado, se usou o crop). O andamento aparece no próprio botão (clique para cancelar) e no fim dá para tocar ou mostrar na pasta.
+- **"Ir para o Conversor"** no lugar do botão "Converter" do Cortador, para não parecer que converte na hora.
+- **Baixar como GIF**: botão GIF novo ao lado de Áudio (e opção GIF em "Baixar...", com trecho se quiser). Baixa só a imagem e entrega um .gif com o ajuste do preset GIF do Converter. O "GIF" do X, que na verdade é vídeo, agora vem como GIF de verdade. Os vídeos já baixados têm um botão GIF na linha.
+
 ## 0.3.4
 
 **English**
