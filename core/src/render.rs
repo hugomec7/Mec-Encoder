@@ -138,6 +138,7 @@ fn out_path(info: &MediaInfo, cfg: &Preset, nm: &Naming) -> PathBuf {
 
 /// Renderiza `info` com o preset. `trim` = (início, fim) em segundos.
 pub fn render(e: &Engine, info: &MediaInfo, cfg: &Preset, nm: &Naming, trim: Option<(f64, f64)>, h: &Hooks) -> Result<Done, String> {
+    let info = &command::cropped(info, cfg);
     // Cortar trecho: só o pedaço entre início e fim (imagens não têm trecho).
     let trim = if info.is_image { None } else { trim.and_then(|(a, b)| command::trim_range(info, a, b)) };
     let cfg = prepare(info, cfg, trim.is_some())?;
@@ -148,6 +149,7 @@ pub fn render(e: &Engine, info: &MediaInfo, cfg: &Preset, nm: &Naming, trim: Opt
 /// Vários trechos do mesmo arquivo. `join`: um arquivo só com os trechos em ordem;
 /// senão um arquivo por trecho (_01, _02...). O `Done` traz o primeiro arquivo e, em `parts`, todos.
 pub fn render_cuts(e: &Engine, info: &MediaInfo, cfg: &Preset, nm: &Naming, cuts: &[(f64, f64)], join: bool, h: &Hooks) -> Result<Done, String> {
+    let info = &command::cropped(info, cfg);
     let mut cuts: Vec<(f64, f64)> = cuts.iter().filter_map(|&(a, b)| command::trim_range(info, a, b)).collect();
     cuts.sort_by(|x, y| x.0.total_cmp(&y.0));
     if cuts.len() <= 1 { return render(e, info, cfg, nm, cuts.first().copied(), h); }

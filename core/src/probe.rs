@@ -36,6 +36,10 @@ pub struct VideoInfo {
     pub bitrate_kbps: u32,
     pub max_cll: f64,
     pub mastering_max: f64,
+    /// Crop do Cortador já aplicado nas dimensões acima: x, y, largura e altura no quadro decodificado
+    /// (antes de girar). Ver command::cropped.
+    #[cfg_attr(feature = "serde", serde(skip))]
+    pub crop: Option<(u32, u32, u32, u32)>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -170,7 +174,7 @@ pub fn parse_flat(text: &str) -> MediaInfo {
                     vfr: fps > 0.0 && fps_nominal > 0.0 && (fps - fps_nominal).abs() / fps_nominal > 0.0005,
                     transfer, primaries: g("color_primaries").to_string(), matrix: g("color_space").to_string(), hdr,
                     bitrate_kbps: g("bit_rate").parse::<u64>().map_or(0, |b| (b / 1000) as u32),
-                    max_cll, mastering_max,
+                    max_cll, mastering_max, crop: None,
                 });
             }
             // Faixas que o FFmpeg não decodifica (ex.: áudio espacial APAC do iPhone) ficam de fora.

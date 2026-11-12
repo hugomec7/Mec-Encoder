@@ -59,6 +59,7 @@
     warn: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M7.1 2.5a1 1 0 0 1 1.8 0l5.4 9.6a1 1 0 0 1-.9 1.5H2.6a1 1 0 0 1-.9-1.5z"/><path d="M8 5.6v3.6M8 11.2v.1" stroke="#000" stroke-opacity=".55" stroke-width="1.6" stroke-linecap="round"/></svg>',
     check: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5l3 3 6-7"/></svg>',
     x: '<svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2.5 2.5l5 5M7.5 2.5l-5 5"/></svg>',
+    crop: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 1.5v10h10"/><path d="M1.5 4.5h10v10"/></svg>',
     rot: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 8A5.5 5.5 0 1 1 8 2.5c1.8 0 3.3.8 4.3 2.1"/><path d="M12.8 1.8v3h-3"/></svg>',
     chev: '<svg class="chev" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 4.5L6 7l2.5-2.5"/></svg>',
     folder: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M2 4.8C2 4 2.6 3.5 3.3 3.5h3l1.4 1.4h5c.7 0 1.3.6 1.3 1.3v5.5c0 .7-.6 1.3-1.3 1.3H3.3c-.7 0-1.3-.6-1.3-1.3z"/></svg>',
@@ -173,13 +174,13 @@
     $('#bMin').title = L.minimize; $('#bMax').title = L.maximize; $('#bClose').title = L.close;
     $('#bSetAll').title = L.setAll; $('#bFoldPresets').title = L.presetsFold; $('#bAdd').title = L.addVideos;
     $('#bIn').title = kf(L.markIn); $('#bOut').title = kf(L.markOut); $('#bCut').title = kf(L.newCut);
-    $('#lIn').textContent = L.inLbl; $('#lOut').textContent = L.outLbl; $('#lNewCut').textContent = L.newCutLbl; $('#lOpenCut').textContent = L.openCutLbl;
+    $('#lIn').textContent = L.inLbl; $('#lOut').textContent = L.outLbl; $('#lNewCut').textContent = L.newCutLbl; $('#lCrop').textContent = L.crop; $('#bCrop').title = L.cropTip; $('#lOpenCut').textContent = L.openCutLbl;
     $('#bOpenCut').title = kf(L.openCutter); $('#lCutter').textContent = L.cutter; $('#lCuts').textContent = L.cutsTitle;
     $('#bCutCancel').textContent = L.cancel; $('#bCutDone').textContent = L.cutConvert; $('#bCutDone').title = L.cutConvertTip; $('#bClearCuts').textContent = L.clearCuts;
-    $('#bCutExport').textContent = L.cutExport; $('#bCutExport').title = L.cutExportTip;
+    renderExport();
     $('#lCutBlankT').textContent = L.cutBlankT; $('#lCutBlankS').textContent = L.cutBlankS; $('#bCutOpenFile').textContent = L.cutOpenFile;
     if (S.plReady) { renderPlayUi(); applyVol(); }
-    $('#lCutSplit').textContent = L.cutSplitBtn; $('#lCutJoin').textContent = L.cutJoinBtn; $('#cutKeys').innerHTML = kf(L.cutKeysTxt); $('#tlHint').textContent = kf(L.tlHint);
+    $('#lCutSplit').textContent = L.cutSplitBtn; $('#lCutJoin').textContent = L.cutJoinBtn; $('#cutKeys').innerHTML = kf(L.cutKeysTxt + ` · <kbd>{open}</kbd> ${esc(L.crop)}`); $('#tlHint').textContent = kf(L.tlHint);
     renderRenderBtn(); renderUpdateBtn(); if ($('#bAfter')) renderAfter();
     $('#tConv').textContent = L.tabConvert; $('#tCut').textContent = L.tabCut; $('#tDl').textContent = L.tabDownload;
     if (S.view === 'dl') { dlRenderSide(); dlRender(); }
@@ -256,8 +257,21 @@
   // proporção escolhida: "9:16" → 0,5625; null = Original
   const ratioOf = (c) => { const m = /^(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)$/.exec(c.aspect || ''); return m ? +m[1] / +m[2] : null; };
   const ev = (x) => Math.max(2, Math.round(x / 2) * 2);
+  /* Crop do Cortador: um retângulo por vídeo (q.crop, em pixels do vídeo em pé). Vai junto no cfg mandado ao motor e às
+     renderizações (Exportar e Converter); o preset não muda. Sem crop = NOCROP (o Rust não aceita vazio). */
+  const NOCROP = { x: 0, y: 0, w: 0, h: 0 };
+  var CR = { on: false, ratio: 'free' };
+  const hasCrop = (q) => !!(q && q.crop && q.crop.w && q.crop.h);
+  const withCrop = (q, c) => Object.assign({}, c, { crop: hasCrop(q) ? q.crop : NOCROP });
+  const cfgOf = (q) => withCrop(q, q.cfg);
+  // o que a prévia mostra: no Cortador, o vídeo como o Exportar salva (desenhando o crop, o quadro inteiro)
+  function pvCfg(q) {
+    if (S.cutter && S.cutter.id === q.id && !q.src.audioOnly) { const c = trimOnlyCfg(q); c.hdrToSdr = true; if (CR.on) c.crop = NOCROP; return c; }
+    return cfgOf(q);
+  }
   function outDims(src, cfg) {
     let { w, h } = src;
+    if (cfg.crop && cfg.crop.w && cfg.crop.h && w && h) { w = Math.max(2, Math.min(cfg.crop.w, w) & ~1); h = Math.max(2, Math.min(cfg.crop.h, h) & ~1); }
     if ((cfg.rotate || 0) % 180 === 90) [w, h] = [h, w];
     // proporção: cortar (preenche) ou barras (nada é cortado), igual ao motor
     const r = ratioOf(cfg);
@@ -502,7 +516,7 @@
     if (!REAL || !S.restored) return Promise.resolve();
     const data = S.queue.filter((q) => q.path).map((q) => ({ path: q.path, file: q.file, dir: q.dir || '', preset: q.preset, cfg: q.cfg,
       status: q.status === 'done' || q.status === 'err' ? q.status : 'ready', out: q.out || null, outMb: q.outMb || 0, took: q.took || 0,
-      error: q.status === 'err' ? q.error || null : null, errCode: q.status === 'err' ? q.errCode || null : null, cuts: cutsOf(q), cutJoin: !!q.cutJoin }));
+      error: q.status === 'err' ? q.error || null : null, errCode: q.status === 'err' ? q.errCode || null : null, cuts: cutsOf(q), cutJoin: !!q.cutJoin, crop: hasCrop(q) ? q.crop : null }));
     const txt = JSON.stringify(data);
     clearTimeout(tQueue);
     if (txt === lastQueue) return Promise.resolve();
@@ -522,7 +536,7 @@
       const pid = presetOf(x.preset) ? x.preset : src.isImage ? defaultImageId() : src.audioOnly ? defaultAudioId() : presetOf(S.set.defaultPreset) ? S.set.defaultPreset : S.presets[0].id;
       const cfg = x.cfg && x.cfg.output ? normPreset(x.cfg) : clone(presetOf(pid));
       S.queue.push({ id: r.id, path: x.path, file: x.file, dir: x.dir || '', src, preset: pid, cfg, status: x.status === 'done' || x.status === 'err' ? x.status : 'ready',
-        out: x.out || null, outMb: x.outMb || 0, took: x.took || 0, error: x.error || null, errCode: x.errCode || null, cuts: Array.isArray(x.cuts) ? x.cuts : Array.isArray(x.trim) ? [x.trim] : null, cutJoin: !!x.cutJoin, thumb: null, p: x.status === 'done' ? 1 : 0 });
+        out: x.out || null, outMb: x.outMb || 0, took: x.took || 0, error: x.error || null, errCode: x.errCode || null, cuts: Array.isArray(x.cuts) ? x.cuts : Array.isArray(x.trim) ? [x.trim] : null, cutJoin: !!x.cutJoin, crop: x.crop && x.crop.w && x.crop.h ? x.crop : null, thumb: null, p: x.status === 'done' ? 1 : 0 });
       ids.push(r.id);
     });
     S.restored = true;
@@ -1094,7 +1108,7 @@
     const q = selItem(); if (q && REAL) requestFrames(q);
   }
   $('.stage').addEventListener('wheel', (e) => {
-    const f = e.target.closest('.frame'); const q = selItem(); if (!f || !q || q.src.audioOnly) return;
+    const f = e.target.closest('.frame'); const q = selItem(); if (!f || !q || q.src.audioOnly || CR.on) return;
     e.preventDefault();
     const r = f.getBoundingClientRect();
     setPz(S.pz.z * Math.exp(-e.deltaY * 0.0018), clamp((e.clientX - r.left) / r.width, 0, 1), clamp((e.clientY - r.top) / r.height, 0, 1));
@@ -1120,7 +1134,7 @@
   function requestPreview(q, out) {
     if (!REAL) return;
     const side = out ? 'out' : 'in'; const st = pvSt[side]; const fr = $(out ? '#frame' : '#frameIn');
-    const t = fullDur(q) * S.t; const max = viewMax(q); const key = JSON.stringify([q.id, out, Math.round(t * 30), out ? q.cfg : 0, max]);
+    const t = fullDur(q) * S.t; const max = viewMax(q); const key = JSON.stringify([q.id, out, Math.round(t * 30), out ? pvCfg(q) : 0, max]);
     if (key === st.key) return; st.key = key;
     // Cortador: motor do player (sem espera, sem FFmpeg novo a cada clique)
     if (!VW.off && !q.src.isImage && !q.src.audioOnly) { clearTimeout(st.timer); st.seq++; viewRequest(q, t, max, out); return; }
@@ -1129,7 +1143,7 @@
     st.timer = setTimeout(() => {
       const seq = ++st.seq; fr.classList.add('loading'); const t0 = performance.now();
       const done = () => { if (seq !== st.seq) return; fr.classList.remove('loading'); st.busy = false; if (out) flushStill(); };
-      inv('preview', { id: q.id, cfg: q.cfg, t, output: out, max }).then((img) => {
+      inv('preview', { id: q.id, cfg: pvCfg(q), t, output: out, max }).then((img) => {
         if (seq !== st.seq) return;
         const el = fr.querySelector('img');
         // troca quando a imagem nova já está decodificada (sem piscar ao pausar)
@@ -1147,7 +1161,7 @@
   const viewCache = () => { if (REAL) inv('view_cache', { mb: viewMemGB() * 1024 }).catch(() => {}); };
   function viewRequest(q, t, max, out = true) {
     const side = out ? 'out' : 'in'; const V = VW[side];
-    V.want = { q, t, max, out }; pvSt[side].busy = true;
+    V.want = { q, t, max, out, cfg: pvCfg(q) }; pvSt[side].busy = true;
     if (!V.busy) viewPump(side);
   }
   async function viewPump(side) {
@@ -1155,7 +1169,7 @@
     if (!w) return;
     V.busy = true; const t0 = performance.now();
     try {
-      const buf = await inv('view_frame', { id: w.q.id, cfg: w.q.cfg, t: w.t, output: w.out, max: w.max });
+      const buf = await inv('view_frame', { id: w.q.id, cfg: w.cfg, t: w.t, output: w.out, max: w.max });
       const dv = new DataView(buf); const fw = dv.getUint32(0, true); const fh = dv.getUint32(4, true);
       const fr = $(w.out ? '#frame' : '#frameIn');
       if (selItem() === w.q && fr.dataset.id === String(w.q.id) && fw && fh && (w.out || S.cmp)) {
@@ -1196,7 +1210,7 @@
     });
   }
   function paintFrame(fr, q, out) {
-    const o = outDims(q.src, q.cfg); const ar = out ? o : { w: q.src.w, h: q.src.h };
+    const o = outDims(q.src, pvCfg(q)); const ar = out ? o : { w: q.src.w, h: q.src.h };
     fr.dataset.ar = ar.w / ar.h;
     const keepImg = REAL && fr.querySelector('img') && fr.dataset.id === String(q.id);
     fr.className = 'frame' + (out ? ' out' : '');
@@ -1214,6 +1228,10 @@
         const k = Math.min(ar.w / w, ar.h / h); const sv = fr.querySelector('svg.scene');
         Object.assign(sv.style, { width: (w * k / ar.w * 100) + '%', height: (h * k / ar.h * 100) + '%', left: ((1 - w * k / ar.w) * 50) + '%', top: ((1 - h * k / ar.h) * 50) + '%' });
         fr.style.background = '#000'; sv.outerHTML = sv.outerHTML.replace('<svg', '<svg preserveAspectRatio="none"');
+      } else if (out && !CR.on && hasCrop(q) && pvCfg(q).crop.w) {
+        const c = q.crop; const W = q.src.w; const H = q.src.h; const sv = fr.querySelector('svg.scene');
+        Object.assign(sv.style, { width: (W / c.w * 100) + '%', height: (H / c.h * 100) + '%', left: (-c.x / c.w * 100) + '%', top: (-c.y / c.h * 100) + '%' });
+        fr.style.background = ''; sv.outerHTML = sv.outerHTML.replace('<svg', '<svg preserveAspectRatio="none"');
       } else fr.style.background = '';
     }
   }
@@ -1241,12 +1259,13 @@
         drawWave(); return;
       }
     }
-    const o = outDims(q.src, q.cfg); const c = [];
+    const o = outDims(q.src, cfgOf(q)); const c = [];
     // informação de como o vídeo VAI FICAR
     const cfr = q.cfg.fps.conform;
     c.push(chip(`${o.w}×${o.h}`), chip(`${codecName(codecOut(q.cfg, q.src))} ${bitsTxt(q.cfg, q.src)}${chromaOut(q.cfg, q.src) === '422' ? ' 4:2:2' : ' 4:2:0'}`, cpuEncode(q.cfg, q.src) ? COLORS.orange : null),
       cfr ? chip(`${fpsTxt(fpsOut(q.cfg, q.src))} fps CFR`, COLORS.green) : chip(`${fpsTxt(q.src.fps)} fps ${q.src.vfr ? 'VFR' : ''}`.trim()));
     if (q.src.hdr) c.push(q.cfg.hdrToSdr ? chip('Rec. 709', COLORS.green) : chip(L.hdrKept, COLORS.orange));
+    if (hasCrop(q)) c.push(chip(L.cropChip, COLORS.teal, ICONS.crop));
     if (q.cfg.rotate) c.push(chip(`${q.cfg.rotate}°`, COLORS.teal, ICONS.rot));
     if (cutsOf(q)) c.push(trimChip(q));
     c.push(chip(`≈ ${fmtMB(estMB(q))}`));
@@ -1256,7 +1275,7 @@
     if (anim) { const m = $('#pvMeta'); m.classList.remove('swap'); void m.offsetWidth; m.classList.add('swap'); }
     paintFrame(fr, q, true);
     if (S.cmp) paintFrame(fi, q, false);
-    fitFrames(); applyPz();
+    fitFrames(); applyPz(); renderCropOv();
     if (REAL) requestFrames(q);
     if (anim) { [fr, fi].forEach((f) => { f.classList.remove('flip'); void f.offsetWidth; f.classList.add('flip'); }); }
     $('#tcEnd').textContent = tcF(q, fullDur(q)); setT(S.t, true);
@@ -1582,14 +1601,14 @@
     if (PL.on) playStop(null, true);
     if (on) {
       if (!cutterOk(q)) { if (q && q.src.isImage) toast(L.cutImage); return; }
-      S.cutter = { id: q.id, before: { cuts: q.cuts ? q.cuts.map((c) => c.slice()) : null, cutJoin: !!q.cutJoin, cutSel: q.cutSel || 0 } };
+      S.cutter = { id: q.id, before: { cuts: q.cuts ? q.cuts.map((c) => c.slice()) : null, cutJoin: !!q.cutJoin, cutSel: q.cutSel || 0, crop: q.crop ? Object.assign({}, q.crop) : null } };
       S.cmp = false; closeMenu(); if (q.cuts) setCuts(q, q.cuts);
       $('#cutStageSlot').append($('.stage')); $('#cutTransportSlot').append($('.transport'));
       root.classList.add('cutter-open'); $('#cutter').hidden = false;
     } else {
       if (!S.cutter) return;
       $('#pvMeta').before($('.stage')); $('#pvMeta').after($('.transport'));
-      root.classList.remove('cutter-open'); $('#cutter').hidden = true; S.cutter = null;
+      root.classList.remove('cutter-open'); $('#cutter').hidden = true; S.cutter = null; CR.on = false; renderCropOv();
     }
     // abrir/fechar o Cortador pede o quadro de novo (sai da memória do motor)
     pvSt.out.key = '';
@@ -1598,18 +1617,204 @@
     if (typeof syncTabs === 'function') syncTabs();
     requestAnimationFrame(() => { fitFrames(); renderAll(); renderTimeline(); renderCutter(); });
   }
+  /* Crop (Cortador): retângulo sobre o quadro inteiro, com 8 alças, fora escurecido. Arrastar dentro move, fora desenha
+     um novo; proporção travada opcional. Os números ficam em pixels do vídeo em pé (o que sai é exatamente esse tamanho). */
+  const CROP_RATIOS = [['free', 0], ['orig', -1], ['9:16', 9 / 16], ['16:9', 16 / 9], ['1:1', 1], ['4:5', 4 / 5]];
+  const cropQ = () => { const q = S.cutter && itemOf(S.cutter.id); return q && !q.src.audioOnly && q.src.w ? q : null; };
+  const cropRatio = (q) => { const r = (CROP_RATIOS.find((x) => x[0] === CR.ratio) || CROP_RATIOS[0])[1]; return r < 0 ? q.src.w / q.src.h : r; };
+  const fullRect = (q) => ({ x: 0, y: 0, w: q.src.w, h: q.src.h });
+  // retângulo em edição (números quebrados durante o arraste; arredonda para par ao soltar)
+  let CRr = null;
+  const evn = (v) => Math.round(v / 2) * 2;
+  function cropSet(q, r, final) {
+    const W = q.src.w, H = q.src.h;
+    let x = clamp(r.x, 0, W - 2), y = clamp(r.y, 0, H - 2); let w = clamp(r.w, 2, W - x), h = clamp(r.h, 2, H - y);
+    CRr = { x, y, w, h };
+    if (final) {
+      x = evn(x); y = evn(y); w = Math.min(evn(w), (W - x) & ~1); h = Math.min(evn(h), (H - y) & ~1);
+      w = Math.max(2, w); h = Math.max(2, h);
+      q.crop = x === 0 && y === 0 && w >= (W & ~1) && h >= (H & ~1) ? null : { x, y, w, h };
+      CRr = q.crop ? Object.assign({}, q.crop) : fullRect(q);
+    }
+    renderCropOv(); renderCropCard();
+  }
+  // maior retângulo da proporção r dentro do quadro, centrado em (cx, cy)
+  function fitRatio(q, r, cx, cy) {
+    const W = q.src.w, H = q.src.h; let w = W, h = W / r; if (h > H) { h = H; w = H * r; }
+    return { x: clamp(cx - w / 2, 0, W - w), y: clamp(cy - h / 2, 0, H - h), w, h };
+  }
+  function cropMode(on) {
+    const q = cropQ(); if (on && !q) return;
+    if (PL.on) playStop(null, true);
+    CR.on = !!on;
+    if (on) { CRr = hasCrop(q) ? Object.assign({}, q.crop) : fullRect(q); S.pz = { z: 1, x: 0, y: 0 }; }
+    pvSt.out.key = '';
+    renderPreview(); renderCropCard();
+  }
+  function renderCropOv() {
+    const fr = $('#frame'); if (!fr) return;
+    let ov = fr.querySelector('.crop-ov'); const q = cropQ();
+    const on = CR.on && q && fr.dataset.id === String(q.id);
+    fr.classList.toggle('cropping', !!on);
+    $('#bCrop') && $('#bCrop').classList.toggle('on', !!CR.on);
+    $('#bCrop') && $('#bCrop').classList.toggle('set', !CR.on && hasCrop(q));
+    if (!on) { if (ov) ov.remove(); return; }
+    if (!ov) {
+      ov = document.createElement('div'); ov.className = 'crop-ov';
+      ov.innerHTML = '<div class="crop-dim"><i class="crop-hole"></i></div><div class="crop-r"><i class="g1"></i><i class="g2"></i>'
+        + ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'].map((h) => `<i class="hd" data-h="${h}"></i>`).join('') + '<b class="crop-sz tnum"></b></div>';
+      fr.append(ov);
+    }
+    const r = CRr || fullRect(q); const W = q.src.w, H = q.src.h;
+    const pos = { left: (r.x / W * 100) + '%', top: (r.y / H * 100) + '%', width: (r.w / W * 100) + '%', height: (r.h / H * 100) + '%' };
+    Object.assign(ov.querySelector('.crop-hole').style, pos); Object.assign(ov.querySelector('.crop-r').style, pos);
+    ov.querySelector('.crop-sz').textContent = `${evn(r.w)} × ${evn(r.h)}`;
+  }
+  $('.stage').addEventListener('pointerdown', (e) => {
+    if (!CR.on || e.button !== 0) return;
+    const fr = e.target.closest('#frame'); const q = cropQ(); if (!fr || !q) return;
+    e.preventDefault(); e.stopPropagation();
+    const b = fr.getBoundingClientRect(); const W = q.src.w, H = q.src.h;
+    // perto da borda do quadro (8 px na tela) gruda nela
+    const snap = (v, n) => (v < 8 ? 0 : v > n - 8 ? n : v);
+    const pt = (ev) => ({ x: clamp(snap(ev.clientX - b.left, b.width) / b.width, 0, 1) * W, y: clamp(snap(ev.clientY - b.top, b.height) / b.height, 0, 1) * H });
+    const p0 = pt(e); const r0 = Object.assign({}, CRr || fullRect(q)); const ratio = cropRatio(q);
+    const hd = e.target.closest('.hd'); const inside = !hd && e.target.closest('.crop-r');
+    // sem crop (quadro inteiro) não há o que mover: arrastar desenha um novo
+    const full = r0.x < 1 && r0.y < 1 && r0.w >= W - 1 && r0.h >= H - 1;
+    let mode = hd ? hd.dataset.h : inside && !full ? 'move' : 'new';
+    const minS = Math.max(8, Math.round(Math.min(W, H) / 60));
+    // canto preso (ax, ay) e ponto do mouse (px, py): retângulo com a proporção, dentro do quadro
+    const corner = (ax, ay, px, py) => {
+      const sx = px >= ax ? 1 : -1, sy = py >= ay ? 1 : -1;
+      let w = Math.max(minS, Math.abs(px - ax)), h = Math.max(minS, Math.abs(py - ay));
+      if (ratio) { if (w / h > ratio) h = w / ratio; else w = h * ratio; }
+      const mw = sx > 0 ? W - ax : ax, mh = sy > 0 ? H - ay : ay;
+      if (w > mw) { w = mw; if (ratio) h = w / ratio; }
+      if (h > mh) { h = mh; if (ratio) w = h * ratio; }
+      return { x: sx > 0 ? ax : ax - w, y: sy > 0 ? ay : ay - h, w, h };
+    };
+    const edge = (horiz, a, p, c) => {
+      // horiz: mexe na largura (alça e/w) com a borda oposta presa em a; a altura acompanha a proporção, centrada em c
+      const L = horiz ? W : H, M = horiz ? H : W; const s = p >= a ? 1 : -1;
+      let d = Math.min(Math.max(minS, Math.abs(p - a)), s > 0 ? L - a : a);
+      let o = horiz ? r0.h : r0.w; let oc = c;
+      if (ratio) { o = horiz ? d / ratio : d * ratio; const mo = 2 * Math.min(c, M - c); if (o > mo) { o = mo; d = horiz ? o * ratio : o / ratio; } oc = c - o / 2; } else oc = horiz ? r0.y : r0.x;
+      const st = s > 0 ? a : a - d;
+      return horiz ? { x: st, y: oc, w: d, h: o } : { x: oc, y: st, w: o, h: d };
+    };
+    if (mode === 'new') CRr = { x: p0.x, y: p0.y, w: 0, h: 0 };
+    let moved = false;
+    dragPtr(fr, e, (ev) => {
+      const p = pt(ev); if (!moved && Math.hypot(p.x - p0.x, p.y - p0.y) < W / 400) return; moved = true;
+      let r;
+      const X1 = r0.x + r0.w, Y1 = r0.y + r0.h;
+      switch (mode) {
+        case 'move': r = { x: clamp(r0.x + p.x - p0.x, 0, W - r0.w), y: clamp(r0.y + p.y - p0.y, 0, H - r0.h), w: r0.w, h: r0.h }; break;
+        case 'new': r = corner(p0.x, p0.y, p.x, p.y); break;
+        case 'nw': r = corner(X1, Y1, p.x, p.y); break;
+        case 'ne': r = corner(r0.x, Y1, p.x, p.y); break;
+        case 'se': r = corner(r0.x, r0.y, p.x, p.y); break;
+        case 'sw': r = corner(X1, r0.y, p.x, p.y); break;
+        case 'e': r = edge(true, r0.x, p.x, r0.y + r0.h / 2); break;
+        case 'w': r = edge(true, X1, p.x, r0.y + r0.h / 2); break;
+        case 's': r = edge(false, r0.y, p.y, r0.x + r0.w / 2); break;
+        case 'n': r = edge(false, Y1, p.y, r0.x + r0.w / 2); break;
+      }
+      if (r) cropSet(q, r, false);
+    }, () => { if (moved) cropSet(q, CRr, true); else { CRr = r0; renderCropOv(); } });
+  }, true);
+  // cartão do crop na lateral do Cortador
+  function renderCropCard() {
+    const el = $('#cropCard'); if (!el) return; const q = cropQ();
+    el.hidden = !q || (!CR.on && !hasCrop(q));
+    if (el.hidden) return;
+    const r = CR.on ? (CRr || fullRect(q)) : q.crop; const W = q.src.w, H = q.src.h;
+    const d = { l: evn(r.x), t: evn(r.y), r: Math.max(0, W - evn(r.x) - evn(r.w)), b: Math.max(0, H - evn(r.y) - evn(r.h)) };
+    const inEdit = document.activeElement && document.activeElement.closest('#cropCard .cn input');
+    el.classList.toggle('editing', CR.on);
+    if (inEdit) { el.querySelector('.crop-size').textContent = `${evn(r.w)} × ${evn(r.h)}`; return; }
+    el.innerHTML = `<div class="crop-head">${ICONS.crop}<h3>${esc(L.crop)}</h3><small class="crop-size tnum">${evn(r.w)} × ${evn(r.h)}</small>`
+      + (CR.on ? '' : `<button class="link" data-c="edit">${esc(L.cropEdit)}</button>`)
+      + `${hasCrop(q) ? `<button class="link off" data-c="off">${esc(L.cropOff)}</button>` : ''}</div>`
+      + (CR.on ? `<div class="crop-ratios">${CROP_RATIOS.map(([k]) => `<button data-r="${k}" class="${k === CR.ratio ? 'active' : ''}">${esc(k === 'free' ? L.cropFree : k === 'orig' ? L.cropOrig : k)}</button>`).join('')}</div>
+        <div class="crop-nums">${[['l', L.cropLeft], ['t', L.cropTop], ['r', L.cropRight], ['b', L.cropBottom]].map(([k, t]) => `<label class="cn"><span>${esc(t)}</span><input class="tnum" data-k="${k}" value="${d[k]}" inputmode="numeric" spellcheck="false"><i>px</i></label>`).join('')}</div>
+        <div class="crop-foot"><small>${esc(L.cropFrom(W, H))}</small><button class="btn small" data-c="done">${esc(L.cropDone)}</button></div>` : '');
+  }
+  $('#cropCard').addEventListener('click', (e) => {
+    const q = cropQ(); if (!q) return;
+    const c = e.target.closest('[data-c]'); const rb = e.target.closest('[data-r]');
+    if (c && c.dataset.c === 'edit') cropMode(true);
+    else if (c && c.dataset.c === 'done') cropMode(false);
+    else if (c && c.dataset.c === 'off') { q.crop = null; CRr = fullRect(q); CR.ratio = 'free'; if (CR.on) { renderCropOv(); renderCropCard(); } else { pvSt.out.key = ''; renderPreview(); renderCropCard(); } renderCutter(); }
+    else if (rb) {
+      CR.ratio = rb.dataset.r; const r = cropRatio(q); const cur = CRr || fullRect(q);
+      if (r) cropSet(q, fitRatio(q, r, cur.x + cur.w / 2, cur.y + cur.h / 2), true); else renderCropCard();
+    }
+  });
+  $('#cropCard').addEventListener('change', (e) => {
+    const inp = e.target.closest('.cn input'); const q = cropQ(); if (!inp || !q) return;
+    const W = q.src.w, H = q.src.h; const r = CRr || fullRect(q);
+    const d = { l: r.x, t: r.y, r: W - r.x - r.w, b: H - r.y - r.h };
+    d[inp.dataset.k] = clamp(Math.round(+String(inp.value).replace(/[^\d]/g, '') || 0), 0, (inp.dataset.k === 'l' || inp.dataset.k === 'r' ? W : H) - 2);
+    CR.ratio = 'free';
+    const w = Math.max(2, W - d.l - d.r), h = Math.max(2, H - d.t - d.b);
+    inp.blur(); cropSet(q, { x: Math.min(d.l, W - 2), y: Math.min(d.t, H - 2), w, h }, true);
+  });
+  $('#cropCard').addEventListener('keydown', (e) => {
+    const inp = e.target.closest('.cn input'); if (!inp) return;
+    e.stopPropagation();
+    if (e.key === 'Enter') inp.dispatchEvent(new Event('change', { bubbles: true }));
+    else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); inp.value = Math.max(0, (+inp.value || 0) + (e.key === 'ArrowUp' ? 2 : -2) * (e.shiftKey ? 10 : 1)); inp.dispatchEvent(new Event('change', { bubbles: true })); inp.focus(); }
+    else if (e.key === 'Escape') { inp.blur(); renderCropCard(); }
+  });
+  $('#bCrop').onclick = () => cropMode(!CR.on);
   function cancelCutter() {
     const q = itemOf(S.cutter && S.cutter.id);
-    if (q) Object.assign(q, { cuts: S.cutter.before.cuts, cutJoin: S.cutter.before.cutJoin, cutSel: S.cutter.before.cutSel });
+    if (q) Object.assign(q, { cuts: S.cutter.before.cuts, cutJoin: S.cutter.before.cutJoin, cutSel: S.cutter.before.cutSel, crop: S.cutter.before.crop });
     openCutter(false);
   }
-  $('#bCutDone').onclick = () => { const id = S.cutter && S.cutter.id; openCutter(false); const q = itemOf(id); if (q) { q.trimOnly = false; selectOnly(q.id); setView('conv'); renderAll(); } };
-  // Exportar: fecha o Cortador e já renderiza este vídeo com os cortes
-  $('#bCutExport').onclick = () => {
-    const q = itemOf(S.cutter && S.cutter.id); openCutter(false);
+  $('#bCutDone').onclick = () => { const id = S.cutter && S.cutter.id; openCutter(false); const q = itemOf(id); if (q) { selectOnly(q.id); setView('conv'); renderAll(); } };
+  /* Exportar: renderiza aqui mesmo, sem passar pela fila do Converter e sem mexer no preset do vídeo.
+     Sai igual ao original (só sem os trechos cortados; com crop, só a área marcada). */
+  var CX = { id: null, p: 0, out: null }; // eslint-disable-line no-var (usado pelo applyLang antes daqui)
+  function renderExport() {
+    const b = $('#bCutExport'); if (!CX) { b.textContent = L.cutExport; b.title = L.cutExportTip; return; }
+    const run = CX.id != null;
+    b.classList.toggle('running', run); b.style.setProperty('--p', run ? CX.p : 0);
+    b.textContent = run ? L.cutExporting(Math.round(CX.p * 100)) : L.cutExport;
+    b.title = run ? L.cutExportStop : L.cutExportTip;
+    const sv = $('#cutSaved'); const q = itemOf(S.cutter && S.cutter.id);
+    sv.hidden = run || !CX.out || !q || CX.out.id !== q.id;
+    if (!sv.hidden) sv.innerHTML = `<span class="ok">${ICONS.check || ''}</span><span class="nm" title="${esc(CX.out.files.join('\n'))}">${esc(L.cutSaved(CX.out.files.length, lastPart(CX.out.files[0])))}</span><button class="dk-ib" data-act="play" title="${esc(L.dlPlay || 'Play')}">${DL_ICONS.play}</button><button class="dk-ib" data-act="show" title="${esc(L.showInFolder || '')}">${ICONS.folder}</button>`;
+  }
+  $('#cutSaved').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-act]'); if (!b || !CX.out) return;
+    if (b.dataset.act === 'play') inv('dl_play', { path: CX.out.files[0] }).catch((er) => toast(String(er)));
+    else inv('reveal', { path: CX.out.files[0] }).catch((er) => toast(String(er)));
+  });
+  $('#bCutExport').onclick = async () => {
+    const q = itemOf(S.cutter && S.cutter.id);
     if (!q) return;
-    if (q.status === 'done') { q.status = 'ready'; q.p = 0; }
-    q.trimOnly = true; renderQueue(); renderOne(q.id, true); toast(L.trimOnlyToast(q.file), true);
+    if (CX.id != null) { if (REAL) inv('render_cancel', { id: CX.id }).catch(() => {}); CX.cancel = true; return; }
+    if (q.status === 'running') { toast(L.cutExportBusy); return; }
+    if (PL.on) playStop(null, true);
+    Object.assign(CX, { id: q.id, p: 0, out: null, cancel: false }); renderExport();
+    if (!REAL) { // demonstração
+      const t = setInterval(() => { CX.p = Math.min(1, CX.p + 0.08); renderExport(); if (CX.p >= 1) { clearInterval(t); CX.out = { id: q.id, files: [q.file.replace(/(\.[^.]+)$/, '_corte$1')] }; CX.id = null; renderExport(); toast(L.cutSavedToast(q.file), true); } }, 120);
+      return;
+    }
+    try {
+      const naming = Object.assign({ dir: q.dir || '', n: S.queue.indexOf(q) + 1 }, nowTags());
+      const r = await inv('render', { id: q.id, naming, cuts: cutsOf(q) || [], join: !!q.cutJoin, cfg: trimOnlyCfg(q) });
+      CX.out = { id: q.id, files: r.parts && r.parts.length ? r.parts : [r.output] };
+      notify(L.cutSavedToast(lastPart(r.output)));
+      toast(L.cutSavedToast(lastPart(r.output)), true);
+    } catch (e) {
+      if (!CX.cancel) { const pe = parseErr(e); toast((L.errs && L.errs[pe.code]) || pe.details || String(e)); }
+      else toast(L.cutExportCancelled);
+    }
+    CX.id = null; CX.p = 0; renderExport();
   };
   $('#bCutOpenFile').onclick = () => { S.cutAfterAdd = { any: true }; if (REAL) inv('pick', { folder: false }).catch(() => {}); else { const q = S.queue.find((x) => cutterOk(x)); if (q) { S.cutAfterAdd = null; selectOnly(q.id); openCutter(true); } } };
   $('#bCutCancel').onclick = cancelCutter;
@@ -1625,9 +1830,9 @@
     $$('#cutMode button').forEach((b) => b.classList.toggle('active', (b.dataset.v === 'join') === !!q.cutJoin));
     $('#cutTotal').textContent = cs.length ? `${L.cutsN(cs.length).replace(/^1 .*/, L.oneCut)} · ${fmtDur(cutsDur(q))}` : L.wholeFile;
     // nomes dos arquivos que vão sair
-    const names = outNames(q);
+    const names = outNames(q, trimOnlyCfg(q));
     $('#cutOut').innerHTML = `<small>${esc(names.length > 1 ? L.cutFilesN(names.length) : L.cutFile1)}</small>` + names.slice(0, 6).map((n) => `<div>${esc(n)}</div>`).join('') + (names.length > 6 ? `<div>…</div>` : '');
-    renderCutList();
+    renderCutList(); renderCropCard();
   }
   // lista de trechos com início e fim em timecode (dá para digitar)
   function renderCutList() {
@@ -1720,7 +1925,7 @@
   const qPlay = () => (QDIV.includes(String(S.set.viewPlay)) ? String(S.set.viewPlay) : 'auto');
   const qTxt = (d) => (d === 'auto' ? L.qualAuto : d === '1' ? L.qualFull : `1/${d}`);
   // pausado: lado maior do quadro (Automática = o tamanho da tela, e maior com zoom)
-  const viewMax = (q) => { const d = qPause(); if (d === 'auto' || !q || !q.src || !q.src.w) return pzMax(); const o = outDims(q.src, q.cfg); return clamp(Math.round(Math.max(o.w, o.h) / +d), 120, 3840); };
+  const viewMax = (q) => { const d = qPause(); if (d === 'auto' || !q || !q.src || !q.src.w) return pzMax(); const o = outDims(q.src, pvCfg(q)); return clamp(Math.round(Math.max(o.w, o.h) / +d), 120, 3840); };
   // tocando: altura em pixels ('auto' = a conversão escolhe e baixa sozinha quando o PC não acompanha)
   const playQ = () => { const d = qPlay(); if (d === 'auto') return 'auto'; const q = PL.q || selItem(); const sh = q && q.src && q.src.w ? Math.min(q.src.w, q.src.h) : 1080; return String(clamp(Math.round(sh / +d / 2) * 2, 240, 2160)); };
   const liveH = (q) => (playQ() === 'auto' ? (q.liveH || 720) : +playQ());
@@ -1731,7 +1936,7 @@
   let EP = null;
   const engOk = (q) => REAL && !VW.off && !!window.MecEnginePlayer && !q.src.audioOnly && !q.src.isImage && !(q.play && q.play.noEngine);
   // tocando: lado maior do quadro (Automática = o tamanho da tela; com zoom, maior)
-  const playMax = (q) => { const d = qPlay(); if (d === 'auto' || !q.src.w) return pzMax(); const o = outDims(q.src, q.cfg); return clamp(Math.round(Math.max(o.w, o.h) / +d), 240, 3840); };
+  const playMax = (q) => { const d = qPlay(); if (d === 'auto' || !q.src.w) return pzMax(); const o = outDims(q.src, pvCfg(q)); return clamp(Math.round(Math.max(o.w, o.h) / +d), 240, 3840); };
   const RATES = [0.25, 0.5, 1, 1.5, 2, 4];
   const rateTxt = (r) => `${fpsTxt(String(r))}×`;
   function planFor(q, o) {
@@ -1806,7 +2011,7 @@
   async function makeProxy(q, key) {
     PL.prep = 0; renderPlayUi(); stage.classList.remove('buffering');
     const h = playQ() === 'auto' ? 540 : +playQ();
-    const url = await inv('play_proxy', { id: q.id, cfg: q.cfg, output: true, height: h, fps: String(frOf(q)), limitMb: Math.round((+S.set.previewGB || 5) * 1000) });
+    const url = await inv('play_proxy', { id: q.id, cfg: pvCfg(q), output: true, height: h, fps: String(frOf(q)), limitMb: Math.round((+S.set.previewGB || 5) * 1000) });
     Object.assign(q.play, { proxy: url, proxyKey: key });
     PL.prep = null; renderPlayUi();
   }
@@ -1817,7 +2022,7 @@
       Object.assign(PL, { cur: parts, mode, i: 0, started: false });
       stage.classList.add('buffering');
       if (mode === 'engine') {
-        const url = await inv('view_play', { id: q.id, cfg: q.cfg, parts, max: playMax(q), rate: PL.rate, dir: PL.dir || 1 });
+        const url = await inv('view_play', { id: q.id, cfg: pvCfg(q), parts, max: playMax(q), rate: PL.rate, dir: PL.dir || 1 });
         if (seq !== PL.seq) return;
         vid.pause(); vid.remove(); $('#frame').append(glc); applyPz();
         // até chegar o primeiro quadro, a tela do play guarda o último de antes: mostra o quadro parado (já no ponto novo)
@@ -1837,7 +2042,7 @@
       }
       if (mode === 'live') {
         PL.h = liveH(q);
-        const r = await inv('play_live', { id: q.id, cfg: q.cfg, parts, output: true, height: PL.h, fps: String(frOf(q)), hw: PL.hw });
+        const r = await inv('play_live', { id: q.id, cfg: pvCfg(q), parts, output: true, height: PL.h, fps: String(frOf(q)), hw: PL.hw });
         if (seq !== PL.seq) { inv('play_stop').catch(() => {}); return; }
         PL.map = liveMap(parts); PL.enc = r.enc;
         vid.src = r.url;
@@ -2300,8 +2505,8 @@
     return base + suf + (n > 1 ? `_01…_${pad(n)}` : '') + '.' + (isGifP(cfg) ? 'gif' : isImageP(cfg) ? (IEXT[(cfg.image || {}).format] || 'jpg') : isAudioP(cfg) ? (AEXT[cfg.audio.codec] || String(file).split('.').pop()) : extOut(cfg, file));
   }
   // todos os arquivos que vão sair deste vídeo (um por trecho, se separados)
-  function outNames(q) {
-    const one = outName(q.file, q.cfg, null); const n = cutsOf(q) && !q.cutJoin ? q.cuts.length : 0;
+  function outNames(q, cfg = q.cfg) {
+    const one = outName(q.file, cfg, null); const n = cutsOf(q) && !q.cutJoin ? q.cuts.length : 0;
     if (n < 2) return [one];
     const dot = one.lastIndexOf('.');
     return Array.from({ length: n }, (_, i) => `${one.slice(0, dot)}_${pad(i + 1)}${one.slice(dot)}`);
@@ -2526,12 +2731,12 @@
     // na aba Baixar, as teclas do conversor não mexem no vídeo escondido
     if (S.view === 'dl') return false;
     switch (a) {
-      case 'openCutter': if (!cut && q) { openCutter(true); return true; } return false;
+      case 'openCutter': if (!cut && q) { openCutter(true); return true; } if (cut && cropQ()) { cropMode(!CR.on); return true; } return false;
       case 'markIn': if (cut) { markTrim('a'); return true; } return false;
       case 'markOut': if (cut) { markTrim('b'); return true; } return false;
       case 'newCut': if (cut) { newCut(); return true; } return false;
       case 'clearCuts': if (cut && q) { setCuts(q, []); return true; } return false;
-      case 'cutDone': if (cut) { openCutter(false); return true; } return false;
+      case 'cutDone': if (cut && CR.on) { cropMode(false); return true; } if (cut) { openCutter(false); return true; } return false;
       case 'play': if (playable(q)) { if (PL.on) playStop(); else playStart({ kind: 'auto' }); return true; } return false;
       // o original, sem pular o que foi cortado
       case 'skipCuts': if (playable(q) && cutsOf(q)) { toggleSkip(); toast(S.set.skipCuts !== false ? L.skipOn : L.skipOff); return true; } return false;
@@ -2580,6 +2785,7 @@
   }
   addEventListener('keydown', (e) => {
     if (S.keyCapture) { captureKey(e); return; }
+    if (S.cutter && CR.on && !e.target.closest('input') && e.key === 'Escape') { e.preventDefault(); cropMode(false); return; }
     if (S.cutter && !e.target.closest('input') && e.key === 'Escape' && !$('#menu').classList.contains('show')) { e.preventDefault(); openCutter(false); return; }
     if (e.key === 'Escape') { if (S.powerEnd) { S.powerEnd(); return; } openNews(false); openSheet(false); closeMenu(); if (S.picked.size > 1 && !e.target.closest('input')) { selectOnly(S.sel); renderAll(); } }
     if (e.target.closest('input, textarea')) return;
@@ -3374,7 +3580,7 @@
   // Exportar do Cortador: só corta. Tudo Original (codec, profundidade, croma, fps, bitrate, formato e áudio),
   // sem HDR→SDR, sem escala nem giro; salva ao lado do original com _corte. O preset do vídeo não muda.
   function trimOnlyCfg(q) {
-    const b = clone(q.cfg);
+    const b = clone(q.cfg); b.crop = hasCrop(q) && !q.src.audioOnly ? Object.assign({}, q.crop) : NOCROP;
     const out = { suffix: { on: true, text: '_corte' }, subfolder: { on: false, text: '' }, deleteSource: false, folder: { on: false, text: '' }, keepTree: false };
     if (q.src.audioOnly) return Object.assign(b, { kind: 'audio', audio: Object.assign({}, b.audio, { codec: 'copy', channels: 'source' }), output: out, metadata: true });
     return Object.assign(b, { kind: 'video', codec: 'source', bits: 0, chroma: 'source', container: 'source', scale: 'source', aspect: 'source', rotate: 0,
@@ -3414,7 +3620,7 @@
           if (twin && q.cfg.output.deleteSource) toast(L.keptForCopy);
           const naming = Object.assign({ dir: q.dir || '', n: S.queue.indexOf(q) + 1 }, nowTags());
           jobUpdate(q);
-          const cfg = q.trimOnly ? trimOnlyCfg(q) : twin ? Object.assign(clone(q.cfg), { output: Object.assign(clone(q.cfg.output), { deleteSource: false }) }) : q.cfg;
+          const cfg = q.trimOnly ? trimOnlyCfg(q) : withCrop(q, twin ? Object.assign(clone(q.cfg), { output: Object.assign(clone(q.cfg.output), { deleteSource: false }) }) : q.cfg);
           const r = await inv('render', { id: q.id, naming, cuts: cutsOf(q) || [], join: !!q.cutJoin, cfg });
           q.trimOnly = false;
           q.status = 'done'; q.p = 1; q.out = r.output; q.parts = r.parts && r.parts.length > 1 ? r.parts : null; q.outMb = r.size / 1e6; q.took = elapsedOf(q); J.done++; jobUpdate(q);
@@ -3672,6 +3878,7 @@
       else toast(L.added(p.added) + (errs ? ' · ' + L.unreadable(errs) : ''), true);
     });
     on('render-progress', (p) => {
+      if (CX.id === p.id) { CX.p = p.p; renderExport(); return; }
       const q = itemOf(p.id); if (!q || q.status !== 'running') return;
       q.p = p.p; q.speed = p.speed; q.mode = p.mode; q.eta = p.eta; const it = $(`.item[data-id="${q.id}"]`);
       if (it) { it.querySelector('.prog').style.setProperty('--p', q.p); const st = it.querySelector('.state'); if (st) { st.textContent = runTxt(q); st.title = p.mode === 'cpu' ? L.cpuDecode : p.mode === 'cpu-encode' ? L.cpuEnc : ''; } }

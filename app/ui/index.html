@@ -85,6 +85,7 @@
             <button class="ctl" title="→"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5L10.5 8 6 12.5"/></svg></button>
             <button class="ctl trim-btn" id="bOut"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2.5H12v11H9.5"/><path d="M7 8H3M5 6L3 8l2 2"/></svg><span id="lOut"></span></button>
             <button class="ctl trim-btn" id="bCut"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="4.2" cy="11.8" r="2"/><circle cx="11.8" cy="11.8" r="2"/><path d="M5.6 10.4L12 2.5M10.4 10.4L4 2.5"/></svg><span id="lNewCut"></span></button>
+            <button class="ctl trim-btn crop-btn" id="bCrop"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 1.5v10h10"/><path d="M1.5 4.5h10v10"/></svg><span id="lCrop"></span></button>
             <button class="open-cut" id="bOpenCut"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="4.2" cy="11.8" r="2"/><circle cx="11.8" cy="11.8" r="2"/><path d="M5.6 10.4L12 2.5M10.4 10.4L4 2.5"/></svg><span id="lOpenCut"></span></button>
           </div>
           <div class="pl-tools">
@@ -164,11 +165,12 @@
 <section class="cutter" id="cutter" hidden>
   <header class="cut-head">
     <div class="cut-title"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="4.2" cy="11.8" r="2"/><circle cx="11.8" cy="11.8" r="2"/><path d="M5.6 10.4L12 2.5M10.4 10.4L4 2.5"/></svg><h2 id="lCutter"></h2><b id="cutFile"></b><small id="cutInfo"></small></div>
-    <div class="cut-actions"><button class="btn small ghost" id="bCutCancel"></button><button class="btn small ghost" id="bCutDone"></button><button class="btn small" id="bCutExport"></button></div>
+    <div class="cut-actions"><span class="cut-saved" id="cutSaved" hidden></span><button class="btn small ghost" id="bCutCancel"></button><button class="btn small ghost" id="bCutDone"></button><button class="btn small cut-export" id="bCutExport"></button></div>
   </header>
   <div class="cut-body">
     <div class="cut-main"><div class="cut-stage" id="cutStageSlot"></div><div class="cut-transport" id="cutTransportSlot"></div></div>
     <aside class="cut-side">
+      <div class="crop-card" id="cropCard" hidden></div>
       <div class="cut-side-head"><h3 id="lCuts"></h3><small id="cutTotal"></small><button class="link" id="bClearCuts"></button></div>
       <div class="cut-mode" id="cutMode" hidden><button data-v="split"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><rect x="1.5" y="4" width="5.5" height="8" rx="1.5"/><rect x="9" y="4" width="5.5" height="8" rx="1.5"/></svg><span id="lCutSplit"></span></button><button data-v="join"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><rect x="1.5" y="4" width="13" height="8" rx="1.5"/><path d="M8 4v8" stroke-dasharray="1.5 1.5"/></svg><span id="lCutJoin"></span></button></div>
       <div class="cut-list smooth" id="cutList"></div>

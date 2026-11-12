@@ -54,6 +54,11 @@ impl Default for Image {
     fn default() -> Self { Self { format: "jpg".into(), quality: 90, lossless: false } }
 }
 
+/// Crop do Cortador: a área do vídeo que fica (em pixels do vídeo em pé, antes do preset). w ou h 0 = sem crop.
+#[derive(Clone, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(rename_all = "camelCase", default))]
+pub struct Crop { pub x: u32, pub y: u32, pub w: u32, pub h: u32 }
+
 /// GIF feito de um vídeo (preset "gif").
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(rename_all = "camelCase", default))]
@@ -127,6 +132,8 @@ pub struct Preset {
     pub audio: Audio,
     pub image: Image,
     pub gif: Gif,
+    /// Crop do Cortador (vem do vídeo, não fica salvo no preset).
+    pub crop: Crop,
     pub output: Output,
     pub av_sync: bool,
     pub metadata: bool,
@@ -156,7 +163,7 @@ impl Default for Preset {
             kind: "video".into(), id: "preset".into(), name: "Preset".into(), icon: "phone".into(), color: "blue".into(),
             codec: "h265".into(), bits: 8, chroma: "420".into(), container: "mp4".into(), scale: "source".into(), aspect: "source".into(), aspect_mode: "crop".into(), rotate: 0, custom_w: 0, custom_h: 0, folder: String::new(),
             bitrate: Bitrate::default(), max_quality: false, fps: Fps::default(), hdr_to_sdr: false,
-            audio: Audio::default(), image: Image::default(), gif: Gif::default(), output: Output::default(), av_sync: true, metadata: true,
+            audio: Audio::default(), image: Image::default(), gif: Gif::default(), crop: Crop::default(), output: Output::default(), av_sync: true, metadata: true,
         }
     }
 }

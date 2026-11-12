@@ -575,3 +575,53 @@ fn cut_before_keyframe_open_gop() {
     }
     let _ = std::fs::remove_dir_all(&d);
 }
+
+/// Crop do Cortador: sai só a área marcada (no vídeo em pé), no tamanho do recorte, igual ao FFmpeg
+/// cortando o vídeo já em pé. Com vídeo deitado no arquivo (rotação 90/270) e sem rotação.
+#[test]
+fn cutter_crop() {
+    use mec_core::preset::{Audio, Bitrate, Crop, Fps, Output, Toggle};
+    use mec_core::render::{render_cuts, Engine, Hooks};
+    use std::sync::{atomic::AtomicBool, Mutex};
+    let (Some(ff), Some(fp)) = (tool("ffmpeg"), tool("ffprobe")) else { eprintln!("sem ffmpeg, pulando"); return };
+    let d = dir("crop");
+    let flat = d.join("flat.mp4");
+    run(&ff, &["-v", "error", "-y", "-f", "lavfi", "-i", "testsrc=s=640x360:r=30", "-t", "2", "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p"]
+        .iter().map(|s| s.to_string()).chain([flat.to_string_lossy().into_owned()]).collect::<Vec<_>>());
+    let e = Engine { ffmpeg: ff.clone(), ffprobe: fp.clone(), encoder: Encoder::Cpu { preset: "ultrafast".into() }, gpu: None };
+    let children = Mutex::new(std::collections::HashMap::new());
+    let cancel = AtomicBool::new(false);
+    let h = Hooks { id: 1, children: &children, cancel: &cancel, progress: &|_| {}, log: &|_| {}, started: &|_| {} };
+    let gray = |path: &Path, vf: &str| -> Vec<u8> {
+        Command::new(&ff).args(["-v", "error", "-i"]).arg(path).args(["-vf", &format!("{vf}format=gray"), "-frames:v", "1", "-f", "rawvideo", "-"]).output().unwrap().stdout
+    };
+    for rot in [0, 90, 270] {
+        let src = d.join(format!("r{rot}.mp4"));
+        run(&ff, &["-v", "error", "-y", "-display_rotation", &rot.to_string(), "-i", &flat.to_string_lossy(), "-c", "copy", &src.to_string_lossy()].iter().map(|s| s.to_string()).collect::<Vec<_>>());
+        let info = probe(&fp, &src).unwrap();
+        let v = info.video.as_ref().unwrap();
+        let (dw, dh) = (v.width, v.height);
+        // um retângulo fora do centro: 1/4 da largura a partir de 1/8, 1/3 da altura a partir de 1/2
+        let c = Crop { x: dw / 8, y: dh / 2, w: dw / 4, h: dh / 3 };
+        let p = Preset {
+            codec: "source".into(), bits: 0, chroma: "source".into(), container: "source".into(), scale: "source".into(), aspect: "source".into(),
+            bitrate: Bitrate { mode: "source".into(), kbps: 20_000, rc: "cbr".into(), level: String::new() }, max_quality: true,
+            fps: Fps { conform: false, value: "source".into() }, hdr_to_sdr: false, crop: c.clone(),
+            audio: Audio { codec: "copy".into(), channels: "source".into(), ..Audio::default() },
+            output: Output { suffix: Toggle { on: true, text: format!("_crop{rot}") }, subfolder: Toggle::default(), delete_source: false, folder: Toggle::default(), keep_tree: false },
+            ..Preset::default()
+        };
+        let r = render_cuts(&e, &info, &p, &mec_core::Naming::default(), &[(0.0, 1.0)], false, &h).unwrap();
+        let o = probe(&fp, &r.output).unwrap();
+        let ov = o.video.as_ref().unwrap();
+        let (ew, eh) = (c.w & !1, c.h & !1);
+        assert_eq!((ov.width, ov.height), (ew, eh), "rotação {rot}: tamanho do recorte");
+        // referência: o FFmpeg gira o vídeo (autorotate) e corta o vídeo em pé
+        let want = gray(&src, &format!("crop={ew}:{eh}:{}:{},", c.x & !1, c.y & !1));
+        let got = gray(&r.output, "");
+        assert_eq!(got.len(), want.len(), "rotação {rot}");
+        let diff = got.iter().zip(&want).map(|(a, b)| (*a as f64 - *b as f64).abs()).sum::<f64>() / got.len() as f64;
+        assert!(diff < 3.0, "rotação {rot}: a área cortada não é a pedida (diferença média {diff:.2})");
+    }
+    let _ = std::fs::remove_dir_all(&d);
+}

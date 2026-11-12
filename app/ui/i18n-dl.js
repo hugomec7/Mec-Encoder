@@ -2,7 +2,7 @@
 (() => {
   const T = {
     en: {
-      cutConvert: 'Convert', cutConvertTip: 'Go to the Convert tab to choose the preset', trimOnlyBadge: 'Cut only', trimOnlyToast: (f) => `Cutting ${f}, keeping the original format`,
+      cutConvert: 'Go to Convert', cutConvertTip: 'Go to the Convert tab to choose the preset', trimOnlyBadge: 'Cut only', trimOnlyToast: (f) => `Cutting ${f}, keeping the original format`,
       tabCut: 'Cut', cutExport: 'Export', cutExportTip: 'Only cut: keeps the original format (codec, resolution, fps, bitrate and audio). Saved next to it with _corte', cutBlankT: 'Choose a video to cut', cutBlankS: 'Drag a video here or open a file. Then mark the cuts and click Export.', cutOpenFile: 'Open video…', dlToCutter: 'Cut in the Cutter',
       dlTabActive: 'Downloading', dlTabDone: 'Done', dlActiveEmpty: 'Nothing downloading now', dlDoneEmpty: 'Nothing finished yet', dlClearList: 'Clear list', dlClearFailed: 'Clear failed',
       dlQuickSub2: (f) => `Takes the link in Ctrl+C and downloads it in the best quality. Audio: just the sound, in ${f}`,
@@ -40,7 +40,7 @@
       },
     },
     pt: {
-      cutConvert: 'Converter', cutConvertTip: 'Ir para a aba Converter e escolher o preset', trimOnlyBadge: 'Só corte', trimOnlyToast: (f) => `Cortando ${f} no formato original`,
+      cutConvert: 'Ir para o Conversor', cutConvertTip: 'Ir para a aba Converter e escolher o preset', trimOnlyBadge: 'Só corte', trimOnlyToast: (f) => `Cortando ${f} no formato original`,
       tabCut: 'Cortar', cutExport: 'Exportar', cutExportTip: 'Só corta: mantém o formato do original (codec, resolução, fps, bitrate e áudio). Salva ao lado com _corte', cutBlankT: 'Escolha um vídeo para cortar', cutBlankS: 'Arraste um vídeo aqui ou abra um arquivo. Depois marque os cortes e clique em Exportar.', cutOpenFile: 'Abrir vídeo…', dlToCutter: 'Cortar no Cortador',
       dlTabActive: 'Baixando', dlTabDone: 'Concluídos', dlActiveEmpty: 'Nada baixando agora', dlDoneEmpty: 'Nada concluído ainda', dlClearList: 'Limpar lista', dlClearFailed: 'Limpar falhas',
       dlQuickSub2: (f) => `Pega o link do Ctrl+C e baixa na maior qualidade. Áudio: só o som, em ${f}`,
@@ -78,7 +78,7 @@
       },
     },
     es: {
-      cutConvert: 'Convertir', cutConvertTip: 'Ir a la pestaña Convertir para elegir el preset', trimOnlyBadge: 'Solo corte', trimOnlyToast: (f) => `Cortando ${f} en el formato original`,
+      cutConvert: 'Ir a Convertir', cutConvertTip: 'Ir a la pestaña Convertir para elegir el preset', trimOnlyBadge: 'Solo corte', trimOnlyToast: (f) => `Cortando ${f} en el formato original`,
       tabCut: 'Cortar', cutExport: 'Exportar', cutExportTip: 'Solo corta: mantiene el formato original (códec, resolución, fps, bitrate y audio). Se guarda al lado con _corte', cutBlankT: 'Elige un video para cortar', cutBlankS: 'Arrastra un video aquí o abre un archivo. Luego marca los cortes y haz clic en Exportar.', cutOpenFile: 'Abrir video…', dlToCutter: 'Cortar en el Cortador',
       dlTabActive: 'Descargando', dlTabDone: 'Terminadas', dlActiveEmpty: 'Nada descargando ahora', dlDoneEmpty: 'Nada terminado todavía', dlClearList: 'Vaciar lista', dlClearFailed: 'Quitar fallidas',
       dlQuickSub2: (f) => `Toma el enlace del Ctrl+C y lo descarga en la mejor calidad. Audio: solo el sonido, en ${f}`,
@@ -116,7 +116,7 @@
       },
     },
     fr: {
-      cutConvert: 'Convertir', cutConvertTip: 'Aller à l’onglet Convertir pour choisir le préréglage', trimOnlyBadge: 'Coupe seule', trimOnlyToast: (f) => `Coupe de ${f} au format d’origine`,
+      cutConvert: 'Aller à Convertir', cutConvertTip: 'Aller à l’onglet Convertir pour choisir le préréglage', trimOnlyBadge: 'Coupe seule', trimOnlyToast: (f) => `Coupe de ${f} au format d’origine`,
       tabCut: 'Couper', cutExport: 'Exporter', cutExportTip: 'Coupe seulement : garde le format d’origine (codec, résolution, fps, débit et audio). Enregistré à côté avec _corte', cutBlankT: 'Choisissez une vidéo à couper', cutBlankS: 'Glissez une vidéo ici ou ouvrez un fichier. Puis marquez les coupes et cliquez sur Exporter.', cutOpenFile: 'Ouvrir une vidéo…', dlToCutter: 'Couper dans le Cutter',
       dlTabActive: 'En cours', dlTabDone: 'Terminés', dlActiveEmpty: 'Rien en cours', dlDoneEmpty: 'Rien de terminé', dlClearList: 'Vider la liste', dlClearFailed: 'Retirer les échecs',
       dlQuickSub2: (f) => `Prend le lien du Ctrl+C et le télécharge en meilleure qualité. Audio : juste le son, en ${f}`,
@@ -154,7 +154,7 @@
       },
     },
     de: {
-      cutConvert: 'Konvertieren', cutConvertTip: 'Zum Tab Konvertieren, um das Preset zu wählen', trimOnlyBadge: 'Nur Schnitt', trimOnlyToast: (f) => `${f} wird im Originalformat geschnitten`,
+      cutConvert: 'Zu Konvertieren', cutConvertTip: 'Zum Tab Konvertieren, um das Preset zu wählen', trimOnlyBadge: 'Nur Schnitt', trimOnlyToast: (f) => `${f} wird im Originalformat geschnitten`,
       tabCut: 'Schneiden', cutExport: 'Exportieren', cutExportTip: 'Nur schneiden: behält das Originalformat (Codec, Auflösung, fps, Bitrate und Audio). Wird daneben mit _corte gespeichert', cutBlankT: 'Video zum Schneiden wählen', cutBlankS: 'Ziehe ein Video hierher oder öffne eine Datei. Dann Schnitte setzen und auf Exportieren klicken.', cutOpenFile: 'Video öffnen…', dlToCutter: 'Im Cutter schneiden',
       dlTabActive: 'Lädt', dlTabDone: 'Fertig', dlActiveEmpty: 'Gerade lädt nichts', dlDoneEmpty: 'Noch nichts fertig', dlClearList: 'Liste leeren', dlClearFailed: 'Fehler entfernen',
       dlQuickSub2: (f) => `Nimmt den Link aus Strg+C und lädt ihn in bester Qualität. Audio: nur der Ton, als ${f}`,
@@ -192,7 +192,7 @@
       },
     },
     it: {
-      cutConvert: 'Converti', cutConvertTip: 'Vai alla scheda Converti per scegliere il preset', trimOnlyBadge: 'Solo taglio', trimOnlyToast: (f) => `Taglio di ${f} nel formato originale`,
+      cutConvert: 'Vai a Converti', cutConvertTip: 'Vai alla scheda Converti per scegliere il preset', trimOnlyBadge: 'Solo taglio', trimOnlyToast: (f) => `Taglio di ${f} nel formato originale`,
       tabCut: 'Taglia', cutExport: 'Esporta', cutExportTip: 'Solo taglio: mantiene il formato originale (codec, risoluzione, fps, bitrate e audio). Salvato accanto con _corte', cutBlankT: 'Scegli un video da tagliare', cutBlankS: 'Trascina qui un video o apri un file. Poi segna i tagli e clicca su Esporta.', cutOpenFile: 'Apri video…', dlToCutter: 'Taglia nel Cutter',
       dlTabActive: 'In corso', dlTabDone: 'Completati', dlActiveEmpty: 'Nessun download in corso', dlDoneEmpty: 'Ancora niente di completato', dlClearList: 'Svuota lista', dlClearFailed: 'Togli i falliti',
       dlQuickSub2: (f) => `Prende il link del Ctrl+C e lo scarica nella qualità migliore. Audio: solo il suono, in ${f}`,
@@ -230,7 +230,7 @@
       },
     },
     ru: {
-      cutConvert: 'Конвертер', cutConvertTip: 'Перейти во вкладку Конвертер и выбрать пресет', trimOnlyBadge: 'Только нарезка', trimOnlyToast: (f) => `Нарезка ${f} в исходном формате`,
+      cutConvert: 'В Конвертер', cutConvertTip: 'Перейти во вкладку Конвертер и выбрать пресет', trimOnlyBadge: 'Только нарезка', trimOnlyToast: (f) => `Нарезка ${f} в исходном формате`,
       tabCut: 'Нарезка', cutExport: 'Экспорт', cutExportTip: 'Только нарезка: формат оригинала сохраняется (кодек, разрешение, fps, битрейт и звук). Сохраняется рядом с _corte', cutBlankT: 'Выберите видео для нарезки', cutBlankS: 'Перетащите видео сюда или откройте файл. Затем отметьте фрагменты и нажмите «Экспорт».', cutOpenFile: 'Открыть видео…', dlToCutter: 'Нарезать',
       dlTabActive: 'Загружаются', dlTabDone: 'Готовые', dlActiveEmpty: 'Сейчас ничего не загружается', dlDoneEmpty: 'Пока ничего не готово', dlClearList: 'Очистить список', dlClearFailed: 'Убрать ошибки',
       dlQuickSub2: (f) => `Берёт ссылку из Ctrl+C и скачивает в лучшем качестве. Аудио: только звук, в ${f}`,
@@ -268,7 +268,7 @@
       },
     },
     ja: {
-      cutConvert: '変換', cutConvertTip: '変換タブでプリセットを選ぶ', trimOnlyBadge: 'カットのみ', trimOnlyToast: (f) => `${f} を元の形式でカット中`,
+      cutConvert: '変換へ', cutConvertTip: '変換タブでプリセットを選ぶ', trimOnlyBadge: 'カットのみ', trimOnlyToast: (f) => `${f} を元の形式でカット中`,
       tabCut: 'カット', cutExport: '書き出し', cutExportTip: 'カットのみ: 元の形式 (コーデック、解像度、fps、ビットレート、音声) のまま。_corte を付けて隣に保存', cutBlankT: 'カットする動画を選んでください', cutBlankS: 'ここに動画をドラッグするかファイルを開きます。カットを指定して書き出しを押します。', cutOpenFile: '動画を開く…', dlToCutter: 'カッターで切る',
       dlTabActive: 'ダウンロード中', dlTabDone: '完了', dlActiveEmpty: 'いまダウンロード中のものはありません', dlDoneEmpty: 'まだ完了したものはありません', dlClearList: 'リストを空にする', dlClearFailed: '失敗を削除',
       dlQuickSub2: (f) => `Ctrl+C のリンクを最高画質でダウンロード。音声: 音だけを ${f} で`,
@@ -306,7 +306,7 @@
       },
     },
     ko: {
-      cutConvert: '변환', cutConvertTip: '변환 탭에서 프리셋 고르기', trimOnlyBadge: '자르기만', trimOnlyToast: (f) => `${f}를 원본 형식으로 자르는 중`,
+      cutConvert: '변환으로', cutConvertTip: '변환 탭에서 프리셋 고르기', trimOnlyBadge: '자르기만', trimOnlyToast: (f) => `${f}를 원본 형식으로 자르는 중`,
       tabCut: '자르기', cutExport: '내보내기', cutExportTip: '자르기만: 원본 형식(코덱, 해상도, fps, 비트레이트, 오디오) 그대로. 옆에 _corte로 저장', cutBlankT: '자를 동영상을 고르세요', cutBlankS: '여기로 동영상을 끌어오거나 파일을 여세요. 컷을 표시하고 내보내기를 누르세요.', cutOpenFile: '동영상 열기…', dlToCutter: '커터에서 자르기',
       dlTabActive: '다운로드 중', dlTabDone: '완료', dlActiveEmpty: '지금 다운로드 중인 항목이 없습니다', dlDoneEmpty: '아직 완료된 항목이 없습니다', dlClearList: '목록 비우기', dlClearFailed: '실패 항목 제거',
       dlQuickSub2: (f) => `Ctrl+C의 링크를 최고 화질로 다운로드. 오디오: 소리만 ${f}(으)로`,
@@ -344,7 +344,7 @@
       },
     },
     zh: {
-      cutConvert: '转换', cutConvertTip: '前往转换标签选择预设', trimOnlyBadge: '仅剪切', trimOnlyToast: (f) => `正在按原格式剪切 ${f}`,
+      cutConvert: '前往转换', cutConvertTip: '前往转换标签选择预设', trimOnlyBadge: '仅剪切', trimOnlyToast: (f) => `正在按原格式剪切 ${f}`,
       tabCut: '剪切', cutExport: '导出', cutExportTip: '仅剪切：保留原始格式（编码、分辨率、帧率、码率和音频）。以 _corte 保存在旁边', cutBlankT: '选择要剪切的视频', cutBlankS: '把视频拖到这里或打开文件。然后标记片段并点击导出。', cutOpenFile: '打开视频…', dlToCutter: '在剪切器中剪切',
       dlTabActive: '下载中', dlTabDone: '已完成', dlActiveEmpty: '现在没有正在下载的内容', dlDoneEmpty: '还没有完成的下载', dlClearList: '清空列表', dlClearFailed: '清除失败项',
       dlQuickSub2: (f) => `以最高画质下载 Ctrl+C 中的链接。音频：只要声音，保存为 ${f}`,

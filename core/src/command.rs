@@ -98,6 +98,34 @@ pub fn source_fps(v: &VideoInfo) -> String {
 }
 
 /// Troca as opções "Original" do preset pelo valor do arquivo: profundidade (`bits = 0`) e FPS (`"source"`).
+/// O vídeo como fica depois do crop do Cortador (`p.crop`, no quadro em pé): largura, altura e
+/// dimensões do quadro decodificado passam a ser as do recorte, e `crop` guarda onde cortar no quadro
+/// decodificado (antes de girar). O resto (tamanho final, nome, conferência, GIF, prévia) segue sozinho.
+pub fn cropped(info: &MediaInfo, p: &Preset) -> MediaInfo {
+    let mut i = info.clone();
+    let Some(v) = i.video.as_mut() else { return i };
+    let c = &p.crop;
+    if c.w == 0 || c.h == 0 || v.crop.is_some() || v.width < 4 || v.height < 4 { return i; }
+    let ev = |x: u32| x & !1;
+    let (dw, dh) = (v.width, v.height);
+    let x = ev(c.x.min(dw - 2));
+    let y = ev(c.y.min(dh - 2));
+    let w = ev(c.w.min(dw - x)).max(2);
+    let h = ev(c.h.min(dh - y)).max(2);
+    if x == 0 && y == 0 && w >= ev(dw) && h >= ev(dh) { return i; }
+    let (cw, ch) = coded(v);
+    // em pé → como sai do decodificador
+    let (cx, cy, ccw, cch) = match v.rotation % 360 {
+        90 => (y, ch.saturating_sub(x + w), h, w),
+        180 => (cw.saturating_sub(x + w), ch.saturating_sub(y + h), w, h),
+        270 => (cw.saturating_sub(y + h), x, h, w),
+        _ => (x, y, w, h),
+    };
+    v.crop = Some((cx, cy, ccw, cch));
+    v.width = w; v.height = h; v.coded_width = ccw; v.coded_height = cch;
+    i
+}
+
 pub fn resolve(info: &MediaInfo, p: &Preset) -> Preset {
     let mut r = p.clone();
     if let Some(v) = info.video.as_ref() {
@@ -168,6 +196,8 @@ fn pix_fmt(p: &Preset, enc: &Encoder) -> &'static str {
 pub fn video_filters(info: &MediaInfo, p: &Preset, enc: &Encoder, preview: Option<(bool, u32)>) -> Vec<String> {
     let Some(v) = info.video.as_ref() else { return vec![] };
     let mut f = Vec::new();
+    // Crop do Cortador: antes de tudo, no quadro decodificado
+    if let Some((x, y, w, h)) = v.crop { f.push(format!("crop={w}:{h}:{x}:{y}")); }
     // Rotação do arquivo + giro extra do usuário (só no resultado).
     if let Some((out, max)) = preview {
         let user = if out { p.rotate % 360 } else { 0 };
@@ -651,8 +681,9 @@ pub fn build_opts(info: &MediaInfo, p: &Preset, enc: &Encoder, output: &Path, hw
 pub fn build_mode(info: &MediaInfo, p: &Preset, enc: &Encoder, output: &Path, dec: Decode) -> Plan {
     let p = &resolve(info, p);
     let dec = if *enc == Encoder::Nvenc { dec } else { Decode::Cpu };
-    // Proporção (cortar/barras) é feita na CPU: decodifica na placa e filtra na CPU.
-    let dec = if dec == Decode::Gpu && aspect_ratio(p).is_some() { Decode::Hw } else { dec };
+    // Proporção (cortar/barras) e o crop do Cortador são feitos na CPU: decodifica na placa e filtra na CPU.
+    let has_crop = info.video.as_ref().map_or(false, |v| v.crop.is_some());
+    let dec = if dec == Decode::Gpu && (aspect_ratio(p).is_some() || has_crop) { Decode::Hw } else { dec };
     let mut warnings = Vec::new();
     let mut args = input_args(info, enc, dec);
     let (afc, aout) = audio_args(info, p);
@@ -838,6 +869,7 @@ pub fn build_gif(info: &MediaInfo, p: &Preset, output: &Path, cuts: &[(f64, f64)
 
 /// Um quadro JPEG da prévia, no tempo `t` (segundos). `output = true` mostra o resultado do preset.
 pub fn preview_args(info: &MediaInfo, p: &Preset, t: f64, output: bool, max: u32) -> Vec<String> {
+    let info = &if output { cropped(info, p) } else { info.clone() };
     let p = &resolve(info, p);
     let mut a: Vec<String> = vec!["-nostdin".into(), "-hide_banner".into(), "-v".into(), "error".into()];
     // imagem: sem -ss (num .jpg, "-ss 0" faz o FFmpeg pular o único quadro e a prévia sai vazia)
@@ -853,6 +885,7 @@ pub fn preview_args(info: &MediaInfo, p: &Preset, t: f64, output: bool, max: u32
 /// Filtro do motor de quadros do player (mecview): o mesmo da prévia, sem o JPEG no fim
 /// (o motor entrega RGBA). `max` = lado maior em pixels.
 pub fn view_filters(info: &MediaInfo, p: &Preset, output: bool, max: u32) -> String {
+    let info = &if output { cropped(info, p) } else { info.clone() };
     let p = &resolve(info, p);
     let mut f = video_filters(info, p, &Encoder::Cpu { preset: "ultrafast".into() }, Some((output, max)));
     if f.last().map_or(false, |x| x == "format=yuvj420p") { f.pop(); }
