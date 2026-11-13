@@ -1,6 +1,17 @@
 // Gerado por docs/release-notes/make_news.py — não edite à mão.
 window.MEC_NEWS = [
  {
+  "version": "0.3.6",
+  "en": [
+   "**Link list** in Download: paste several links at once and each video shows up with its name, thumbnail, site and length before downloading (a playlist or profile becomes one row per video; links with an error are left out). Choose a folder just for this list, for example Memes, without changing the usual download folder; folders you used before stay as shortcuts. The same options as \"Download…\": Video (max quality, 1080, 720 or 480, web ready), Audio, GIF or Thumbnail, plus subtitles and thumbnail. Each download in the list shows the folder it goes to.",
+   "**Fix**: in Convert, the aspect ratio mode showed \"Crop\" instead of its usual name since 0.3.5."
+  ],
+  "pt": [
+   "**Lista de links** no Baixar: cole vários links de uma vez e cada vídeo aparece com nome, miniatura, site e duração antes de baixar (playlist ou perfil vira uma linha por vídeo; link com erro fica de fora). Escolha uma pasta só para essa lista, por exemplo Memes, sem mudar a pasta de sempre do Baixar; as pastas usadas antes ficam como atalho. As mesmas opções do \"Baixar...\": Vídeo (qualidade máxima, 1080, 720 ou 480, pronto para web), Áudio, GIF ou Miniatura, além de legenda e miniatura junto. Cada download da lista mostra a pasta para onde vai.",
+   "**Correção**: no Converter, o modo de proporção mostrava \"Crop\" no lugar de \"Cortar\" desde a 0.3.5."
+  ]
+ },
+ {
   "version": "0.3.5",
   "en": [
    "**Crop in the Cutter**, like Premiere's Crop: press **C** (or the Crop button) and drag the box to keep only part of the picture, for example just the video of a meme, without the black bars and the text. 8 handles, drag inside to move, drag outside to draw a new box; ratio Free, Original, 9:16, 16:9, 1:1 or 4:5; or type how many pixels to remove from each side. The video comes out at the crop size, in Export and in Convert, and the preview and play already show the result.",
@@ -143,28 +154,6 @@ window.MEC_NEWS = [
    "**Pular cortes** ganhou ícone próprio (um salto entre dois pedaços) no lugar da tesoura, fica azul quando ligado e mostra dois textos: **Pulando cortes** (toca o resultado) e **Vídeo inteiro** (toca o original). No Cortador tem o mesmo tamanho do **Novo corte**.",
    "**Play mais discreto**: quadrado arredondado com fundo suave, como os outros controles, no lugar do círculo branco. Ícones de play e pause mais simples.",
    "**Espaçamento igual** no Cortador: Início, ‹, ⏮, ▶, ⏭, › e Fim com a mesma distância entre si, afastados do timecode."
-  ]
- },
- {
-  "version": "0.2.10",
-  "en": [
-   "**Test version**: not offered by the app's automatic update. Download it from this page.",
-   "**Play shows the result**: with cuts marked, play starts at the playhead and skips what was cut. Put the playhead near the end of a cut and press play to see how it joins the next one. The time on top of the preview shows where you are in the final file. The **Skip cuts** button (or **Shift+Space**) switches between playing with the cuts and playing the original; while playing, it continues from the same point.",
-   "**⏮ ⏭ go from cut to cut** (start and last frame of each cut; without cuts, the beginning and the end). Shortcuts **↑ ↓**. They replace the 5-second buttons (Shift+← → still jump 5 seconds).",
-   "**Volume slider** next to the speaker (click the speaker to mute).",
-   "The **▶ Cuts** button was removed: the normal play does that now.",
-   "The **In** and **Out** buttons show only their icons again.",
-   "**Fix**: removing a cut with × now updates the list right away (before, it only disappeared from the timeline)."
-  ],
-  "pt": [
-   "**Versão de teste**: a atualização automática do app não oferece esta versão. Baixe por esta página.",
-   "**O play mostra o resultado**: com cortes marcados, o play começa na agulha e pula o que foi cortado. Ponha a agulha perto do fim de um corte e aperte play para ver como ele emenda no próximo. O tempo em cima da prévia mostra onde você está no arquivo final. O botão **Pular cortes** (ou **Shift+Espaço**) alterna entre tocar com os cortes e tocar o original; tocando, continua do mesmo ponto.",
-   "**⏮ ⏭ vão de corte em corte** (início e último quadro de cada corte; sem cortes, o começo e o fim). Atalhos **↑ ↓**. Eles substituem os botões de 5 segundos (Shift+← → continuam pulando 5 segundos).",
-   "**Controle de volume** deslizante ao lado do alto-falante (clicar no alto-falante tira o som).",
-   "O botão **▶ Trechos** saiu: o play normal já faz isso.",
-   "Os botões de **Início** e **Fim** voltaram a ser só o ícone.",
-   "No app em português, **trecho** virou **corte**: \"Novo corte\", a lista de \"Cortes\" etc.",
-   "**Correção**: tirar um corte pelo × atualiza a lista na hora (antes só sumia da linha do tempo)."
   ]
  }
 ];
