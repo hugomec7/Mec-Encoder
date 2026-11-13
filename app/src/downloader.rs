@@ -316,7 +316,10 @@ pub async fn dl_info(app: AppHandle, state: State<'_, AppState>, url: String) ->
     let deno = Some(deno_path(&app)).filter(|d| d.is_file());
     let files = account_files(&app);
     let ck = (!files.is_empty()).then(|| {
-        let f = accounts_dir(&app).join(format!("info-{}.txt", std::process::id()));
+        // um arquivo por leitura: a lista de links lê vários ao mesmo tempo
+        static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let f = accounts_dir(&app).join(format!("info-{}-{n}.txt", std::process::id()));
         std::fs::write(&f, download::merge_cookie_files(&files)).ok().map(|_| f)
     }).flatten();
     let tools = Tools { ytdlp: yt, deno, ffmpeg: e.ffmpeg()?, ffprobe: e.ffprobe()?, encoder: e.encoder.lock().unwrap().clone(),

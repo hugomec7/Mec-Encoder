@@ -174,13 +174,13 @@
     $('#bMin').title = L.minimize; $('#bMax').title = L.maximize; $('#bClose').title = L.close;
     $('#bSetAll').title = L.setAll; $('#bFoldPresets').title = L.presetsFold; $('#bAdd').title = L.addVideos;
     $('#bIn').title = kf(L.markIn); $('#bOut').title = kf(L.markOut); $('#bCut').title = kf(L.newCut);
-    $('#lIn').textContent = L.inLbl; $('#lOut').textContent = L.outLbl; $('#lNewCut').textContent = L.newCutLbl; $('#lCrop').textContent = L.crop; $('#bCrop').title = L.cropTip; $('#lOpenCut').textContent = L.openCutLbl;
+    $('#lIn').textContent = L.inLbl; $('#lOut').textContent = L.outLbl; $('#lNewCut').textContent = L.newCutLbl; $('#lCrop').textContent = L.cropTool; $('#bCrop').title = L.cropTip; $('#lOpenCut').textContent = L.openCutLbl;
     $('#bOpenCut').title = kf(L.openCutter); $('#lCutter').textContent = L.cutter; $('#lCuts').textContent = L.cutsTitle;
     $('#bCutCancel').textContent = L.cancel; $('#bCutDone').textContent = L.cutConvert; $('#bCutDone').title = L.cutConvertTip; $('#bClearCuts').textContent = L.clearCuts;
     renderExport();
     $('#lCutBlankT').textContent = L.cutBlankT; $('#lCutBlankS').textContent = L.cutBlankS; $('#bCutOpenFile').textContent = L.cutOpenFile;
     if (S.plReady) { renderPlayUi(); applyVol(); }
-    $('#lCutSplit').textContent = L.cutSplitBtn; $('#lCutJoin').textContent = L.cutJoinBtn; $('#cutKeys').innerHTML = kf(L.cutKeysTxt + ` · <kbd>{open}</kbd> ${esc(L.crop)}`); $('#tlHint').textContent = kf(L.tlHint);
+    $('#lCutSplit').textContent = L.cutSplitBtn; $('#lCutJoin').textContent = L.cutJoinBtn; $('#cutKeys').innerHTML = kf(L.cutKeysTxt + ` · <kbd>{open}</kbd> ${esc(L.cropTool)}`); $('#tlHint').textContent = kf(L.tlHint);
     renderRenderBtn(); renderUpdateBtn(); if ($('#bAfter')) renderAfter();
     $('#tConv').textContent = L.tabConvert; $('#tCut').textContent = L.tabCut; $('#tDl').textContent = L.tabDownload;
     if (S.view === 'dl') { dlRenderSide(); dlRender(); }
@@ -1734,7 +1734,7 @@
     const inEdit = document.activeElement && document.activeElement.closest('#cropCard .cn input');
     el.classList.toggle('editing', CR.on);
     if (inEdit) { el.querySelector('.crop-size').textContent = `${evn(r.w)} × ${evn(r.h)}`; return; }
-    el.innerHTML = `<div class="crop-head">${ICONS.crop}<h3>${esc(L.crop)}</h3><small class="crop-size tnum">${evn(r.w)} × ${evn(r.h)}</small>`
+    el.innerHTML = `<div class="crop-head">${ICONS.crop}<h3>${esc(L.cropTool)}</h3><small class="crop-size tnum">${evn(r.w)} × ${evn(r.h)}</small>`
       + (CR.on ? '' : `<button class="link" data-c="edit">${esc(L.cropEdit)}</button>`)
       + `${hasCrop(q) ? `<button class="link off" data-c="off">${esc(L.cropOff)}</button>` : ''}</div>`
       + (CR.on ? `<div class="crop-ratios">${CROP_RATIOS.map(([k]) => `<button data-r="${k}" class="${k === CR.ratio ? 'active' : ''}">${esc(k === 'free' ? L.cropFree : k === 'orig' ? L.cropOrig : k)}</button>`).join('')}</div>
@@ -2852,7 +2852,7 @@
 
   function dlSave() {
     const keep = DL.list.filter((it) => ['done', 'err', 'cancel'].includes(it.status)).slice(0, 60)
-      .map(({ id, url, kind, status, meta, files, size, web, err, errCode, t, extras, height, subs, thumb, audioFmt, section, gif }) => ({ id, url, kind, status, meta, files, size, web, err, errCode, t, extras, height, subs, thumb, audioFmt, section, gif }));
+      .map(({ id, url, kind, status, meta, files, size, web, err, errCode, t, extras, height, subs, thumb, audioFmt, section, gif, dest }) => ({ id, url, kind, status, meta, files, size, web, err, errCode, t, extras, height, subs, thumb, audioFmt, section, gif, dest }));
     store.set('mec.downloads', JSON.stringify(keep));
   }
   function dlLoad() {
@@ -2974,7 +2974,7 @@
     if (!REAL) { dlDemoRun(it); return; }
     try {
       const height = it.height != null ? it.height : 0;
-      const d = await inv('dl_start', { id: it.id, url: it.url, kind: it.kind, web: !!set.web, audio: set.audio, dest: set.dir || null,
+      const d = await inv('dl_start', { id: it.id, url: it.url, kind: it.kind, web: !!set.web, audio: set.audio, dest: it.dest || set.dir || null,
         height, subs: it.subs || [], thumb: !!it.thumb, section: it.section || null, gif: it.kind === 'gif' ? (it.gif || dlGifCfg()) : null });
       Object.assign(it, { status: 'done', files: d.files, size: d.size, web: d.web, extras: d.extras || [], meta: Object.assign({}, it.meta, d.meta.title ? d.meta : {}) });
       notify(L.dlDone((it.meta && it.meta.title) || dlShort(it.url)));
@@ -3018,7 +3018,8 @@
     if (it.section) p.push(`${dlDur(it.section[0])}–${dlDur(it.section[1])}`);
     else if (m.duration) p.push(dlDur(m.duration));
     if (it.status === 'run' && it.kind !== 'audio' && m.vcodec) { const c = dlCodec(m.vcodec); if (c) p.push(c); }
-    return `${site ? `<b>${esc(site)}</b>` : ''}${site && p.length ? ' · ' : ''}${esc(p.join(' · '))}`;
+    const dir = it.dest && it.dest !== dlSet().dir ? `<span class="dk-dest" title="${esc(it.dest)}">${DL_ICONS.folder}${esc(String(it.dest).split(/[\\/]/).filter(Boolean).pop() || it.dest)}</span>` : '';
+    return `${site ? `<b>${esc(site)}</b>` : ''}${site && p.length ? ' · ' : ''}${esc(p.join(' · '))}${dir}`;
   }
   function dlStatus(it) {
     const st = it.step || {}; const pct = (x) => `${Math.round(clamp(x || 0, 0, 1) * 100)}%`;
@@ -3212,7 +3213,7 @@
     $('#lDlAudio').textContent = L.dlAudioShort; $('#bDlGif').title = L.dlGifTip(dlGifTxt(dlGifCfg()));
     $('#bDlAudio').title = `${L.act.dlAudio} (${keyLabel(keyOf('dlAudio'))})`;
     $('#kDlVideo').innerHTML = dlKeycaps('dlVideo');
-    $('#lDlPick').textContent = L.dlPickBtn; $('#lDlPickSub').textContent = L.dlPickSub;
+    $('#lDlPick').textContent = L.dlPickBtn; $('#lDlPickSub').textContent = L.dlPickSub; $('#lDlList').textContent = L.lsBtn; $('#lDlListSub').textContent = L.lsBtnSub;
     const dir = set.dir || (DL.tools && DL.tools.defaultDir) || (REAL ? '' : 'C:\\Users\\Hugo\\Downloads\\Mec Encoder');
     $('#dlSet').innerHTML = `<div class="row"><div class="lbl">${esc(L.dlSaveIn)}<button class="dk-pathfull" id="bDlDirOpen" title="${esc(L.dlOpen)}">${esc(dir)}</button></div><button class="dk-change" id="bDlDir">${esc(L.dlChange)}</button></div>`;
     $('#bDlDirOpen').onclick = () => $('#bDlOpen').click();
@@ -3436,6 +3437,147 @@
       dlPickClose(); DL.tab = 'active'; dlRender(); dlPump();
     };
   }
+  /* Lista de links: vários vídeos de uma vez, cada um com nome e miniatura, todos para uma pasta escolhida só para eles
+     (ex.: a pasta Memes), com as opções do "Baixar..." valendo para a lista inteira. A lista fica guardada se fechar. */
+  const LS = { rows: [], seq: 0, text: '', dir: '', kind: 'video', q: 0, sub: false, subLang: 'orig', thumb: false, reading: 0 };
+  const LS_SUBS = [['orig', ''], ['pt', 'pt'], ['en', 'en'], ['es', 'es']];
+  const lsSubArg = (k) => (k === 'orig' ? ['.*-orig'] : [`${k}.*`]);
+  function lsOpen() {
+    if (!LS.dir) LS.dir = (dlSet().recentDirs || [])[0] || '';
+    $('#dlListBg').hidden = false; lsRender();
+    requestAnimationFrame(() => { const f = $('#lsUrl'); if (f && !LS.rows.length) f.focus(); });
+  }
+  function lsClose() { $('#dlListBg').hidden = true; }
+  // links novos entram no fim (repetidos são ignorados) e cada um é lido em seguida: nome, miniatura, duração
+  function lsAddLinks(text) {
+    const have = new Set(LS.rows.map((r) => r.url)); let n = 0;
+    dlLinks(text).forEach((url) => { if (have.has(url)) return; have.add(url); LS.rows.push({ id: ++LS.seq, url, st: 'wait', info: null }); n++; });
+    if (n) { lsRenderRows(); lsPump(); }
+    return n;
+  }
+  function lsPump() {
+    while (LS.reading < 3) {
+      const r = LS.rows.find((x) => x.st === 'wait'); if (!r) break;
+      r.st = 'read'; LS.reading++; lsRead(r);
+    }
+  }
+  async function lsRead(r) {
+    try {
+      const info = REAL ? await inv('dl_info', { url: r.url }) : await new Promise((ok, no) => setTimeout(() => (/fail/.test(r.url) ? no('dl-login|demo') : ok(dlIsList(r.url) ? dlDemoList() : lsDemoInfo(r.url))), 300 + Math.random() * 900));
+      if (!LS.rows.includes(r)) return;
+      if (info.entries) {
+        // playlist ou perfil: cada vídeo vira uma linha da lista
+        const have = new Set(LS.rows.map((x) => x.url)); const at = LS.rows.indexOf(r);
+        const add = info.entries.filter((e) => e.url && !have.has(e.url)).map((e) => ({ id: ++LS.seq, url: e.url, st: 'ok', info: { title: e.title, duration: e.duration, thumbnail: e.thumbnail || (e.thumbnails && e.thumbnails.length ? e.thumbnails[e.thumbnails.length - 1].url : ''), extractor_key: info.extractor_key } }));
+        LS.rows.splice(at, 1, ...add);
+      } else { r.info = info; r.st = 'ok'; }
+    } catch (e) {
+      if (!LS.rows.includes(r)) return;
+      const s = String(e); const i = s.indexOf('|'); r.st = 'err'; r.code = i > 0 ? s.slice(0, i) : s.startsWith('dl-') ? s : 'unknown'; r.err = i > 0 ? s.slice(i + 1) : s;
+    } finally { LS.reading--; }
+    if (!$('#dlListBg').hidden) lsRenderRows(); lsPump();
+  }
+  function lsRowHtml(r) {
+    const i = r.info || {}; const site = dlSite({ url: r.url, meta: { site: i.extractor_key } });
+    const sub = r.st === 'err' ? `<span class="dk-err" title="${esc(r.err || '')}">${esc((L.dlErrs && L.dlErrs[r.code]) || L.dlErrs.unknown)}</span>`
+      : r.st === 'ok' ? esc([site, i.duration ? dlDur(i.duration) : ''].filter(Boolean).join(' · ')) : `<span class="dk-muted">${esc(L.dlReading)}</span>`;
+    const th = i.thumbnail ? `<img src="${esc(i.thumbnail)}" referrerpolicy="no-referrer" alt="" loading="lazy">` : `<i class="ls-ph ${r.st}"></i>`;
+    return `<div class="ls-row ${r.st}" data-id="${r.id}"><span class="ls-th">${th}</span><span class="ls-tx"><b class="${i.title ? '' : 'ls-url'}">${esc(i.title || dlShort(r.url))}</b><small>${sub}</small></span>
+      <button class="dk-ib x" data-act="rm" title="${esc(L.lsRemove)}">${ICONS.x}</button></div>`;
+  }
+  function lsCounts() {
+    const ok = LS.rows.filter((r) => r.st === 'ok').length; const bad = LS.rows.filter((r) => r.st === 'err').length;
+    return { ok, bad, go: LS.rows.length - bad };
+  }
+  function lsRenderRows() {
+    const b = $('#lsRows'); if (!b) return; const sc = b.scrollTop;
+    b.innerHTML = LS.rows.length ? LS.rows.map(lsRowHtml).join('') : `<div class="ls-empty">${esc(L.lsEmpty)}</div>`;
+    b.scrollTop = sc;
+    const c = lsCounts();
+    $('#lsCount').textContent = LS.rows.length ? [L.dlListN(LS.rows.length), c.bad ? L.lsBad(c.bad) : '', LS.rows.some((r) => r.st === 'wait' || r.st === 'read') ? L.dlReading : ''].filter(Boolean).join(' · ') : '';
+    const g = $('#bLsGo'); g.disabled = !c.go || !LS.dir; g.textContent = L.lsGo(c.go);
+    $('#bLsClear').hidden = !LS.rows.length;
+  }
+  function lsRender() {
+    const el = $('#dlList'); const set = dlSet();
+    const recent = (set.recentDirs || []).filter((d) => d !== LS.dir).slice(0, 4);
+    const leaf = (d) => String(d).split(/[\\/]/).filter(Boolean).pop() || d;
+    const kinds = [['video', L.dlVideoShort], ['audio', L.dlAudioShort], ['gif', 'GIF'], ['thumb', L.lsThumbOnly]];
+    el.innerHTML = `<div class="dk-pk-head"><div><b>${esc(L.lsTitle)}</b><small id="lsCount"></small></div>
+        <button class="link" id="bLsClear">${esc(L.lsClear)}</button><button class="dk-ib x" id="bLsX" title="${esc(L.close || L.cancel)}">${ICONS.x}</button></div>
+      <div class="ls-main">
+        <div class="ls-left">
+          <div class="dk-pk-link"><textarea id="lsUrl" rows="2" spellcheck="false" placeholder="${esc(L.lsPaste)}"></textarea></div>
+          <div class="ls-rows" id="lsRows"></div>
+        </div>
+        <div class="ls-side">
+          <p class="dk-cap">${esc(L.lsFolder)}</p>
+          <button class="ls-dir ${LS.dir ? '' : 'none'}" id="bLsDir" title="${esc(LS.dir)}">${DL_ICONS.folder}<span><b>${esc(LS.dir ? leaf(LS.dir) : L.lsPickFolder)}</b>${LS.dir ? `<small>${esc(LS.dir)}</small>` : ''}</span></button>
+          ${recent.length ? `<div class="ls-recent">${recent.map((d) => `<button data-dir="${esc(d)}" title="${esc(d)}">${esc(leaf(d))}</button>`).join('')}</div>` : ''}
+          <p class="dk-cap">${esc(L.lsWhat)}</p>
+          <div id="lsKind">${segH('lsKind', LS.kind, kinds)}</div>
+          ${LS.kind === 'video' ? `<p class="dk-cap">${esc(L.lsQuality)}</p><div id="lsQ">${segH('lsQ', LS.q, [[0, L.lsMax], [1080, '1080'], [720, '720'], [480, '480']])}</div>
+            <label class="ls-sw" title="${esc(L.dlWebSub)}"><span>${esc(L.dlWeb)}</span><span class="switch ${set.web ? 'on' : ''}" id="lsWeb"></span></label>` : ''}
+          ${LS.kind === 'audio' ? `<p class="ls-note">${esc(L.lsAudioFmt(String(set.audio).toUpperCase()))}</p>` : ''}
+          ${LS.kind === 'gif' ? `<p class="ls-note">${esc(['GIF', dlGifTxt(dlGifCfg())].join(' · '))}</p>` : ''}
+          ${LS.kind === 'video' || LS.kind === 'audio' ? `<p class="dk-cap">${esc(L.dlExtras)}</p>
+            <label class="ls-sw"><span>${esc(L.dlWithSubs)}</span>${LS.sub ? `<button class="field pick dd" id="lsLang" data-menu="1">${esc(lsLangLabel(LS.subLang))}${ICONS.chev || ''}</button>` : ''}<span class="switch ${LS.sub ? 'on' : ''}" id="lsSub"></span></label>
+            <label class="ls-sw"><span>${esc(L.dlWithThumb)}</span><span class="switch ${LS.thumb ? 'on' : ''}" id="lsThumb"></span></label>` : ''}
+        </div>
+      </div>
+      <div class="dk-pk-foot"><span class="ls-foot-note" id="lsNote"></span><button class="dk-go" id="bLsCancel">${esc(L.close || L.cancel)}</button><button class="dk-btn dk-pri dk-pk-go" id="bLsGo"></button></div>`;
+    lsRenderRows();
+    $('#lsNote').textContent = LS.dir ? '' : L.lsNeedFolder;
+    const f = $('#lsUrl'); f.value = LS.text;
+    const take = () => { const n = lsAddLinks(f.value); if (n || !dlLinks(f.value).length) { f.value = ''; LS.text = ''; } };
+    f.addEventListener('input', () => { LS.text = f.value; });
+    f.addEventListener('paste', () => setTimeout(take, 0));
+    f.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); take(); } if (e.key === 'Escape') lsClose(); });
+    $('#bLsX').onclick = lsClose; $('#bLsCancel').onclick = lsClose;
+    $('#bLsClear').onclick = () => { LS.rows = []; lsRenderRows(); };
+    $('#lsRows').onclick = (e) => { const b = e.target.closest('[data-act="rm"]'); if (!b) return; const id = +b.closest('.ls-row').dataset.id; LS.rows = LS.rows.filter((r) => r.id !== id); lsRenderRows(); };
+    $('#bLsDir').onclick = async () => {
+      let d = null;
+      if (REAL) { try { d = await inv('pick_dir', { start: LS.dir || set.dir || null }); } catch (er) { toast(String(er)); } } else d = 'D:\\Memes';
+      if (d) { LS.dir = d; lsRender(); }
+    };
+    $$('.ls-recent button', el).forEach((b) => { b.onclick = () => { LS.dir = b.dataset.dir; lsRender(); }; });
+    seg($('#lsKind .seg'), (v) => { LS.kind = v; lsRender(); });
+    const q = $('#lsQ .seg'); if (q) seg(q, (v) => { LS.q = +v; });
+    const w = $('#lsWeb'); if (w) w.onclick = (e) => { e.preventDefault(); set.web = !set.web; saveSettings(); w.classList.toggle('on', set.web); dlRenderOpts(); };
+    const sb = $('#lsSub'); if (sb) sb.onclick = (e) => { e.preventDefault(); LS.sub = !LS.sub; lsRender(); };
+    const th = $('#lsThumb'); if (th) th.onclick = (e) => { e.preventDefault(); LS.thumb = !LS.thumb; th.classList.toggle('on', LS.thumb); };
+    const lg = $('#lsLang'); if (lg) lg.onclick = (e) => { e.preventDefault(); e.stopPropagation(); openMenu(e.currentTarget, LS_SUBS.map(([k]) => ({ label: lsLangLabel(k), value: k, sel: k === LS.subLang })), (v) => { LS.subLang = v; lsRender(); }); };
+    $('#bLsGo').onclick = lsGo;
+  }
+  const lsLangLabel = (k) => (k === 'orig' ? L.lsSubOrig : dlLangName(k));
+  function lsGo() {
+    const rows = LS.rows.filter((r) => r.st !== 'err'); if (!rows.length || !LS.dir) return;
+    const set = dlSet(); const kind = LS.kind; const now = Date.now();
+    // pasta da lista entra nas recentes (para a próxima lista de memes já estar ali)
+    set.recentDirs = [LS.dir].concat((set.recentDirs || []).filter((d) => d !== LS.dir)).slice(0, 6); saveSettings();
+    const extras = kind === 'video' || kind === 'audio';
+    rows.slice().reverse().forEach((r) => {
+      const i = r.info || {}; let w = 0, h = 0;
+      if (kind === 'video' && i.formats) { const sm = dlSummary(i, set.web); const pick = sm.rows.find((x) => !LS.q || x.p <= LS.q) || sm.rows[sm.rows.length - 1]; if (pick) { w = pick.w; h = pick.h; } }
+      DL.list.unshift({ id: ++DL.seq, url: r.url, kind, status: 'wait', step: null, t: now, web: '', dest: LS.dir,
+        height: kind === 'video' ? LS.q : 0, subs: extras && LS.sub ? lsSubArg(LS.subLang) : [], thumb: extras && LS.thumb,
+        gif: kind === 'gif' ? dlGifCfg() : undefined,
+        meta: r.info ? { title: i.title || '', site: i.extractor_key, duration: i.duration || 0, thumbnail: i.thumbnail || '', width: w, height: h } : null });
+    });
+    toast(L.lsQueued(rows.length, String(LS.dir).split(/[\\/]/).filter(Boolean).pop() || LS.dir));
+    LS.rows = []; LS.text = ''; lsClose();
+    DL.tab = 'active'; dlRender(); dlPump();
+  }
+  function lsDemoInfo(url) {
+    const t = ['quando o cliente pede pra mudar só uma coisinha', 'eu explicando o render pela 5ª vez', 'o Premiere fechando sem salvar', 'gato julgando a minha edição', 'POV: chegou o pagamento da gringa'];
+    const k = Math.abs([...url].reduce((a, c) => a * 31 + c.charCodeAt(0) | 0, 7)) % t.length;
+    const info = dlDemoInfo(); return Object.assign(info, { title: t[k], duration: 8 + k * 5, extractor_key: /x\.com|twitter/.test(url) ? 'Twitter' : /instagram/.test(url) ? 'Instagram' : 'TikTok',
+      thumbnail: 'data:image/svg+xml,' + encodeURIComponent(scene(200 + k * 40, k % 2 === 0).replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ')) });
+  }
+  $('#bDlList').onclick = lsOpen;
+  $('#dlListBg').addEventListener('mousedown', (e) => { if (e.target.id === 'dlListBg') lsClose(); });
+  addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#dlListBg').hidden && !$('#menu').classList.contains('show')) { e.stopPropagation(); lsClose(); } }, true);
   function dlDemoList() {
     const t = ['Hug Challenge com estranhos na Paulista', 'Perguntei para casais quanto eles ganham', 'Quiz de 100 reais no metrô', 'Liguei para minha ex no FaceTime', 'Quem acerta a música ganha'];
     return { _type: 'playlist', title: '@frankiebruno', extractor_key: 'TikTokUser', entries: t.map((title, i) => ({ url: `https://www.tiktok.com/@frankiebruno/video/74318042198${i}`, title, duration: 31 + i * 9 })) };
