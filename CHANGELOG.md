@@ -1,5 +1,19 @@
 # Changelog · Novidades
 
+## 0.3.10
+
+**English**
+- **Link list: `{link}` and `{user}` fixed.** Reading a link didn't pass the video id, the @ and the date to the list, so `{link}` came out empty and the file was named after the link itself. On X, the @ and the post number now come from the link itself (`x.com/<user>/status/<number>`): `{user}_{link}` gives `@user_2121333733617701141`. Groups already saved are fixed when the list opens.
+- **Rename with one click**, like in Completed: hover over the name and click. If the video is checked together with others, all checked videos are renamed at once.
+- The selection bar keeps only "Select all" and "Copy links".
+- The `{ }` button on an empty Model field now inserts only the tag you clicked.
+
+**Português**
+- **Lista de links: `{link}` e `{usuario}` corrigidos.** A leitura do link não passava o id do vídeo, o @ e a data para a lista, então o `{link}` saía vazio e o arquivo ficava com o próprio link como nome. No X, o @ e o número do post agora vêm do próprio link (`x.com/<usuario>/status/<número>`): `{usuario}_{link}` vira `@usuario_2121333733617701141`. Os grupos já salvos são corrigidos ao abrir a lista.
+- **Renomear com um clique**, igual em Concluídos: passe o mouse no nome e clique. Se o vídeo estiver marcado junto com outros, todos os marcados são renomeados de uma vez.
+- A barra dos selecionados ficou só com "Selecionar todos" e "Copiar links".
+- O botão `{ }` com o campo Modelo vazio agora coloca só a etiqueta clicada.
+
 ## 0.3.9
 
 **English**

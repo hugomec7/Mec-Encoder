@@ -1,6 +1,21 @@
 // Gerado por docs/release-notes/make_news.py — não edite à mão.
 window.MEC_NEWS = [
  {
+  "version": "0.3.10",
+  "en": [
+   "**Link list: `{link}` and `{user}` fixed.** Reading a link didn't pass the video id, the @ and the date to the list, so `{link}` came out empty and the file was named after the link itself. On X, the @ and the post number now come from the link itself (`x.com/<user>/status/<number>`): `{user}_{link}` gives `@user_2121333733617701141`. Groups already saved are fixed when the list opens.",
+   "**Rename with one click**, like in Completed: hover over the name and click. If the video is checked together with others, all checked videos are renamed at once.",
+   "The selection bar keeps only \"Select all\" and \"Copy links\".",
+   "The `{ }` button on an empty Model field now inserts only the tag you clicked."
+  ],
+  "pt": [
+   "**Lista de links: `{link}` e `{usuario}` corrigidos.** A leitura do link não passava o id do vídeo, o @ e a data para a lista, então o `{link}` saía vazio e o arquivo ficava com o próprio link como nome. No X, o @ e o número do post agora vêm do próprio link (`x.com/<usuario>/status/<número>`): `{usuario}_{link}` vira `@usuario_2121333733617701141`. Os grupos já salvos são corrigidos ao abrir a lista.",
+   "**Renomear com um clique**, igual em Concluídos: passe o mouse no nome e clique. Se o vídeo estiver marcado junto com outros, todos os marcados são renomeados de uma vez.",
+   "A barra dos selecionados ficou só com \"Selecionar todos\" e \"Copiar links\".",
+   "O botão `{ }` com o campo Modelo vazio agora coloca só a etiqueta clicada."
+  ]
+ },
+ {
   "version": "0.3.9",
   "en": [
    "**Name model per group** in the Link list: each group has its own \"Model\" field (for example `{title}_{date}` for Memes and `{user}_{title}_{id}` for Motion). Empty uses the model from Options. The `{ }` button lists the tags, including `{group}`, and the X goes back to the model from Options."
@@ -95,27 +110,6 @@ window.MEC_NEWS = [
    "**Exportar no Cortador agora só corta**: o vídeo mantém tudo do original (codec, resolução, fps, bitrate, profundidade, croma, formato do arquivo e áudio), sem converter HDR, mudar o tamanho ou girar, cortado no quadro exato. Salva ao lado do original como Vídeo_corte.mp4 (vários cortes separados: _corte_01, _corte_02…). O preset do vídeo não muda; na fila aparece como \"Só corte\".",
    "**Converter** substitui o Concluir no Cortador: guarda os cortes e abre a aba Converter com o vídeo selecionado, para escolher o preset e renderizar como quiser.",
    "**Play no Cortador** com gravação de tela e outros arquivos em que o player não consegue pular para o meio: tocava do começo (como se o corte estivesse no início, e o \"Pulando cortes\" parecia não fazer nada). Agora passa para a prévia ao vivo e começa no quadro certo."
-  ]
- },
- {
-  "version": "0.3.2",
-  "en": [
-   "**Three tabs at the top: Convert · Cut · Download** (Ctrl+1, Ctrl+2, Ctrl+3). Note: Download moved from Ctrl+2 to Ctrl+3.",
-   "**Cut tab**: opens the Cutter on the selected video. With no video, drag one there or click **Open video…** and it goes straight into the Cutter.",
-   "**Export in the Cutter**: finishes and starts rendering that video with the cuts right away. **Finish** still just keeps the cuts and goes back to the queue.",
-   "**Cleaner Download tab**: only **Quick download** (Ctrl+V, best quality), **Audio** (Ctrl+Shift+V, just the sound), **Download…** and **Save to**. Ready for web, audio format and Accounts moved to **Options**.",
-   "**Download…** opens with the link from Ctrl+C in a field at the top. Paste several links there, one per line, to pick which ones to download. **Ready for web** is also in this window, in sync with Options.",
-   "**Downloading and Done tabs** in the list: finished downloads move to Done by themselves.",
-   "In Done: **▶ on the thumbnail** plays the video, and the new **✂ Cut** button sends a downloaded video straight to the Cutter. Download, cut and export without leaving the app."
-  ],
-  "pt": [
-   "**Três abas no topo: Converter · Cortar · Baixar** (Ctrl+1, Ctrl+2, Ctrl+3). Atenção: Baixar passou do Ctrl+2 para o Ctrl+3.",
-   "**Aba Cortar**: abre o Cortador no vídeo selecionado. Sem vídeo, arraste um para lá ou clique em **Abrir vídeo…**, e ele entra direto no Cortador.",
-   "**Exportar no Cortador**: conclui e já começa a renderizar o vídeo com os cortes. **Concluir** continua só guardando os cortes e voltando para a fila.",
-   "**Aba Baixar mais enxuta**: só **Baixar rápido** (Ctrl+V, maior qualidade), **Áudio** (Ctrl+Shift+V, só o som), **Baixar…** e **Salvar em**. Pronto para web, formato do áudio e Contas foram para **Opções**.",
-   "**Baixar…** abre com o link do Ctrl+C num campo no topo. Cole vários links ali, um por linha, para escolher quais baixar. O **Pronto para web** também está nessa janela, junto com o das Opções.",
-   "**Abas Baixando e Concluídos** na lista: o que termina passa sozinho para Concluídos.",
-   "Em Concluídos: o **▶ na miniatura** assiste ao vídeo, e o novo botão **✂ Cortar** manda o vídeo baixado direto para o Cortador. Baixe, corte e exporte sem sair do app."
   ]
  }
 ];
