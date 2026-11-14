@@ -248,3 +248,19 @@
   };
   Object.entries(T).forEach(([lang, [a, b, c, d]]) => { const L = window.MEC_I18N[lang]; if (L) Object.assign(L, { lsDupBadge: a, lsDupMsg: b, lsDupSel: c, lsDupRm: d }); });
 })();
+// Lista de links: modelo do nome por grupo
+(() => {
+  const T = {
+    en: ['Model', 'Use the model from Options', 'This group has its own model · see the one in Options', (t) => `Empty: uses the model from Options (${t}) · change`],
+    pt: ['Modelo', 'Usar o modelo das Opções', 'Este grupo tem modelo próprio · ver o das Opções', (t) => `Vazio: usa o modelo das Opções (${t}) · mudar`],
+    es: ['Modelo', 'Usar el modelo de Opciones', 'Este grupo tiene su propio modelo · ver el de Opciones', (t) => `Vacío: usa el modelo de Opciones (${t}) · cambiar`],
+    fr: ['Modèle', 'Utiliser le modèle des Options', 'Ce groupe a son propre modèle · voir celui des Options', (t) => `Vide : modèle des Options (${t}) · modifier`],
+    de: ['Muster', 'Muster aus den Optionen verwenden', 'Diese Gruppe hat ein eigenes Muster · das aus den Optionen ansehen', (t) => `Leer: Muster aus den Optionen (${t}) · ändern`],
+    it: ['Modello', 'Usa il modello delle Opzioni', 'Questo gruppo ha un modello proprio · vedi quello delle Opzioni', (t) => `Vuoto: usa il modello delle Opzioni (${t}) · cambia`],
+    ru: ['Шаблон', 'Взять шаблон из настроек', 'У группы свой шаблон · открыть шаблон из настроек', (t) => `Пусто: шаблон из настроек (${t}) · изменить`],
+    ja: ['形式', 'オプションの形式を使う', 'このグループは独自の形式 · オプションの形式を見る', (t) => `空欄: オプションの形式（${t}）· 変更`],
+    ko: ['형식', '옵션의 형식 사용', '이 그룹은 자체 형식 사용 · 옵션 형식 보기', (t) => `비우면 옵션 형식 사용 (${t}) · 변경`],
+    zh: ['格式', '使用选项中的格式', '此分组有自己的格式 · 查看选项中的格式', (t) => `留空：使用选项中的格式（${t}）· 修改`],
+  };
+  Object.entries(T).forEach(([lang, [a, b, c, d]]) => { const L = window.MEC_I18N[lang]; if (L) Object.assign(L, { lsTplLbl: a, lsTplReset: b, lsTplOwn: c, lsTplLink: d }); });
+})();

@@ -1225,3 +1225,10 @@
 .ls-dup .link:hover{color:var(--text)}
 .ls-dup .dk-btn{flex:none;width:auto;white-space:nowrap}
 .ls-dup-b{display:inline-block;margin-right:8px;padding:0 5px;border-radius:4px;font:500 10px/16px var(--font,inherit);background:color-mix(in srgb,var(--orange,#FF9F0A) 22%,transparent);color:var(--orange,#FF9F0A)}
+/* modelo do nome por grupo */
+.ls-tplrow .field.dim input::placeholder{color:var(--text-3)}
+.ls-tpl-x{width:24px;height:24px;display:grid;place-items:center;border-radius:6px;color:var(--text-3)}
+.ls-tpl-x:hover{background:var(--hover);color:var(--text)}
+.ls-tpl-x svg{width:11px;height:11px}
+.ls-fx2.ls-tplrow{grid-template-columns:70px minmax(0,1fr)}.ls-tpl-x{width:20px;height:20px;flex:none}
+.ls-main{grid-template-columns:minmax(0,1fr) 300px}

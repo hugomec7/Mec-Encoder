@@ -3526,7 +3526,9 @@
     return nmClean(out.replace(/([_\-.])\1+/g, '$1').replace(/^[\s_\-.]+|[\s_\-]+$/g, ''));
   }
   const lsExt = (g) => (g.kind === 'audio' ? '.' + (dlSet().audio || 'wav') : g.kind === 'gif' ? '.gif' : g.kind === 'thumb' ? '.jpg' : '.mp4');
-  const lsBase = (g, r) => r.name || (r.info ? nmApply(nmTemplate(), r.info, g.kind === 'video' ? (g.q || r.info.height || 0) : 0) : '') || dlShort(r.url);
+  // modelo do grupo (vazio: o das Opções); {grupo} também vale aqui
+  const lsTpl = (g) => String((g.tpl || '').trim() || nmTemplate()).replace(/\{(grupo|group)\}/gi, g.name || L.lsGroupNew(LG.groups.indexOf(g) + 1));
+  const lsBase = (g, r) => r.name || (r.info ? nmApply(lsTpl(g), r.info, g.kind === 'video' ? (g.q || r.info.height || 0) : 0) : '') || dlShort(r.url);
   // prefixo/sufixo do grupo: {grupo} vira o nome do grupo; o resto fica como digitado (só sem o que o Windows não aceita)
   const fxClean = (s) => String(s || '').replace(/[\\/:*?"<>|\u0000-\u001f]+/g, ' ');
   const lsAffix = (g, o) => (o.on ? fxClean(String(o.text || '').replace(/\{(grupo|group)\}/gi, g.name || L.lsGroupNew(LG.groups.indexOf(g) + 1))) : '');
@@ -3590,7 +3592,7 @@
     m.cur.forEach((s, id) => {
       const r = g.rows.find((x) => x.id === id); if (!r) return;
       const v = nmClean(s.t); if (!v) return;   // nome vazio: fica o de antes
-      const auto = r.info ? nmApply(nmTemplate(), r.info, g.kind === 'video' ? (g.q || r.info.height || 0) : 0) : '';
+      const auto = r.info ? nmApply(lsTpl(g), r.info, g.kind === 'video' ? (g.q || r.info.height || 0) : 0) : '';
       r.name = v === auto ? '' : v;
     });
     LG.mc = null; lsRenderRows(); lsSave(); $('#lsRows').focus();
@@ -3787,10 +3789,11 @@
           ${affix('sub', L.lsSubfolder, L.lsSubPh, true)}
           ${g.dir ? `<p class="ls-path tnum" title="${esc(lsDirOf(g))}">${esc(lsDirOf(g))}</p>` : ''}
           <p class="dk-cap">${esc(L.lsNameCap)}</p>
+          <div class="ls-fx2 ls-tplrow"><span class="ls-fx2-l">${esc(L.lsTplLbl)}</span><div class="field tagged ${g.tpl ? '' : 'dim'}"><input id="lsTplIn" value="${esc(g.tpl || '')}" class="txt" spellcheck="false" placeholder="${esc(nmTemplate())}">${g.tpl ? `<button class="ls-tpl-x" id="bLsTplX" title="${esc(L.lsTplReset)}">${ICONS.x}</button>` : ''}<button class="tag-btn" id="bLsTags" title="${esc(L.tagsTitle)}">{ }</button></div></div>
           ${affix('pre', L.lsPrefix, `${L.lsGroupTag}_`, true)}
           ${affix('suf', L.lsSuffix, `_${L.lsGroupTag}`, true)}
           <p class="ls-hint">${esc(L.lsFxHint)}</p>
-          <button class="link ls-tpl" id="bLsTpl">${esc(L.lsTplLink(nmTemplate()))}</button>
+          <button class="link ls-tpl" id="bLsTpl">${esc(g.tpl ? L.lsTplOwn : L.lsTplLink(nmTemplate()))}</button>
           <p class="dk-cap">${esc(L.lsWhat)}</p>
           <div id="lsKind">${segH('lsKind', g.kind, kinds)}</div>
           ${g.kind === 'video' ? `<p class="dk-cap">${esc(L.lsQuality)}</p><div id="lsQ">${segH('lsQ', g.q, [[0, L.lsMax], [1080, '1080'], [720, '720'], [480, '480']])}</div>
@@ -3835,6 +3838,22 @@
         i.value = i.value.slice(0, a) + t + i.value.slice(z); i.dispatchEvent(new Event('input')); i.focus(); i.setSelectionRange(a + t.length, a + t.length); lsSave();
       }); }; });
     $('#bLsTpl').onclick = () => { $('#dlOptsBg').hidden = false; dlRenderOpts(); const t = $('#dlNameTpl'); if (t) t.focus(); };
+    // modelo deste grupo: vazio usa o das Opções
+    const ti = $('#lsTplIn');
+    ti.addEventListener('input', () => { const had = !!g.tpl; g.tpl = ti.value; lsRenderRows(); lsSave(); if (had !== !!g.tpl) { const f = document.activeElement === ti; const c = ti.selectionStart; lsRender(); if (f) { const n = $('#lsTplIn'); n.focus(); n.setSelectionRange(c, c); } } });
+    ti.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') ti.blur(); });
+    $('#bLsTags').onmousedown = (e) => e.preventDefault();
+    $('#bLsTags').onclick = (e) => {
+      e.stopPropagation();
+      const items = NM_TAGS.map(([k]) => ({ label: `${nmTag(k)}  ${L.nmTagTip[k]}`, value: nmTag(k) })).concat([{ label: `${L.lsGroupTag}  ${L.lsGroupTagTip} · ${gname}`, value: L.lsGroupTag }]);
+      openMenu(e.currentTarget, items, (t) => {
+        if (!ti.value) ti.value = nmTemplate();   // começa do modelo das Opções
+        const a = ti.selectionStart ?? ti.value.length, z = ti.selectionEnd ?? a; const pre = ti.value.slice(0, a); const sep = /\}$/.test(pre) ? '_' : '';
+        ti.value = pre + sep + t + ti.value.slice(z); const c = a + sep.length + t.length;
+        ti.dispatchEvent(new Event('input')); const n = $('#lsTplIn'); n.focus(); n.setSelectionRange(c, c);
+      });
+    };
+    const tx = $('#bLsTplX'); if (tx) tx.onclick = () => { g.tpl = ''; lsRender(); lsSave(); };
     seg($('#lsKind .seg'), (v) => { g.kind = v; lsRender(); lsSave(); });
     const q = $('#lsQ .seg'); if (q) seg(q, (v) => { g.q = +v; lsRenderRows(); lsSave(); });
     const w = $('#lsWeb'); if (w) w.onclick = (e) => { e.preventDefault(); set.web = !set.web; saveSettings(); w.classList.toggle('on', set.web); };
@@ -3927,7 +3946,7 @@
         const i = r.info || {}; const h = g.kind === 'video' ? (g.q ? Math.min(g.q, i.height || g.q) : i.height || 0) : 0;
         DL.list.unshift({ id: ++DL.seq, url: r.url, kind: g.kind, status: 'wait', step: null, t: now, web: '', dest: lsDirOf(g, r), group: g.name || '',
           // com o vídeo já lido, o nome vai pronto; sem (ainda lendo), o motor monta pelo modelo
-          name: r.info || r.name ? lsFull(g, lsBase(g, r)) : '', nameTpl: r.info || r.name ? '' : lsAffix(g, g.pre) + nmTemplate() + lsAffix(g, g.suf),
+          name: r.info || r.name ? lsFull(g, lsBase(g, r)) : '', nameTpl: r.info || r.name ? '' : lsAffix(g, g.pre) + lsTpl(g) + lsAffix(g, g.suf),
           height: g.kind === 'video' ? g.q : 0, subs: extras && g.subs ? lsSubArg(g.subLang) : [], thumb: extras && g.thumb,
           gif: g.kind === 'gif' ? dlGifCfg() : undefined,
           meta: r.info ? { title: i.title || '', site: i.extractor_key, duration: i.duration || 0, thumbnail: i.thumbnail || '', width: i.width || 0, height: h } : null });
