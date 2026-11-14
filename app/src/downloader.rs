@@ -341,14 +341,18 @@ pub async fn dl_info(app: AppHandle, state: State<'_, AppState>, url: String) ->
         json!(v.get(key).and_then(|s| s.as_object()).map(|m| m.iter().map(|(lang, list)| json!({
             "lang": lang, "name": list.get(0).and_then(|x| x.get("name")).cloned().unwrap_or(Value::Null) })).collect::<Vec<_>>()).unwrap_or_default())
     };
-    let mut out = pick(&v, &["title", "duration", "extractor_key", "thumbnail", "width", "height", "webpage_url", "is_live", "_type", "playlist_count", "uploader"]);
+    let mut out = pick(&v, &["title", "duration", "extractor_key", "thumbnail", "width", "height", "webpage_url", "is_live", "_type", "playlist_count", "uploader",
+        // para o nome do arquivo na Lista de links: {link}, {usuario}, {data}
+        "id", "uploader_id", "channel", "channel_id", "upload_date"]);
     // playlist ou perfil: a lista de vídeos (até 1000)
     let entries: Vec<Value> = v.get("entries").and_then(|e| e.as_array()).map(|a| a.iter().take(1000).filter_map(|e| {
         let url = e.get("webpage_url").or_else(|| e.get("url")).and_then(|u| u.as_str())?;
         if !url.starts_with("http") { return None; }
         let thumb = e.get("thumbnail").cloned().or_else(|| e.get("thumbnails").and_then(|t| t.as_array()).and_then(|t| t.last()).and_then(|t| t.get("url")).cloned());
         Some(json!({ "url": url, "title": e.get("title").cloned().unwrap_or(Value::Null), "duration": e.get("duration").cloned().unwrap_or(Value::Null),
-                     "thumbnail": thumb.unwrap_or(Value::Null) }))
+                     "thumbnail": thumb.unwrap_or(Value::Null),
+                     "id": e.get("id").cloned().unwrap_or(Value::Null), "uploader": e.get("uploader").or_else(|| e.get("channel")).cloned().unwrap_or(Value::Null),
+                     "uploader_id": e.get("uploader_id").or_else(|| e.get("channel_id")).cloned().unwrap_or(Value::Null) }))
     }).collect()).unwrap_or_default();
     if let Value::Object(m) = &mut out {
         if !entries.is_empty() { m.insert("entries".into(), json!(entries)); }

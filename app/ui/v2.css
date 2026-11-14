@@ -1232,3 +1232,8 @@
 .ls-tpl-x svg{width:11px;height:11px}
 .ls-fx2.ls-tplrow{grid-template-columns:70px minmax(0,1fr)}.ls-tpl-x{width:20px;height:20px;flex:none}
 .ls-main{grid-template-columns:minmax(0,1fr) 300px}
+/* nome na lista: passar o mouse e clicar para renomear (como em Concluídos) */
+.ls-nm .ls-ren{cursor:text;border-radius:4px;margin:0 -4px;padding:0 4px}
+.ls-nm .ls-ren:hover{background:var(--fill)}
+.ls-row.sel .ls-nm .ls-ren:hover{background:color-mix(in srgb,var(--text) 10%,transparent)}
+#lsRows,#lsRows:focus,#lsRows:focus-visible{outline:none!important;box-shadow:none!important}

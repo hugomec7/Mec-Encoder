@@ -3470,6 +3470,13 @@
     kind: 'video', q: 0, subs: false, subLang: 'orig', thumb: false, rows: [], text: '' });
   const lsG = () => LG.groups.find((g) => g.id === LG.cur) || LG.groups[0];
   // só o que precisa para mostrar e nomear (o resto do yt-dlp é grande demais para guardar)
+  // no X o @ e o número do post vêm do próprio link (x.com/<usuario>/status/<número>): {usuario} e {link} são os do link
+  function lsLinkNames(i, url) {
+    const m = String(url || '').match(/(?:x|twitter)\.com\/([^/?#]+)\/status\/(\d+)/i); if (!m || !i) return i;
+    if (m[1].toLowerCase() !== 'i') i.uploader_id = m[1];
+    i.id = m[2];
+    return i;
+  }
   const lsSlim = (i) => (i ? { title: i.title || '', uploader: i.uploader || i.channel || '', uploader_id: i.uploader_id || i.channel_id || '', id: i.id || '',
     extractor_key: i.extractor_key || '', thumbnail: i.thumbnail || '', duration: i.duration || 0, upload_date: i.upload_date || '', height: i.height || 0, width: i.width || 0 } : null);
   function lsSave() {
@@ -3480,7 +3487,7 @@
     try {
       const d = JSON.parse(store.get('mec.dlgroups') || 'null');
       if (d && d.groups && d.groups.length) {
-        LG.groups = d.groups.map((x) => Object.assign(lsNewGroup(), x, { id: ++LG.seq, rows: (x.rows || []).map((r) => Object.assign({}, r, { id: ++LG.seq })) }));
+        LG.groups = d.groups.map((x) => Object.assign(lsNewGroup(), x, { id: ++LG.seq, rows: (x.rows || []).map((r) => Object.assign({}, r, { id: ++LG.seq, info: lsLinkNames(r.info, r.url) })) }));
         LG.cur = LG.groups[Math.max(0, d.groups.findIndex((x) => x.id === d.cur))].id;
       }
     } catch { /* lista nova */ }
@@ -3595,9 +3602,10 @@
       const auto = r.info ? nmApply(lsTpl(g), r.info, g.kind === 'video' ? (g.q || r.info.height || 0) : 0) : '';
       r.name = v === auto ? '' : v;
     });
+    if (m.one) LG.sel.clear();   // renomeou só o clicado: não fica marcado
     LG.mc = null; lsRenderRows(); lsSave(); $('#lsRows').focus();
   }
-  function mcCancel() { LG.mc = null; lsRenderRows(); $('#lsRows').focus(); }
+  function mcCancel() { if (LG.mc && LG.mc.one) LG.sel.clear(); LG.mc = null; lsRenderRows(); $('#lsRows').focus(); }
   function mcHtml(s) {
     const a = Math.min(s.a, s.c), b = Math.max(s.a, s.c); const car = '<i class="mc-car"></i>';
     if (a === b) return esc(s.t.slice(0, a)) + car + esc(s.t.slice(a));
@@ -3662,11 +3670,11 @@
         // playlist ou perfil: cada vídeo vira uma linha
         const have = new Set(g.rows.map((x) => x.url)); const at = g.rows.indexOf(r);
         const add = info.entries.filter((e) => e.url && !have.has(e.url)).map((e) => ({ id: ++LG.seq, url: e.url, st: 'ok', name: '', dir: '',
-          info: lsSlim({ title: e.title, duration: e.duration, id: e.id, uploader: e.uploader || info.uploader, uploader_id: e.uploader_id || info.uploader_id, thumbnail: e.thumbnail || (e.thumbnails && e.thumbnails.length ? e.thumbnails[e.thumbnails.length - 1].url : ''), extractor_key: info.extractor_key }) }));
+          info: lsLinkNames(lsSlim({ title: e.title, duration: e.duration, id: e.id, uploader: e.uploader || info.uploader, uploader_id: e.uploader_id || info.uploader_id, thumbnail: e.thumbnail || (e.thumbnails && e.thumbnails.length ? e.thumbnails[e.thumbnails.length - 1].url : ''), extractor_key: info.extractor_key }), e.url) }));
         g.rows.splice(at, 1, ...add);
       } else {
         const sm = info.formats ? dlSummary(info, dlSet().web) : null;
-        r.info = lsSlim(Object.assign({}, info, sm && sm.rows[0] ? { height: sm.rows[0].p } : {})); r.st = 'ok';
+        r.info = lsLinkNames(lsSlim(Object.assign({}, info, sm && sm.rows[0] ? { height: sm.rows[0].p } : {})), r.url); r.st = 'ok';
       }
     } catch (e) {
       if (!g.rows.includes(r)) return;
@@ -3687,9 +3695,9 @@
     const th = i.thumbnail ? `<img src="${esc(i.thumbnail)}" referrerpolicy="no-referrer" alt="" loading="lazy">` : `<i class="ls-ph ${r.st}"></i>`;
     const dir = r.dir ? nmClean(r.dir) : '';
     const pre = lsAffix(g, g.pre), suf = lsAffix(g, g.suf);
-    const nm = ms ? `<b class="mc-t">${mcHtml(ms)}</b>` : `<b class="${r.info || r.name ? '' : 'ls-url'}">${esc(base)}</b>`;
+    const nm = ms ? `<b class="mc-t">${mcHtml(ms)}</b>` : `<b class="ls-ren${r.info || r.name ? '' : ' ls-url'}" title="${esc(L.dlRename)}">${esc(base)}</b>`;
     return `<div class="ls-row ${r.st}${sel ? ' sel' : ''}${ms ? ' mc' : ''}" data-id="${r.id}"><span class="ls-ck${sel ? ' on' : ''}" data-act="ck" role="checkbox" aria-checked="${sel}"></span><span class="ls-th">${th}</span>
-      <span class="ls-tx"><span class="ls-nm" title="${ms ? '' : esc(L.lsRenameTip)}">${pre ? `<i class="ls-fx">${esc(pre)}</i>` : ''}${nm}${suf ? `<i class="ls-fx">${esc(suf)}</i>` : ''}<i class="ls-ext">${esc(lsExt(g))}</i></span>
+      <span class="ls-tx"><span class="ls-nm">${pre ? `<i class="ls-fx">${esc(pre)}</i>` : ''}${nm}${suf ? `<i class="ls-fx">${esc(suf)}</i>` : ''}<i class="ls-ext">${esc(lsExt(g))}</i></span>
       <small>${dups && dups.has(r.id) ? `<span class="ls-dup-b">${esc(L.lsDupBadge)}</span>` : ''}${dir ? `<span class="ls-sub" title="${esc(L.lsSubfolder)}">${DL_ICONS.folder}${esc(dir)}</span>` : ''}${sub}</small></span>
       <span class="ls-acts"><button class="dk-ib" data-act="link" title="${esc(L.dlCopyLink)}">${DL_ICONS.link}</button><button class="dk-ib x" data-act="rm" title="${esc(L.lsRemove)}">${ICONS.x}</button></span></div>`;
   }
@@ -3732,7 +3740,7 @@
       return;
     }
     el.innerHTML = `<span class="ls-sel-n">${esc(L.lsSelN(n))}</span><button class="link" data-s="all">${esc(L.lsSelAll)}</button><span class="ls-grow"></span>
-      <button class="dk-btn dk-sec ls-sm" data-s="ren">${esc(L.lsRename)}<kbd>F2</kbd></button><button class="dk-btn dk-sec ls-sm" data-s="sub">${DL_ICONS.folder}${esc(L.lsSubfolder)}</button><button class="dk-btn dk-sec ls-sm" data-s="links">${DL_ICONS.link}${esc(n === 1 ? L.dlCopyLink : L.lsCopyLinks)}</button><button class="dk-btn dk-sec ls-sm" data-s="rm">${esc(L.lsRemoveSel)}</button>`;
+      <button class="dk-btn dk-sec ls-sm" data-s="links">${DL_ICONS.link}${esc(n === 1 ? L.dlCopyLink : L.lsCopyLinks)}</button>`;
   }
   // tirar da lista (um, ou todos os selecionados) com desfazer: Ctrl+Shift+Z (ou Ctrl+Z)
   function lsRemove(ids) {
@@ -3909,8 +3917,8 @@
       if (e.target.closest('[data-act="ck"]')) { const id = +row.dataset.id; if (LG.sel.has(id)) LG.sel.delete(id); else LG.sel.add(id); LG.anchor = id; LG.subEd = false; lsRenderRows(); return; }
       // X numa linha selecionada tira todos os selecionados; numa linha fora da seleção, só ela
       if (e.target.closest('[data-act="rm"]')) { const id = +row.dataset.id; lsRemove(LG.sel.has(id) ? new Set(LG.sel) : new Set([id])); return; }
-      // segundo clique no nome (clique duplo): renomeia o que está selecionado (ou só esta linha)
-      if (e.detail === 2 && e.target.closest('.ls-nm')) { const id = +row.dataset.id; if (!LG.sel.has(id)) { LG.sel.clear(); LG.sel.add(id); } mcStart(); return; }
+      // um clique no nome renomeia, como em Concluídos: os selecionados juntos se esta linha for um deles
+      if (e.target.closest('.ls-ren') && !e.shiftKey && !e.ctrlKey && !e.metaKey) { const id = +row.dataset.id; const one = !LG.sel.has(id); if (one) { LG.sel.clear(); LG.sel.add(id); } LG.anchor = id; mcStart(); if (LG.mc) LG.mc.one = one; return; }
       LG.subEd = false; lsSelect(+row.dataset.id, e); lsRenderRows();
     } else if (e.target.closest('#lsRows')) { LG.sel.clear(); LG.subEd = false; lsRenderRows(); }
   });

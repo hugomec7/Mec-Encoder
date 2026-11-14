@@ -114,6 +114,20 @@ pub fn name_from(tpl: &str, m: &Meta) -> String {
     clean_name(s.trim_matches(|c: char| c.is_whitespace() || "_-".contains(c)))
 }
 
+/// No X o @ e o número do post vêm do próprio link (x.com/<usuario>/status/<número>): {usuario} e {link} são os do link.
+pub fn with_link_names(m: &Meta, url: &str) -> Meta {
+    let mut m = m.clone();
+    let low = url.to_lowercase();
+    let Some(p) = ["x.com/", "twitter.com/"].iter().find_map(|h| low.find(h).map(|i| i + h.len())) else { return m };
+    let parts: Vec<&str> = url[p..].split(['/', '?', '#']).collect();
+    if parts.len() >= 3 && parts[1] == "status" {
+        if parts[0] != "i" { m.uploader_id = parts[0].to_string(); }
+        let n: String = parts[2].chars().take_while(|c| c.is_ascii_digit()).collect();
+        if !n.is_empty() { m.id = n; }
+    }
+    m
+}
+
 /// O que o Windows não aceita no nome vira espaço; sem espaços repetidos nem ponto/espaço no fim.
 pub fn clean_name(s: &str) -> String {
     let t: String = s.chars().map(|c| if "\\/:*?\"<>|".contains(c) || c.is_control() { ' ' } else { c }).collect();
@@ -584,7 +598,7 @@ fn run_inner(job: &Job, t: &Tools, work: &Path, h: &Hooks, on: &(dyn Fn(Event) +
     let mut out = Done { meta: s.meta.clone(), ..Default::default() };
     // nome escolhido (Lista de links) ou montado pelo modelo; trecho ganha "(início-fim)" no fim
     let chosen = if !job.name.trim().is_empty() { clean_name(&job.name) }
-                 else if !job.name_tpl.trim().is_empty() { name_from(&job.name_tpl, &s.meta) } else { String::new() };
+                 else if !job.name_tpl.trim().is_empty() { name_from(&job.name_tpl, &with_link_names(&s.meta, &job.url)) } else { String::new() };
     let chosen = match (chosen.is_empty(), job.section) {
         (false, Some((x, y))) if job.kind != Kind::Thumb => format!("{chosen} ({}-{})", section_label(x), section_label(y)),
         _ => chosen,
@@ -743,6 +757,10 @@ mod tests {
         let yt = Meta { title: "x".into(), uploader: "Canal".into(), uploader_id: "UCabcdefghijklmnopqrstuv".into(), ..Default::default() };
         assert_eq!(name_from("{user}", &yt), "Canal");
         assert_eq!(clean_name("a/b:c*?.  "), "a b c");
+        // X: o @ e o número saem do link quando o site não informa
+        let x = with_link_names(&Meta { uploader: "bedevi".into(), ..Default::default() }, "https://x.com/sizasizmisiniz/status/2121333733617701141?s=20");
+        assert_eq!(name_from("{link}", &x), "2121333733617701141");
+        assert_eq!(name_from("{usuario}_{link}", &x), "@sizasizmisiniz_2121333733617701141");
         // o yt-dlp informa perfil, id e data numa linha
         assert_eq!(parse_line("MECN Fulano | Memes|fulano|123|20260101"),
                    Some(Line::Names { uploader: "Fulano | Memes".into(), uploader_id: "fulano".into(), id: "123".into(), date: "20260101".into() }));
