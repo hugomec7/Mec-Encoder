@@ -3855,7 +3855,6 @@
       e.stopPropagation();
       const items = NM_TAGS.map(([k]) => ({ label: `${nmTag(k)}  ${L.nmTagTip[k]}`, value: nmTag(k) })).concat([{ label: `${L.lsGroupTag}  ${L.lsGroupTagTip} · ${gname}`, value: L.lsGroupTag }]);
       openMenu(e.currentTarget, items, (t) => {
-        if (!ti.value) ti.value = nmTemplate();   // começa do modelo das Opções
         const a = ti.selectionStart ?? ti.value.length, z = ti.selectionEnd ?? a; const pre = ti.value.slice(0, a); const sep = /\}$/.test(pre) ? '_' : '';
         ti.value = pre + sep + t + ti.value.slice(z); const c = a + sep.length + t.length;
         ti.dispatchEvent(new Event('input')); const n = $('#lsTplIn'); n.focus(); n.setSelectionRange(c, c);
