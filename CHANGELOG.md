@@ -1,5 +1,23 @@
 # Changelog · Novidades
 
+## 0.3.8
+
+**English**
+- **Advanced link list** in Download:
+  - **Groups** in tabs (for example Memes and Motion), each with its own folder, subfolder, prefix/suffix (`{group}` becomes the group name) and download options. Groups are kept until you click the X on the tab. "Download this group" or "Download all".
+  - **Rename like in File Pilot**: select one or several videos (checkbox, click, Ctrl/Shift+click) and press F2 or double-click the name. Each name gets its own cursor, and typing, arrows, Ctrl+arrows (words), Shift (select), Home/End, delete, paste and Ctrl+Z apply to all of them at once.
+  - Copy the link of one video or of all selected ones, a subfolder only for the selected ones, and X removes every selected video (Ctrl+Shift+Z brings them back).
+  - **Duplicate warning**: the same video pasted twice (even as twitter.com and x.com, or with `?s=20`) is marked, with "Remove duplicates".
+- **File name model** (Download → Options): `{user}_{title}_{id}` by default, with `{site}`, `{date}` and `{quality}`. It applies to every download, including Quick download. An empty tag disappears along with its separator.
+
+**Português**
+- **Lista de links avançada** no Baixar:
+  - **Grupos** em abas (por exemplo Memes e Motion), cada um com pasta, subpasta, prefixo/sufixo (`{grupo}` vira o nome do grupo) e as opções de baixar. Os grupos ficam guardados até você clicar no X da aba. "Baixar este grupo" ou "Baixar todos".
+  - **Renomear como no File Pilot**: selecione um ou vários vídeos (caixinha, clique, Ctrl/Shift+clique) e aperte F2 ou dê clique duplo no nome. Cada nome ganha a sua agulha, e digitar, setas, Ctrl+setas (palavras), Shift (selecionar), Home/End, apagar, colar e Ctrl+Z valem para todos ao mesmo tempo.
+  - Copiar o link de um vídeo ou de todos os selecionados, subpasta só para os selecionados, e o X tira todos os selecionados (Ctrl+Shift+Z traz de volta).
+  - **Aviso de repetidos**: o mesmo vídeo colado duas vezes (mesmo como twitter.com e x.com, ou com `?s=20`) fica marcado, com "Remover repetidos".
+- **Modelo do nome do arquivo** (Baixar → Opções): `{usuario}_{titulo}_{id}` por padrão, com `{site}`, `{data}` e `{qualidade}`. Vale em todo download, inclusive o Baixar rápido. Etiqueta vazia some junto com o separador.
+
 ## 0.3.7
 
 **English**

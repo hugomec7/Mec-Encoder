@@ -1,6 +1,25 @@
 // Gerado por docs/release-notes/make_news.py — não edite à mão.
 window.MEC_NEWS = [
  {
+  "version": "0.3.8",
+  "en": [
+   "**Advanced link list** in Download:",
+   "**Groups** in tabs (for example Memes and Motion), each with its own folder, subfolder, prefix/suffix (`{group}` becomes the group name) and download options. Groups are kept until you click the X on the tab. \"Download this group\" or \"Download all\".",
+   "**Rename like in File Pilot**: select one or several videos (checkbox, click, Ctrl/Shift+click) and press F2 or double-click the name. Each name gets its own cursor, and typing, arrows, Ctrl+arrows (words), Shift (select), Home/End, delete, paste and Ctrl+Z apply to all of them at once.",
+   "Copy the link of one video or of all selected ones, a subfolder only for the selected ones, and X removes every selected video (Ctrl+Shift+Z brings them back).",
+   "**Duplicate warning**: the same video pasted twice (even as twitter.com and x.com, or with `?s=20`) is marked, with \"Remove duplicates\".",
+   "**File name model** (Download → Options): `{user}_{title}_{id}` by default, with `{site}`, `{date}` and `{quality}`. It applies to every download, including Quick download. An empty tag disappears along with its separator."
+  ],
+  "pt": [
+   "**Lista de links avançada** no Baixar:",
+   "**Grupos** em abas (por exemplo Memes e Motion), cada um com pasta, subpasta, prefixo/sufixo (`{grupo}` vira o nome do grupo) e as opções de baixar. Os grupos ficam guardados até você clicar no X da aba. \"Baixar este grupo\" ou \"Baixar todos\".",
+   "**Renomear como no File Pilot**: selecione um ou vários vídeos (caixinha, clique, Ctrl/Shift+clique) e aperte F2 ou dê clique duplo no nome. Cada nome ganha a sua agulha, e digitar, setas, Ctrl+setas (palavras), Shift (selecionar), Home/End, apagar, colar e Ctrl+Z valem para todos ao mesmo tempo.",
+   "Copiar o link de um vídeo ou de todos os selecionados, subpasta só para os selecionados, e o X tira todos os selecionados (Ctrl+Shift+Z traz de volta).",
+   "**Aviso de repetidos**: o mesmo vídeo colado duas vezes (mesmo como twitter.com e x.com, ou com `?s=20`) fica marcado, com \"Remover repetidos\".",
+   "**Modelo do nome do arquivo** (Baixar → Opções): `{usuario}_{titulo}_{id}` por padrão, com `{site}`, `{data}` e `{qualidade}`. Vale em todo download, inclusive o Baixar rápido. Etiqueta vazia some junto com o separador."
+  ]
+ },
+ {
   "version": "0.3.7",
   "en": [
    "**Fix: \"Delete original\" works again.** Since 0.3.4 the new player kept the video open for the preview, and Windows doesn't move an open file to the Recycle Bin, so the original stayed in place without any warning. Now the preview lets go of the file before deleting, it tries again for a few seconds if another program is holding it, and if it still can't, a message says so (the new file is always saved)."
@@ -109,45 +128,6 @@ window.MEC_NEWS = [
    "**Legenda** (com o idioma, inclusive a automática do YouTube) e **miniatura** podem vir junto, salvas ao lado do vídeo com o mesmo nome (Vídeo.pt.srt, Vídeo.jpg).",
    "**Só um trecho** (de 1:20 até 1:45): baixa só esse pedaço, cortado no quadro exato. O nome do arquivo leva o trecho.",
    "**Playlists, canais e perfis**: o link abre uma lista para marcar quais vídeos baixar, em vídeo ou áudio e na qualidade escolhida. Os botões rápidos também abrem essa lista, em vez de baixar centenas de vídeos de uma vez."
-  ]
- },
- {
-  "version": "0.3.0",
-  "en": [
-   "**New Download tab** (Ctrl+2): copy a video link from YouTube, TikTok, X, Facebook, Reddit and hundreds of other sites, and click **Download video** or **Download audio**. It downloads right away in the best quality, without asking anything. Shortcuts in the tab: **Ctrl+V** (video) and **Ctrl+Shift+V** (audio). The link in Ctrl+C shows under the buttons.",
-   "**Several links at once**: paste one per line. Up to 3 downloads at the same time.",
-   "**Ready for web** (on by default): the video comes out as H.264 + AAC in .mp4, which opens in WhatsApp, Instagram and the browser. If the site already sent it that way, it only reorganizes the file; if not (VP9, AV1, HEVC, Opus), it converts on the graphics card in seconds. Turn it off to keep the file exactly as the site sent it.",
-   "**Audio saved as** WAV, M4A, MP3 or FLAC, chosen once.",
-   "**Save to**: Downloads\\Mec Encoder by default, with the full path shown. Click it to open the folder.",
-   "Done downloads: **▶ plays in the Windows player** (or double-click the row), click the **name to rename** the file, send it to the converter queue or show it in the folder.",
-   "First time only, the app downloads yt-dlp and Deno (about 60 MB). yt-dlp updates itself once a day; if a site changes, it updates and tries again.",
-   "Not yet: Instagram and age-restricted videos need a login, which comes in a next version. Netflix, Spotify and other DRM-protected services can't be downloaded.",
-   "**8 new languages**: Spanish, French, German, Italian, Russian, Japanese, Korean and Simplified Chinese. The first time, the app opens in the Windows language.",
-   "**Studio is the default theme** for new installs (your current theme stays).",
-   "**New versions show up by themselves**: the app checks when it opens, every 3 hours and when you come back to it, and shows a notice in the corner. Option in Settings › Updates.",
-   "**Settings reorganized**: shortcuts have their own page (Edit button), GPU is under Performance, Playback comes before the folders.",
-   "**Saved previews unused for 7 days are deleted** by themselves (option: 1, 7, 30 days or never).",
-   "**Fix**: a single cut no longer stutters at the start in MPC, nor plays the audio out of sync in Films & TV and Windows Media Player. The audio is now rewritten in the same format as the original, starting together with the video.",
-   "**Fix**: \"Delete the original\" now also works for cut videos (it goes to the Recycle Bin after all cuts are done and checked).",
-   "**Fix**: the icon of the selected item in menus no longer disappears on the blue highlight."
-  ],
-  "pt": [
-   "**Nova aba Baixar** (Ctrl+2): copie o link de um vídeo do YouTube, TikTok, X, Facebook, Reddit e centenas de outros sites e clique em **Baixar vídeo** ou **Baixar áudio**. Baixa na hora, na maior qualidade, sem perguntar nada. Atalhos na aba: **Ctrl+V** (vídeo) e **Ctrl+Shift+V** (áudio). O link que está no Ctrl+C aparece embaixo dos botões.",
-   "**Vários links de uma vez**: cole um por linha. Até 3 downloads ao mesmo tempo.",
-   "**Pronto para web** (ligado por padrão): o vídeo sai em H.264 + AAC em .mp4, que abre no WhatsApp, Instagram e navegador. Se o site já mandou assim, só reorganiza o arquivo; se não (VP9, AV1, HEVC, Opus), converte na placa de vídeo em segundos. Desligado, guarda o arquivo exatamente como o site mandou.",
-   "**Áudio sai em** WAV, M4A, MP3 ou FLAC, escolhido uma vez.",
-   "**Salvar em**: Downloads\\Mec Encoder por padrão, com o caminho completo à vista. Clique nele para abrir a pasta.",
-   "Downloads prontos: **▶ assiste no player do Windows** (ou dois cliques na linha), clique no **nome para renomear** o arquivo, mande para a fila do conversor ou mostre na pasta.",
-   "Só na primeira vez, o app baixa o yt-dlp e o Deno (cerca de 60 MB). O yt-dlp se atualiza sozinho uma vez por dia; se um site mudar, ele atualiza e tenta de novo.",
-   "Ainda não: Instagram e vídeos com restrição de idade pedem login, que chega numa próxima versão. Netflix, Spotify e outros serviços com DRM não podem ser baixados.",
-   "**8 idiomas novos**: espanhol, francês, alemão, italiano, russo, japonês, coreano e chinês simplificado. Na primeira vez, o app abre no idioma do Windows.",
-   "**Estúdio é o tema padrão** para quem instala agora (quem já usa continua com o seu).",
-   "**Versões novas aparecem sozinhas**: o app procura ao abrir, a cada 3 horas e ao voltar para ele, e mostra um aviso no canto. Opção em Configurações › Atualizações.",
-   "**Configurações reorganizadas**: atalhos numa página própria (botão Editar), GPU em Desempenho, Reprodução antes das pastas.",
-   "**Prévias guardadas sem uso há 7 dias são apagadas** sozinhas (opção: 1, 7, 30 dias ou nunca).",
-   "**Correção**: um corte só não trava mais no começo no MPC, nem toca o áudio fora de sincronia no Filmes e TV e no Reprodutor Multimídia. O áudio agora é regravado no mesmo formato do original, começando junto com o vídeo.",
-   "**Correção**: \"Apagar o original\" também vale para vídeos cortados (vai para a Lixeira depois que todos os cortes saem e são conferidos).",
-   "**Correção**: o ícone do item marcado nos menus não some mais sobre o azul."
   ]
  }
 ];
