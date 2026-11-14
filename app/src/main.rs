@@ -740,8 +740,24 @@ fn do_render(app: &AppHandle, engine: &Engine, info: &MediaInfo, cfg: &Preset, n
     let mut warnings = d.warnings;
     let mut deleted = false;
     if d.delete_source {
-        // Vai para a Lixeira, não some de vez.
-        match trash::delete(&info.path) { Ok(()) => deleted = true, Err(_) => warnings.push("delete-failed".into()) }
+        // Vai para a Lixeira, não some de vez. Antes, a prévia solta o arquivo (o motor do player e o play ao vivo
+        // deixam o vídeo aberto, e o Windows não move arquivo aberto); tenta de novo por alguns segundos
+        // (antivírus e a busca do Windows também seguram o arquivo por um instante).
+        let st = app.state::<AppState>();
+        let mut last = String::new();
+        for attempt in 0..8 {
+            st.viewer.release(&info.path);
+            if let Some(s) = st.player.lock().unwrap().as_ref() { s.stop("live"); }
+            match trash::delete(&info.path) {
+                Ok(()) => { deleted = true; break; }
+                Err(e) => { last = e.to_string(); if !info.path.exists() { break; } }
+            }
+            std::thread::sleep(std::time::Duration::from_millis(if attempt < 3 { 250 } else { 600 }));
+        }
+        if !deleted {
+            log(app, &format!("{} | delete source failed: {last}", info.path.display()));
+            warnings.push("delete-failed".into());
+        }
     }
     Ok(RenderResult { output: d.output, size: d.size, deleted, warnings, parts: d.parts })
 }

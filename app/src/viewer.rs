@@ -193,6 +193,27 @@ impl Viewer {
         Ok(format!("http://127.0.0.1:{port}/play?{}", qs.join("&")))
     }
 
+    /// Solta o arquivo (para o Windows deixar mandar para a Lixeira): fecha os vídeos abertos com esse caminho e
+    /// para o play pelo motor. O FFmpeg abre sem permitir apagar, então enquanto a prévia está aberta o arquivo fica preso.
+    pub fn release(&self, path: &Path) {
+        let mut guard = self.proc.lock().unwrap();
+        let Some(p) = guard.as_mut() else { return };
+        let ids: Vec<u64> = p.open.iter().filter(|(_, v)| v.as_path() == path).map(|(k, _)| *k).collect();
+        let mut ok = true;
+        for id in &ids {
+            ok &= writeln!(p.stdin, "close {id}").and_then(|_| p.stdin.flush()).is_ok() && Self::line(&mut p.out).is_ok();
+            p.open.remove(id);
+        }
+        if ok && self.serve.lock().unwrap().is_some() {
+            ok = writeln!(p.stdin, "pstop").and_then(|_| p.stdin.flush()).is_ok() && Self::line(&mut p.out).is_ok();
+        }
+        if !ok {
+            // motor travado: fecha de vez (abre de novo no próximo quadro)
+            let mut dead = guard.take().unwrap(); let _ = dead.child.kill(); let _ = dead.child.wait();
+            *self.serve.lock().unwrap() = None;
+        }
+    }
+
     /// Fecha o motor (sair do app).
     pub fn stop(&self) {
         *self.serve.lock().unwrap() = None;

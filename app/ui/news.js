@@ -1,6 +1,15 @@
 // Gerado por docs/release-notes/make_news.py — não edite à mão.
 window.MEC_NEWS = [
  {
+  "version": "0.3.7",
+  "en": [
+   "**Fix: \"Delete original\" works again.** Since 0.3.4 the new player kept the video open for the preview, and Windows doesn't move an open file to the Recycle Bin, so the original stayed in place without any warning. Now the preview lets go of the file before deleting, it tries again for a few seconds if another program is holding it, and if it still can't, a message says so (the new file is always saved)."
+  ],
+  "pt": [
+   "**Correção: \"Apagar o original\" voltou a funcionar.** Desde a 0.3.4 o player novo deixava o vídeo aberto para a prévia, e o Windows não manda para a Lixeira um arquivo aberto, então o original ficava no lugar sem nenhum aviso. Agora a prévia solta o arquivo antes de apagar, tenta de novo por alguns segundos se outro programa estiver segurando, e se mesmo assim não der, aparece um aviso (o arquivo novo é sempre salvo)."
+  ]
+ },
+ {
   "version": "0.3.6",
   "en": [
    "**Link list** in Download: paste several links at once and each video shows up with its name, thumbnail, site and length before downloading (a playlist or profile becomes one row per video; links with an error are left out). Choose a folder just for this list, for example Memes, without changing the usual download folder; folders you used before stay as shortcuts. The same options as \"Download…\": Video (max quality, 1080, 720 or 480, web ready), Audio, GIF or Thumbnail, plus subtitles and thumbnail. Each download in the list shows the folder it goes to.",
@@ -139,21 +148,6 @@ window.MEC_NEWS = [
    "**Correção**: um corte só não trava mais no começo no MPC, nem toca o áudio fora de sincronia no Filmes e TV e no Reprodutor Multimídia. O áudio agora é regravado no mesmo formato do original, começando junto com o vídeo.",
    "**Correção**: \"Apagar o original\" também vale para vídeos cortados (vai para a Lixeira depois que todos os cortes saem e são conferidos).",
    "**Correção**: o ícone do item marcado nos menus não some mais sobre o azul."
-  ]
- },
- {
-  "version": "0.2.11",
-  "en": [
-   "**Everything from the test versions 0.2.7 to 0.2.10** comes in this update: several cuts per video, the Cutter, timeline zoom, play with sound (plays the result, skipping the cuts), timecode ruler, magnet and configurable shortcuts. See them in What's new.",
-   "**Skip cuts** has its own icon (a jump between two pieces) instead of scissors, turns blue when on and shows two texts: **Skipping cuts** (plays the result) and **Whole video** (plays the original). In the Cutter it is the same size as **New cut**.",
-   "**Quieter play button**: a rounded square with a soft background, like the other controls, instead of the white circle. Simpler play and pause icons.",
-   "**Even spacing** in the Cutter: In, ‹, ⏮, ▶, ⏭, › and Out are the same distance apart, away from the timecode."
-  ],
-  "pt": [
-   "**Tudo das versões de teste 0.2.7 a 0.2.10** vem nesta atualização: vários cortes por vídeo, o Cortador, zoom na linha do tempo, play com som (toca o resultado, pulando os cortes), régua de timecode, ímã e atalhos configuráveis. Veja em Novidades.",
-   "**Pular cortes** ganhou ícone próprio (um salto entre dois pedaços) no lugar da tesoura, fica azul quando ligado e mostra dois textos: **Pulando cortes** (toca o resultado) e **Vídeo inteiro** (toca o original). No Cortador tem o mesmo tamanho do **Novo corte**.",
-   "**Play mais discreto**: quadrado arredondado com fundo suave, como os outros controles, no lugar do círculo branco. Ícones de play e pause mais simples.",
-   "**Espaçamento igual** no Cortador: Início, ‹, ⏮, ▶, ⏭, › e Fim com a mesma distância entre si, afastados do timecode."
   ]
  }
 ];

@@ -3786,6 +3786,7 @@
           q.trimOnly = false;
           q.status = 'done'; q.p = 1; q.out = r.output; q.parts = r.parts && r.parts.length > 1 ? r.parts : null; q.outMb = r.size / 1e6; q.took = elapsedOf(q); J.done++; jobUpdate(q);
           if (r.deleted) toast(L.deletedOrig);
+          else if ((r.warnings || []).includes('delete-failed')) notify(L.deleteFailed(q.file), true);
           if (J.mode === 'single') notify(L.rendered(q.file) + ' · ' + fmtDur(q.took));
         } catch (e) {
           if (S.stopping || S.job !== J) { q.status = 'ready'; q.p = 0; break; }

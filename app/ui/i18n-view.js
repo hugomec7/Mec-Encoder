@@ -135,3 +135,19 @@
   };
   Object.entries(T).forEach(([lang, v]) => { const L = window.MEC_I18N[lang]; if (L) K.forEach((k, i) => { L[k] = v[i]; }); });
 })();
+// Apagar o original
+(() => {
+  const T = {
+    en: (f) => `Couldn't move ${f} to the Recycle Bin (another program is using it). The new file was saved.`,
+    pt: (f) => `Não deu para mandar ${f} para a Lixeira (outro programa está usando o arquivo). O arquivo novo foi salvo.`,
+    es: (f) => `No se pudo enviar ${f} a la Papelera (otro programa lo está usando). El archivo nuevo se guardó.`,
+    fr: (f) => `Impossible de mettre ${f} à la Corbeille (un autre programme l’utilise). Le nouveau fichier est enregistré.`,
+    de: (f) => `${f} konnte nicht in den Papierkorb (ein anderes Programm nutzt die Datei). Die neue Datei ist gespeichert.`,
+    it: (f) => `Impossibile spostare ${f} nel cestino (un altro programma lo sta usando). Il nuovo file è stato salvato.`,
+    ru: (f) => `Не удалось переместить ${f} в корзину (файл занят другой программой). Новый файл сохранён.`,
+    ja: (f) => `${f} をごみ箱に移動できませんでした（別のプログラムが使用中）。新しいファイルは保存されました。`,
+    ko: (f) => `${f}을(를) 휴지통으로 옮기지 못했습니다(다른 프로그램이 사용 중). 새 파일은 저장되었습니다.`,
+    zh: (f) => `无法将 ${f} 移到回收站（其他程序正在使用）。新文件已保存。`,
+  };
+  Object.entries(T).forEach(([lang, v]) => { const L = window.MEC_I18N[lang]; if (L) L.deleteFailed = v; });
+})();
