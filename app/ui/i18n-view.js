@@ -151,3 +151,100 @@
   };
   Object.entries(T).forEach(([lang, v]) => { const L = window.MEC_I18N[lang]; if (L) L.deleteFailed = v; });
 })();
+// Lista de links avançada: grupos, nomes, renomear vários
+(() => {
+  const K = ['lsGroupNew', 'lsGroupAdd', 'lsGroupDel', 'lsGroupDelAsk', 'lsGroupName', 'lsGroupPh', 'lsSubfolder', 'lsSubPh', 'lsSubNone', 'lsNameCap', 'lsStart', 'lsEnd', 'lsUseGroupName', 'lsTplLink',
+    'lsRenameTip', 'lsSelN', 'lsSelAll', 'lsRename', 'lsRemoveSel', 'lsRenameN', 'lsApply', 'lsReplace', 'lsFind', 'lsReplWith', 'lsNumber', 'lsGoGroup', 'lsGoAll',
+    'nmTitle', 'nmSub', 'nmReset', 'nmExample', 'nmTagTip'];
+  const tips = (u, t, i, s, d, q) => ({ user: u, title: t, id: i, site: s, date: d, quality: q });
+  const T = {
+    en: [(n) => `Group ${n}`, 'New group', 'Delete group', (g, n) => `Delete the group "${g}" and its ${n} link${n === 1 ? '' : 's'}?`, 'Group name', 'e.g. Memes', 'Subfolder', 'e.g. tony_stark', 'none', 'File name', 'Start', 'End', 'Use the group name', (t) => `Name model: ${t} · change`,
+      'Double-click or F2 to rename', (n) => `${n} selected`, 'Select all', 'Rename', 'Remove', (n) => `Rename ${n} ${n === 1 ? 'video' : 'videos'}`, 'Apply', 'Replace', 'find', 'replace with', 'Number', (g, n) => n ? `Download ${g} (${n})` : `Download ${g}`, (n) => `Download all (${n})`,
+      'File name', 'Model for every download. Empty tags disappear along with their separator.', 'Default', 'Example:', tips('@ of the profile', 'Video title (up to 80 characters)', 'End of the link (video id)', 'Site', 'Post date', 'Quality, e.g. 1080p')],
+    pt: [(n) => `Grupo ${n}`, 'Novo grupo', 'Apagar grupo', (g, n) => `Apagar o grupo "${g}" e ${n === 1 ? 'o link' : `os ${n} links`} dele?`, 'Nome do grupo', 'ex.: Memes', 'Subpasta', 'ex.: tony_stark', 'nenhuma', 'Nome do arquivo', 'Começo', 'Fim', 'Usar o nome do grupo', (t) => `Modelo do nome: ${t} · mudar`,
+      'Clique duplo ou F2 para renomear', (n) => `${n} ${n === 1 ? 'selecionado' : 'selecionados'}`, 'Selecionar todos', 'Renomear', 'Tirar', (n) => `Renomear ${n} ${n === 1 ? 'vídeo' : 'vídeos'}`, 'Aplicar', 'Trocar', 'procurar', 'trocar por', 'Numerar', (g, n) => n ? `Baixar ${g} (${n})` : `Baixar ${g}`, (n) => `Baixar todos (${n})`,
+      'Nome do arquivo', 'Modelo de todo download. Etiqueta vazia some junto com o separador.', 'Padrão', 'Exemplo:', tips('@ do perfil', 'Título do vídeo (até 80 caracteres)', 'Final do link (id do vídeo)', 'Site', 'Data do post', 'Qualidade, ex.: 1080p')],
+    es: [(n) => `Grupo ${n}`, 'Nuevo grupo', 'Borrar grupo', (g, n) => `¿Borrar el grupo "${g}" y sus ${n} enlaces?`, 'Nombre del grupo', 'ej.: Memes', 'Subcarpeta', 'ej.: tony_stark', 'ninguna', 'Nombre del archivo', 'Inicio', 'Final', 'Usar el nombre del grupo', (t) => `Modelo del nombre: ${t} · cambiar`,
+      'Doble clic o F2 para renombrar', (n) => `${n} seleccionados`, 'Seleccionar todo', 'Renombrar', 'Quitar', (n) => `Renombrar ${n} videos`, 'Aplicar', 'Reemplazar', 'buscar', 'reemplazar por', 'Numerar', (g, n) => n ? `Descargar ${g} (${n})` : `Descargar ${g}`, (n) => `Descargar todo (${n})`,
+      'Nombre del archivo', 'Modelo para cada descarga. Una etiqueta vacía desaparece con su separador.', 'Predeterminado', 'Ejemplo:', tips('@ del perfil', 'Título del video (hasta 80 caracteres)', 'Final del enlace (id)', 'Sitio', 'Fecha', 'Calidad, ej.: 1080p')],
+    fr: [(n) => `Groupe ${n}`, 'Nouveau groupe', 'Supprimer le groupe', (g, n) => `Supprimer le groupe « ${g} » et ses ${n} liens ?`, 'Nom du groupe', 'ex. : Memes', 'Sous-dossier', 'ex. : tony_stark', 'aucun', 'Nom du fichier', 'Début', 'Fin', 'Utiliser le nom du groupe', (t) => `Modèle du nom : ${t} · modifier`,
+      'Double-clic ou F2 pour renommer', (n) => `${n} sélectionné(s)`, 'Tout sélectionner', 'Renommer', 'Retirer', (n) => `Renommer ${n} vidéo(s)`, 'Appliquer', 'Remplacer', 'chercher', 'remplacer par', 'Numéroter', (g, n) => n ? `Télécharger ${g} (${n})` : `Télécharger ${g}`, (n) => `Tout télécharger (${n})`,
+      'Nom du fichier', 'Modèle pour chaque téléchargement. Une étiquette vide disparaît avec son séparateur.', 'Par défaut', 'Exemple :', tips('@ du profil', 'Titre de la vidéo (80 caractères max.)', 'Fin du lien (id)', 'Site', 'Date', 'Qualité, ex. : 1080p')],
+    de: [(n) => `Gruppe ${n}`, 'Neue Gruppe', 'Gruppe löschen', (g, n) => `Gruppe „${g}“ mit ${n} Links löschen?`, 'Gruppenname', 'z. B. Memes', 'Unterordner', 'z. B. tony_stark', 'keiner', 'Dateiname', 'Anfang', 'Ende', 'Gruppennamen verwenden', (t) => `Namensmuster: ${t} · ändern`,
+      'Doppelklick oder F2 zum Umbenennen', (n) => `${n} ausgewählt`, 'Alle auswählen', 'Umbenennen', 'Entfernen', (n) => `${n} Videos umbenennen`, 'Anwenden', 'Ersetzen', 'suchen', 'ersetzen durch', 'Nummerieren', (g, n) => n ? `${g} laden (${n})` : `${g} laden`, (n) => `Alle laden (${n})`,
+      'Dateiname', 'Muster für jeden Download. Leere Platzhalter verschwinden samt Trennzeichen.', 'Standard', 'Beispiel:', tips('@ des Profils', 'Videotitel (bis 80 Zeichen)', 'Ende des Links (ID)', 'Seite', 'Datum', 'Qualität, z. B. 1080p')],
+    it: [(n) => `Gruppo ${n}`, 'Nuovo gruppo', 'Elimina gruppo', (g, n) => `Eliminare il gruppo "${g}" e i suoi ${n} link?`, 'Nome del gruppo', 'es.: Memes', 'Sottocartella', 'es.: tony_stark', 'nessuna', 'Nome del file', 'Inizio', 'Fine', 'Usa il nome del gruppo', (t) => `Modello del nome: ${t} · cambia`,
+      'Doppio clic o F2 per rinominare', (n) => `${n} selezionati`, 'Seleziona tutti', 'Rinomina', 'Togli', (n) => `Rinomina ${n} video`, 'Applica', 'Sostituisci', 'cerca', 'sostituisci con', 'Numera', (g, n) => n ? `Scarica ${g} (${n})` : `Scarica ${g}`, (n) => `Scarica tutto (${n})`,
+      'Nome del file', 'Modello per ogni download. Un tag vuoto sparisce con il suo separatore.', 'Predefinito', 'Esempio:', tips('@ del profilo', 'Titolo del video (fino a 80 caratteri)', 'Fine del link (id)', 'Sito', 'Data', 'Qualità, es.: 1080p')],
+    ru: [(n) => `Группа ${n}`, 'Новая группа', 'Удалить группу', (g, n) => `Удалить группу «${g}» и её ссылки (${n})?`, 'Название группы', 'напр.: Memes', 'Подпапка', 'напр.: tony_stark', 'нет', 'Имя файла', 'Начало', 'Конец', 'Взять название группы', (t) => `Шаблон имени: ${t} · изменить`,
+      'Двойной щелчок или F2 — переименовать', (n) => `Выбрано: ${n}`, 'Выбрать все', 'Переименовать', 'Убрать', (n) => `Переименовать: ${n}`, 'Применить', 'Заменить', 'найти', 'заменить на', 'Нумеровать', (g, n) => n ? `Скачать ${g} (${n})` : `Скачать ${g}`, (n) => `Скачать все (${n})`,
+      'Имя файла', 'Шаблон для всех загрузок. Пустая метка исчезает вместе с разделителем.', 'По умолчанию', 'Пример:', tips('@ профиля', 'Название видео (до 80 символов)', 'Конец ссылки (id)', 'Сайт', 'Дата', 'Качество, напр. 1080p')],
+    ja: [(n) => `グループ ${n}`, '新しいグループ', 'グループを削除', (g, n) => `グループ「${g}」と ${n} 件のリンクを削除しますか？`, 'グループ名', '例: Memes', 'サブフォルダ', '例: tony_stark', 'なし', 'ファイル名', '先頭', '末尾', 'グループ名を使う', (t) => `名前の形式: ${t} · 変更`,
+      'ダブルクリックまたは F2 で名前を変更', (n) => `${n} 件選択`, 'すべて選択', '名前を変更', '外す', (n) => `${n} 件の名前を変更`, '適用', '置換', '検索', '置換後', '連番', (g, n) => n ? `${g} をダウンロード (${n})` : `${g} をダウンロード`, (n) => `すべてダウンロード (${n})`,
+      'ファイル名', 'すべてのダウンロードの形式。空のタグは区切りごと消えます。', '既定', '例:', tips('プロフィールの @', '動画のタイトル（80文字まで）', 'リンクの末尾（ID）', 'サイト', '投稿日', '画質（例: 1080p）')],
+    ko: [(n) => `그룹 ${n}`, '새 그룹', '그룹 삭제', (g, n) => `"${g}" 그룹과 링크 ${n}개를 삭제할까요?`, '그룹 이름', '예: Memes', '하위 폴더', '예: tony_stark', '없음', '파일 이름', '앞', '뒤', '그룹 이름 사용', (t) => `이름 형식: ${t} · 변경`,
+      '더블클릭 또는 F2로 이름 바꾸기', (n) => `${n}개 선택됨`, '모두 선택', '이름 바꾸기', '빼기', (n) => `${n}개 이름 바꾸기`, '적용', '바꾸기', '찾기', '바꿀 내용', '번호 붙이기', (g, n) => n ? `${g} 다운로드 (${n})` : `${g} 다운로드`, (n) => `모두 다운로드 (${n})`,
+      '파일 이름', '모든 다운로드의 형식. 빈 태그는 구분자와 함께 사라집니다.', '기본값', '예:', tips('프로필 @', '영상 제목 (최대 80자)', '링크 끝 (ID)', '사이트', '게시 날짜', '화질, 예: 1080p')],
+    zh: [(n) => `分组 ${n}`, '新建分组', '删除分组', (g, n) => `删除分组“${g}”及其 ${n} 个链接？`, '分组名称', '例如：Memes', '子文件夹', '例如：tony_stark', '无', '文件名', '开头', '结尾', '使用分组名称', (t) => `命名格式：${t} · 修改`,
+      '双击或按 F2 重命名', (n) => `已选 ${n} 个`, '全选', '重命名', '移除', (n) => `重命名 ${n} 个视频`, '应用', '替换', '查找', '替换为', '编号', (g, n) => n ? `下载 ${g}（${n}）` : `下载 ${g}`, (n) => `全部下载（${n}）`,
+      '文件名', '所有下载使用的格式。空标签会连同分隔符一起去掉。', '默认', '示例：', tips('账号 @', '视频标题（最多 80 字）', '链接末尾（ID）', '网站', '发布日期', '画质，例如 1080p')],
+  };
+  Object.entries(T).forEach(([lang, v]) => { const L = window.MEC_I18N[lang]; if (L) K.forEach((k, i) => { L[k] = v[i]; }); });
+})();
+// Renomear com várias agulhas + prefixo/sufixo do grupo
+(() => {
+  const K = ['mcEditing', 'mcKeys', 'lsSubFor', 'lsPrefix', 'lsSuffix', 'lsGroupTag', 'lsGroupTagTip', 'lsFxHint'];
+  const kb = (s) => s.replace(/\[([^\]]+)\]/g, '<kbd>$1</kbd>');
+  const T = {
+    en: [(n) => `Renaming ${n} ${n === 1 ? 'name' : 'names'}`, kb('[Enter] save · [Esc] cancel · [Ctrl]+[←→] words · [Shift] select'), (n) => `Subfolder for ${n}`, 'Prefix', 'Suffix', '{group}', 'Insert the group name', 'Goes before/after the name of every video in this group. {group} becomes the group name.'],
+    pt: [(n) => `Renomeando ${n} ${n === 1 ? 'nome' : 'nomes'}`, kb('[Enter] salva · [Esc] cancela · [Ctrl]+[←→] palavras · [Shift] seleciona'), (n) => `Subpasta para ${n}`, 'Prefixo', 'Sufixo', '{grupo}', 'Inserir o nome do grupo', 'Entra antes/depois do nome de todos os vídeos deste grupo. {grupo} vira o nome do grupo.'],
+    es: [(n) => `Renombrando ${n}`, kb('[Enter] guarda · [Esc] cancela · [Ctrl]+[←→] palabras · [Shift] selecciona'), (n) => `Subcarpeta para ${n}`, 'Prefijo', 'Sufijo', '{group}', 'Insertar el nombre del grupo', 'Va antes/después del nombre de todos los videos del grupo. {group} es el nombre del grupo.'],
+    fr: [(n) => `Renommage de ${n}`, kb('[Entrée] enregistre · [Échap] annule · [Ctrl]+[←→] mots · [Maj] sélection'), (n) => `Sous-dossier pour ${n}`, 'Préfixe', 'Suffixe', '{group}', 'Insérer le nom du groupe', 'S’ajoute avant/après le nom de chaque vidéo du groupe. {group} devient le nom du groupe.'],
+    de: [(n) => `${n} Namen umbenennen`, kb('[Enter] speichern · [Esc] abbrechen · [Strg]+[←→] Wörter · [Umschalt] auswählen'), (n) => `Unterordner für ${n}`, 'Präfix', 'Suffix', '{group}', 'Gruppennamen einfügen', 'Steht vor/nach dem Namen jedes Videos der Gruppe. {group} wird zum Gruppennamen.'],
+    it: [(n) => `Rinomina di ${n}`, kb('[Invio] salva · [Esc] annulla · [Ctrl]+[←→] parole · [Maiusc] seleziona'), (n) => `Sottocartella per ${n}`, 'Prefisso', 'Suffisso', '{group}', 'Inserisci il nome del gruppo', 'Va prima/dopo il nome di ogni video del gruppo. {group} diventa il nome del gruppo.'],
+    ru: [(n) => `Переименование: ${n}`, kb('[Enter] сохранить · [Esc] отмена · [Ctrl]+[←→] слова · [Shift] выделить'), (n) => `Подпапка для ${n}`, 'Префикс', 'Суффикс', '{group}', 'Вставить название группы', 'Добавляется до/после имени каждого видео группы. {group} — название группы.'],
+    ja: [(n) => `${n} 件の名前を編集中`, kb('[Enter] 保存 · [Esc] 取消 · [Ctrl]+[←→] 単語 · [Shift] 選択'), (n) => `${n} 件のサブフォルダ`, '接頭辞', '接尾辞', '{group}', 'グループ名を挿入', 'このグループのすべての動画名の前/後に付きます。{group} はグループ名になります。'],
+    ko: [(n) => `이름 ${n}개 편집 중`, kb('[Enter] 저장 · [Esc] 취소 · [Ctrl]+[←→] 단어 · [Shift] 선택'), (n) => `${n}개의 하위 폴더`, '접두사', '접미사', '{group}', '그룹 이름 넣기', '이 그룹 모든 영상 이름의 앞/뒤에 붙습니다. {group}은 그룹 이름이 됩니다.'],
+    zh: [(n) => `正在重命名 ${n} 个`, kb('[Enter] 保存 · [Esc] 取消 · [Ctrl]+[←→] 按词 · [Shift] 选择'), (n) => `${n} 个的子文件夹`, '前缀', '后缀', '{group}', '插入分组名称', '加在本组每个视频名称的前/后。{group} 会变成分组名称。'],
+  };
+  Object.entries(T).forEach(([lang, v]) => { const L = window.MEC_I18N[lang]; if (L) K.forEach((k, i) => { L[k] = v[i]; }); });
+})();
+// Lista de links: copiar links dos selecionados
+(() => {
+  const T = { en: ['Copy links', (n) => `${n} links copied`], pt: ['Copiar links', (n) => `${n} links copiados`], es: ['Copiar enlaces', (n) => `${n} enlaces copiados`],
+    fr: ['Copier les liens', (n) => `${n} liens copiés`], de: ['Links kopieren', (n) => `${n} Links kopiert`], it: ['Copia link', (n) => `${n} link copiati`],
+    ru: ['Копировать ссылки', (n) => `Скопировано ссылок: ${n}`], ja: ['リンクをコピー', (n) => `${n} 件のリンクをコピーしました`], ko: ['링크 복사', (n) => `링크 ${n}개 복사됨`], zh: ['复制链接', (n) => `已复制 ${n} 个链接`] };
+  Object.entries(T).forEach(([lang, [a, b]]) => { const L = window.MEC_I18N[lang]; if (L) Object.assign(L, { lsCopyLinks: a, lsLinksCopied: b }); });
+})();
+// Lista de links: tirar e desfazer
+(() => {
+  const T = {
+    en: [(n) => `${n} ${n === 1 ? 'video' : 'videos'} removed from the list · Ctrl+Shift+Z to undo`, (n) => `${n} ${n === 1 ? 'video' : 'videos'} back on the list`],
+    pt: [(n) => `${n} ${n === 1 ? 'vídeo tirado' : 'vídeos tirados'} da lista · Ctrl+Shift+Z desfaz`, (n) => `${n} ${n === 1 ? 'vídeo voltou' : 'vídeos voltaram'} para a lista`],
+    es: [(n) => `${n} quitado(s) de la lista · Ctrl+Shift+Z deshace`, (n) => `${n} de vuelta en la lista`],
+    fr: [(n) => `${n} retiré(s) de la liste · Ctrl+Maj+Z pour annuler`, (n) => `${n} remis dans la liste`],
+    de: [(n) => `${n} aus der Liste entfernt · Strg+Umschalt+Z macht rückgängig`, (n) => `${n} wieder in der Liste`],
+    it: [(n) => `${n} tolto/i dalla lista · Ctrl+Maiusc+Z annulla`, (n) => `${n} di nuovo nella lista`],
+    ru: [(n) => `Убрано из списка: ${n} · Ctrl+Shift+Z — вернуть`, (n) => `Возвращено в список: ${n}`],
+    ja: [(n) => `${n} 件をリストから外しました · Ctrl+Shift+Z で元に戻す`, (n) => `${n} 件をリストに戻しました`],
+    ko: [(n) => `목록에서 ${n}개 뺌 · Ctrl+Shift+Z로 되돌리기`, (n) => `${n}개를 목록에 되돌림`],
+    zh: [(n) => `已从列表移除 ${n} 个 · Ctrl+Shift+Z 撤销`, (n) => `已恢复 ${n} 个到列表`],
+  };
+  Object.entries(T).forEach(([lang, [a, b]]) => { const L = window.MEC_I18N[lang]; if (L) Object.assign(L, { lsRemoved: a, lsRestored: b }); });
+})();
+// Lista de links: repetidos
+(() => {
+  const T = {
+    en: ['Duplicate', (n) => `${n} duplicate ${n === 1 ? 'video' : 'videos'} in this list`, 'Select', 'Remove duplicates'],
+    pt: ['Repetido', (n) => `${n} ${n === 1 ? 'vídeo repetido' : 'vídeos repetidos'} nesta lista`, 'Selecionar', 'Remover repetidos'],
+    es: ['Repetido', (n) => `${n} video(s) repetido(s) en esta lista`, 'Seleccionar', 'Quitar repetidos'],
+    fr: ['Doublon', (n) => `${n} doublon(s) dans cette liste`, 'Sélectionner', 'Retirer les doublons'],
+    de: ['Doppelt', (n) => `${n} doppelte(s) Video(s) in dieser Liste`, 'Auswählen', 'Doppelte entfernen'],
+    it: ['Doppione', (n) => `${n} video doppi in questa lista`, 'Seleziona', 'Togli i doppioni'],
+    ru: ['Повтор', (n) => `Повторов в списке: ${n}`, 'Выбрать', 'Убрать повторы'],
+    ja: ['重複', (n) => `このリストに重複が ${n} 件あります`, '選択', '重複を外す'],
+    ko: ['중복', (n) => `이 목록에 중복 영상 ${n}개`, '선택', '중복 빼기'],
+    zh: ['重复', (n) => `此列表中有 ${n} 个重复视频`, '选择', '移除重复'],
+  };
+  Object.entries(T).forEach(([lang, [a, b, c, d]]) => { const L = window.MEC_I18N[lang]; if (L) Object.assign(L, { lsDupBadge: a, lsDupMsg: b, lsDupSel: c, lsDupRm: d }); });
+})();

@@ -60,6 +60,65 @@ pub struct Job {
     pub section: Option<(f64, f64)>,
     /// GIF: largura, quadros por segundo, qualidade e loop (como o preset GIF do Converter).
     pub gif: crate::preset::Gif,
+    /// Nome do arquivo já pronto, sem extensão (Lista de links: renomeado à mão ou já montado pelo modelo).
+    pub name: String,
+    /// Modelo do nome ({usuario}_{titulo}_{id}...), montado com o que o site informa. Vazio: o título do vídeo.
+    pub name_tpl: String,
+}
+
+/// Nome do arquivo pelo modelo: {usuario}/{user}, {titulo}/{title}, {id}/{link}, {site}, {data}/{date},
+/// {qualidade}/{quality}. Etiqueta vazia some junto com o separador antes dela (sem "__" sobrando).
+pub fn name_from(tpl: &str, m: &Meta) -> String {
+    let val = |k: &str| -> String {
+        match k {
+            "user" | "usuario" => {
+                let u = m.uploader_id.trim();
+                if u.is_empty() || (u.starts_with("UC") && u.len() > 20) { m.uploader.trim().to_string() }
+                else if u.starts_with('@') { u.to_string() } else { format!("@{u}") }
+            }
+            "title" | "titulo" => {
+                let mut t = m.title.trim().to_string();
+                // no X o título vem como "Nome - texto do post": o nome já vai no {usuario}
+                let pre = format!("{} - ", m.uploader.trim());
+                if !m.uploader.trim().is_empty() && t.starts_with(&pre) { t = t[pre.len()..].to_string(); }
+                let t = clean_name(&t);
+                if t.chars().count() <= 80 { t } else {
+                    let cut: String = t.chars().take(80).collect();
+                    match cut.rfind(' ') { Some(i) if i > 40 => cut[..i].to_string(), _ => cut }
+                }
+            }
+            "id" | "link" => m.id.trim().to_string(),
+            "site" => match m.site.as_str() { "Twitter" => "X".into(), "Youtube" => "YouTube".into(), s => s.trim_end_matches("User").to_string() },
+            "date" | "data" => { let d = m.upload_date.trim(); if d.len() == 8 { format!("{}-{}-{}", &d[..4], &d[4..6], &d[6..]) } else { String::new() } }
+            "quality" | "qualidade" => if m.height > 0 { format!("{}p", m.width.min(m.height).max(if m.width == 0 { m.height } else { 0 })) } else { String::new() },
+            _ => String::new(),
+        }
+    };
+    let mut out = String::new(); let mut rest = tpl;
+    while let Some(a) = rest.find('{') {
+        let Some(b) = rest[a..].find('}').map(|b| a + b) else { break };
+        let (lit, key) = (&rest[..a], rest[a + 1..b].to_lowercase());
+        let known = ["user", "usuario", "title", "titulo", "id", "link", "site", "date", "data", "quality", "qualidade"].contains(&key.as_str());
+        if !known { out.push_str(&rest[..=b]); rest = &rest[b + 1..]; continue; }
+        let v = clean_name(&val(&key));
+        // etiqueta vazia leva junto o separador antes dela (mas não um texto fixo, como "meme_")
+        let only_sep = lit.chars().all(|c| c.is_whitespace() || "_-.".contains(c));
+        if !v.is_empty() || !only_sep { out.push_str(lit); }
+        out.push_str(&v);
+        rest = &rest[b + 1..];
+    }
+    out.push_str(rest);
+    // separadores repetidos ("__") de etiquetas vazias no meio, e nada sobrando nas pontas
+    let mut s = String::new();
+    for c in out.chars() { if "_-.".contains(c) && s.ends_with(c) { continue; } s.push(c); }
+    clean_name(s.trim_matches(|c: char| c.is_whitespace() || "_-".contains(c)))
+}
+
+/// O que o Windows não aceita no nome vira espaço; sem espaços repetidos nem ponto/espaço no fim.
+pub fn clean_name(s: &str) -> String {
+    let t: String = s.chars().map(|c| if "\\/:*?\"<>|".contains(c) || c.is_control() { ' ' } else { c }).collect();
+    let t = t.split_whitespace().collect::<Vec<_>>().join(" ");
+    t.trim_end_matches(['.', ' ']).to_string()
 }
 
 /// "1m20s" para o nome do arquivo de um trecho (dois-pontos não pode em nome de arquivo).
@@ -99,6 +158,11 @@ pub struct Meta {
     pub vcodec: String,
     pub acodec: String,
     pub thumbnail: String,
+    /// Para o nome do arquivo: perfil (@), id do vídeo (final do link) e data do post (AAAAMMDD).
+    pub uploader: String,
+    pub uploader_id: String,
+    pub id: String,
+    pub upload_date: String,
 }
 
 /// Andamento: `stage` é "download", "merge" (juntando vídeo e áudio), "audio" (convertendo o áudio) ou "web".
@@ -137,6 +201,8 @@ pub enum Line {
     Title(String),
     Info { site: String, width: u32, height: u32, fps: f64, duration: f64, vcodec: String, acodec: String },
     Thumb(String),
+    /// Perfil, @ do perfil, id do vídeo e data do post.
+    Names { uploader: String, uploader_id: String, id: String, date: String },
     /// Partes que vão ser baixadas (formato, bytes) — vídeo e áudio separados no YouTube.
     Parts(Vec<(String, u64)>),
     Progress { done: u64, total: u64, speed: f64, eta: Option<f64>, format: String },
@@ -198,6 +264,7 @@ pub fn ytdlp_args(job: &Job, t: &Tools, work: &Path) -> Vec<String> {
         format!("before_dl:{P}T %(title)s"),
         format!("before_dl:{P}I %(extractor_key)s|%(width)s|%(height)s|%(fps)s|%(duration)s|%(vcodec)s|%(acodec)s"),
         format!("before_dl:{P}U %(thumbnail)s"),
+        format!("before_dl:{P}N %(uploader,channel)s|%(uploader_id,channel_id)s|%(id)s|%(upload_date)s"),
         format!("before_dl:{P}S %(requested_formats.0.format_id)s={}|%(requested_formats.1.format_id)s={}",
                 "%(requested_formats.0.filesize,requested_formats.0.filesize_approx)s", "%(requested_formats.1.filesize,requested_formats.1.filesize_approx)s"),
         format!("after_move:{P}F %(filepath)s"),
@@ -244,6 +311,12 @@ pub fn parse_line(s: &str) -> Option<Line> {
     Some(match tag {
         "T" => Line::Title(na(v)),
         "U" => Line::Thumb(na(v)),
+        "N" => {
+            let f: Vec<&str> = v.split('|').collect();
+            // o nome do perfil pode ter "|": as três últimas partes são fixas
+            let n = f.len(); if n < 4 { return None; }
+            Line::Names { uploader: na(&f[..n - 3].join("|")), uploader_id: na(f[n - 3]), id: na(f[n - 2]), date: na(f[n - 1]) }
+        }
         "F" => Line::File(PathBuf::from(v)),
         "I" => {
             let f: Vec<&str> = v.split('|').collect();
@@ -461,6 +534,7 @@ fn run_inner(job: &Job, t: &Tools, work: &Path, h: &Hooks, on: &(dyn Fn(Event) +
             Line::Error(e) => errors.lock().unwrap().push(e),
             Line::Title(x) => { s.meta.title = x; }
             Line::Thumb(x) => { s.meta.thumbnail = x; }
+            Line::Names { uploader, uploader_id, id, date } => { s.meta.uploader = uploader; s.meta.uploader_id = uploader_id; s.meta.id = id; s.meta.upload_date = date; }
             Line::Info { site, width, height, fps, duration, vcodec, acodec } => {
                 s.meta.site = site; s.meta.width = width; s.meta.height = height; s.meta.fps = fps; s.meta.duration = duration;
                 s.meta.vcodec = vcodec; s.meta.acodec = acodec;
@@ -508,8 +582,15 @@ fn run_inner(job: &Job, t: &Tools, work: &Path, h: &Hooks, on: &(dyn Fn(Event) +
 
     // acabamento e mudança para a pasta final
     let mut out = Done { meta: s.meta.clone(), ..Default::default() };
+    // nome escolhido (Lista de links) ou montado pelo modelo; trecho ganha "(início-fim)" no fim
+    let chosen = if !job.name.trim().is_empty() { clean_name(&job.name) }
+                 else if !job.name_tpl.trim().is_empty() { name_from(&job.name_tpl, &s.meta) } else { String::new() };
+    let chosen = match (chosen.is_empty(), job.section) {
+        (false, Some((x, y))) if job.kind != Kind::Thumb => format!("{chosen} ({}-{})", section_label(x), section_label(y)),
+        _ => chosen,
+    };
     for f in files {
-        let stem = f.file_stem().map(|x| x.to_string_lossy().into_owned()).unwrap_or_default();
+        let stem = if chosen.is_empty() { f.file_stem().map(|x| x.to_string_lossy().into_owned()).unwrap_or_default() } else { chosen.clone() };
         let ext = f.extension().map(|x| x.to_string_lossy().to_lowercase()).unwrap_or_default();
         let finished = if job.kind == Kind::Gif && !is_image(&f) && ext != "gif" {
             let info = probe(&t.ffprobe, &f).map_err(|e| format!("output check failed: {e}"))?;
@@ -642,6 +723,29 @@ mod tests {
     fn tools_() -> Tools {
         Tools { ytdlp: "/t/yt-dlp".into(), deno: Some("/t/deno".into()), ffmpeg: "/f/ffmpeg".into(), ffprobe: "/f/ffprobe".into(),
                 encoder: Encoder::Nvenc, cache: None, cookies: None }
+    }
+
+    #[test]
+    fn file_name_model() {
+        let m = Meta { title: "Frankie Bruno - quando o cliente pede: mudar \"só\" uma coisinha?".into(), uploader: "Frankie Bruno".into(), uploader_id: "frankiebruno".into(),
+                       id: "2120237782186459505".into(), site: "Twitter".into(), upload_date: "20261109".into(), width: 720, height: 1280, ..Default::default() };
+        assert_eq!(name_from("{usuario}_{titulo}_{id}", &m), "@frankiebruno_quando o cliente pede mudar só uma coisinha_2120237782186459505");
+        assert_eq!(name_from("{user} {date} {site} {quality}", &m), "@frankiebruno 2026-11-09 X 720p");
+        // etiqueta vazia some com o separador; desconhecida fica como está
+        let semid = Meta { title: "Meme".into(), ..Default::default() };
+        assert_eq!(name_from("{usuario}_{titulo}_{id}", &semid), "Meme");
+        assert_eq!(name_from("meme_{usuario}_{titulo}", &semid), "meme_Meme");
+        assert_eq!(name_from("{x}_{titulo}", &semid), "{x}_Meme");
+        // título longo: até 80 caracteres, cortando numa palavra
+        let longo = Meta { title: "palavra ".repeat(30), ..Default::default() };
+        let n = name_from("{titulo}", &longo); assert!(n.chars().count() <= 80 && n.ends_with("palavra"), "{n}");
+        // YouTube: @handle já vem com @; id de canal (UC...) usa o nome
+        let yt = Meta { title: "x".into(), uploader: "Canal".into(), uploader_id: "UCabcdefghijklmnopqrstuv".into(), ..Default::default() };
+        assert_eq!(name_from("{user}", &yt), "Canal");
+        assert_eq!(clean_name("a/b:c*?.  "), "a b c");
+        // o yt-dlp informa perfil, id e data numa linha
+        assert_eq!(parse_line("MECN Fulano | Memes|fulano|123|20260101"),
+                   Some(Line::Names { uploader: "Fulano | Memes".into(), uploader_id: "fulano".into(), id: "123".into(), date: "20260101".into() }));
     }
 
     #[test]

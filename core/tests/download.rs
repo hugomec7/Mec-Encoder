@@ -96,6 +96,19 @@ fn video_web_ready_and_audio() {
     assert_eq!((vg.codec.as_str(), vg.width, vg.height), ("gif", 320, 180));
     assert!(ev.into_inner().unwrap().iter().any(|e| matches!(e, Event::Step(s) if s.stage == "gif")));
 
+    // nome escolhido (Lista de links) numa subpasta que ainda não existe; o mesmo nome de novo não sobrescreve
+    let sub = d.join("dest-lista").join("Memes").join("Tony Stark");
+    let ev = Mutex::new(Vec::new());
+    let rn = get(&t, &Job { url: srv.file("nome", &gmp4), name: "tony_stark_cliente: chato?".into(), dest: sub.clone(), ..job.clone() }, &d.join("w7"), &ev).unwrap();
+    assert_eq!(rn.files[0].parent().unwrap(), sub.as_path());
+    assert_eq!(rn.files[0].file_name().unwrap().to_string_lossy(), "tony_stark_cliente chato.mp4");
+    let rn2 = get(&t, &Job { url: srv.file("nome2", &gmp4), name: "tony_stark_cliente: chato?".into(), dest: sub.clone(), ..job.clone() }, &d.join("w7b"), &ev).unwrap();
+    assert_eq!(rn2.files[0].file_name().unwrap().to_string_lossy(), "tony_stark_cliente chato (2).mp4");
+    // modelo: etiquetas sem valor (link direto não tem perfil) somem com o separador; o id é o do arquivo
+    let rt = get(&t, &Job { url: srv.file("modelo", &gmp4), name_tpl: "meme_{usuario}_{titulo}".into(), ..job.clone() }, &d.join("w8"), &ev).unwrap();
+    let nt = rt.files[0].file_stem().unwrap().to_string_lossy().into_owned();
+    assert!(nt.starts_with("meme_") && !nt.contains("__") && nt.len() > 5, "{nt}");
+
     // só áudio em WAV, com um arquivo de sessão (o yt-dlp tem que aceitar o formato)
     let ck = d.join("cookies.txt");
     let sess = download::netscape(&[download::Cookie { name: "sessionid".into(), value: "abc".into(), domain: ".instagram.com".into(), path: "/".into(),

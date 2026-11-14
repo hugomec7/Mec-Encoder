@@ -2824,7 +2824,7 @@
     ok: '<svg class="dk-ok" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5l3 3 6-7"/></svg>',
   };
   // links de um texto: com https://, com www. ou "dominio.com/caminho" numa linha
-  function dlLinks(text) {
+  function dlLinks(text, keepRepeats) {
     const out = [];
     String(text || '').split(/\s+/).forEach((w) => {
       let u = w.trim().replace(/^[<("'[]+|[>)"'\],.;]+$/g, '');
@@ -2832,7 +2832,7 @@
       if (/^www\./i.test(u)) u = 'https://' + u;
       else if (!/^https?:\/\//i.test(u)) { if (/^[\w-]+(\.[\w-]+)+\/\S+/.test(u)) u = 'https://' + u; else return; }
       try { const x = new URL(u); if (!/^https?:$/.test(x.protocol) || !x.hostname.includes('.')) return; } catch { return; }
-      if (!out.includes(u)) out.push(u);
+      if (keepRepeats || !out.includes(u)) out.push(u);
     });
     return out;
   }
@@ -2852,7 +2852,7 @@
 
   function dlSave() {
     const keep = DL.list.filter((it) => ['done', 'err', 'cancel'].includes(it.status)).slice(0, 60)
-      .map(({ id, url, kind, status, meta, files, size, web, err, errCode, t, extras, height, subs, thumb, audioFmt, section, gif, dest }) => ({ id, url, kind, status, meta, files, size, web, err, errCode, t, extras, height, subs, thumb, audioFmt, section, gif, dest }));
+      .map(({ id, url, kind, status, meta, files, size, web, err, errCode, t, extras, height, subs, thumb, audioFmt, section, gif, dest, name, nameTpl }) => ({ id, url, kind, status, meta, files, size, web, err, errCode, t, extras, height, subs, thumb, audioFmt, section, gif, dest, name, nameTpl }));
     store.set('mec.downloads', JSON.stringify(keep));
   }
   function dlLoad() {
@@ -2975,7 +2975,9 @@
     try {
       const height = it.height != null ? it.height : 0;
       const d = await inv('dl_start', { id: it.id, url: it.url, kind: it.kind, web: !!set.web, audio: set.audio, dest: it.dest || set.dir || null,
-        height, subs: it.subs || [], thumb: !!it.thumb, section: it.section || null, gif: it.kind === 'gif' ? (it.gif || dlGifCfg()) : null });
+        height, subs: it.subs || [], thumb: !!it.thumb, section: it.section || null, gif: it.kind === 'gif' ? (it.gif || dlGifCfg()) : null,
+        // nome: o da Lista de links (pronto) ou o modelo das Opções (o motor monta com o que o site informar)
+        name: it.name || '', nameTpl: it.name ? '' : (it.nameTpl || nmTemplate()) });
       Object.assign(it, { status: 'done', files: d.files, size: d.size, web: d.web, extras: d.extras || [], meta: Object.assign({}, it.meta, d.meta.title ? d.meta : {}) });
       notify(L.dlDone((it.meta && it.meta.title) || dlShort(it.url)));
     } catch (e) {
@@ -3234,15 +3236,34 @@
     $('#lDlOptsT').textContent = L.dlOptions; $('#bDlOptsX').innerHTML = ICONS.x; $('#bDlOptsX').title = L.close;
     $('#dlOptSet').innerHTML = `
       <div class="row"><div class="lbl">${esc(L.dlWeb)}<small>${esc(L.dlWebSub)}</small></div><span class="switch ${set.web ? 'on' : ''}" id="dlWeb"></span></div>
-      <div class="row"><div class="lbl">${esc(L.dlAudioFmt)}</div><span id="dlASeg">${segH('dlAudioFmt', set.audio, [['wav', 'WAV'], ['m4a', 'M4A'], ['mp3', 'MP3'], ['flac', 'FLAC']])}</span></div>`;
+      <div class="row"><div class="lbl">${esc(L.dlAudioFmt)}</div><span id="dlASeg">${segH('dlAudioFmt', set.audio, [['wav', 'WAV'], ['m4a', 'M4A'], ['mp3', 'MP3'], ['flac', 'FLAC']])}</span></div>
+      <div class="row nm-row"><div class="lbl">${esc(L.nmTitle)}<small>${esc(L.nmSub)}</small></div>
+        <div class="nm-ed"><input id="dlNameTpl" class="tnum" value="${esc(nmTemplate())}" spellcheck="false">
+          <div class="nm-tags">${NM_TAGS.map(([k]) => `<button data-tag="${k}" title="${esc(L.nmTagTip[k])}">${esc(nmTag(k))}</button>`).join('')}<button class="link" data-tag="reset">${esc(L.nmReset)}</button></div>
+          <p class="nm-ex" id="dlNameEx"></p></div></div>`;
     $('#dlWeb').onclick = () => { set.web = !set.web; saveSettings(); $('#dlWeb').classList.toggle('on', set.web); };
     seg($('#dlASeg .seg'), (v) => { set.audio = v; saveSettings(); });
+    // modelo do nome: exemplo ao vivo com um vídeo do X
+    const tp = $('#dlNameTpl');
+    const ex = () => {
+      const i = { title: 'Frankie Bruno - quando o cliente pede pra mudar só uma coisinha 😭', uploader: 'Frankie Bruno', uploader_id: 'frankiebruno', id: '2120237782186459505', extractor_key: 'Twitter', upload_date: '20261109' };
+      $('#dlNameEx').innerHTML = `<span>${esc(L.nmExample)}</span> <b>${esc((nmApply(tp.value || nmDefault(), i, 1080) || '…') + '.mp4')}</b>`;
+    };
+    const saveTpl = () => { const v = tp.value.trim(); set.nameTpl = v && v !== nmDefault() ? v : ''; saveSettings(); };
+    tp.addEventListener('input', () => { ex(); saveTpl(); });
+    tp.addEventListener('keydown', (e) => e.stopPropagation());
+    $$('.nm-tags [data-tag]').forEach((b) => { b.onmousedown = (e) => e.preventDefault(); b.onclick = () => {
+      if (b.dataset.tag === 'reset') tp.value = nmDefault();
+      else { const t = nmTag(b.dataset.tag); const a = tp.selectionStart ?? tp.value.length, z = tp.selectionEnd ?? a; const pre = tp.value.slice(0, a); const sep = /\}$/.test(pre) ? '_' : '';   // etiqueta logo depois de outra: separa com _
+        tp.value = pre + sep + t + tp.value.slice(z); const c = a + sep.length + t.length; tp.setSelectionRange(c, c); }
+      tp.focus(); ex(); saveTpl(); if (!$('#dlListBg').hidden) lsRender(); }; });
+    ex();
     dlRenderAccounts();
   }
   $('#bDlOpts').onclick = () => { $('#dlOptsBg').hidden = false; dlRenderOpts(); };
   $('#bDlOptsX').onclick = () => { $('#dlOptsBg').hidden = true; };
   $('#dlOptsBg').addEventListener('mousedown', (e) => { if (e.target.id === 'dlOptsBg') $('#dlOptsBg').hidden = true; });
-  addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#dlOptsBg').hidden && !$('#menu').classList.contains('show')) { e.stopPropagation(); $('#dlOptsBg').hidden = true; } }, true);
+  addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#dlOptsBg').hidden && !$('#menu').classList.contains('show')) { e.stopImmediatePropagation(); $('#dlOptsBg').hidden = true; } }, true);
   function dlWhen(ms) {
     if (!ms) return '';
     const d0 = new Date(); d0.setHours(0, 0, 0, 0); const d1 = new Date(ms); d1.setHours(0, 0, 0, 0);
@@ -3437,147 +3458,512 @@
       dlPickClose(); DL.tab = 'active'; dlRender(); dlPump();
     };
   }
-  /* Lista de links: vários vídeos de uma vez, cada um com nome e miniatura, todos para uma pasta escolhida só para eles
-     (ex.: a pasta Memes), com as opções do "Baixar..." valendo para a lista inteira. A lista fica guardada se fechar. */
-  const LS = { rows: [], seq: 0, text: '', dir: '', kind: 'video', q: 0, sub: false, subLang: 'orig', thumb: false, reading: 0 };
+  /* Lista de links: grupos em abas (ex.: Memes, Motion), cada um com pasta, subpasta, prefixo/sufixo e as opções
+     do "Baixar...". Cada vídeo aparece com miniatura e o nome com que vai ser salvo. Renomear é como no File Pilot:
+     selecionar um ou vários e F2 (ou clique duplo no nome) põe uma agulha em cada nome, e tudo o que se digita, as
+     setas, Ctrl+setas (palavras), Shift (selecionar), Home/End, apagar e colar vale para todos ao mesmo tempo.
+     Os grupos ficam guardados; só somem no X da aba. */
   const LS_SUBS = [['orig', ''], ['pt', 'pt'], ['en', 'en'], ['es', 'es']];
   const lsSubArg = (k) => (k === 'orig' ? ['.*-orig'] : [`${k}.*`]);
-  function lsOpen() {
-    if (!LS.dir) LS.dir = (dlSet().recentDirs || [])[0] || '';
-    $('#dlListBg').hidden = false; lsRender();
-    requestAnimationFrame(() => { const f = $('#lsUrl'); if (f && !LS.rows.length) f.focus(); });
+  const LG = { groups: [], cur: 0, seq: 0, reading: 0, sel: new Set(), anchor: 0, mc: null, subEd: false };
+  const lsNewGroup = (name) => ({ id: ++LG.seq, name: name || '', dir: '', sub: { on: false, text: '' }, pre: { on: false, text: '' }, suf: { on: false, text: '' },
+    kind: 'video', q: 0, subs: false, subLang: 'orig', thumb: false, rows: [], text: '' });
+  const lsG = () => LG.groups.find((g) => g.id === LG.cur) || LG.groups[0];
+  // só o que precisa para mostrar e nomear (o resto do yt-dlp é grande demais para guardar)
+  const lsSlim = (i) => (i ? { title: i.title || '', uploader: i.uploader || i.channel || '', uploader_id: i.uploader_id || i.channel_id || '', id: i.id || '',
+    extractor_key: i.extractor_key || '', thumbnail: i.thumbnail || '', duration: i.duration || 0, upload_date: i.upload_date || '', height: i.height || 0, width: i.width || 0 } : null);
+  function lsSave() {
+    const g = LG.groups.map((x) => Object.assign({}, x, { text: '', rows: x.rows.map((r) => ({ id: r.id, url: r.url, st: r.st === 'read' ? 'wait' : r.st, info: r.info, name: r.name || '', dir: r.dir || '', code: r.code, err: r.err })) }));
+    store.set('mec.dlgroups', JSON.stringify({ cur: LG.cur, groups: g }));
   }
-  function lsClose() { $('#dlListBg').hidden = true; }
-  // links novos entram no fim (repetidos são ignorados) e cada um é lido em seguida: nome, miniatura, duração
-  function lsAddLinks(text) {
-    const have = new Set(LS.rows.map((r) => r.url)); let n = 0;
-    dlLinks(text).forEach((url) => { if (have.has(url)) return; have.add(url); LS.rows.push({ id: ++LS.seq, url, st: 'wait', info: null }); n++; });
-    if (n) { lsRenderRows(); lsPump(); }
+  function lsLoad() {
+    try {
+      const d = JSON.parse(store.get('mec.dlgroups') || 'null');
+      if (d && d.groups && d.groups.length) {
+        LG.groups = d.groups.map((x) => Object.assign(lsNewGroup(), x, { id: ++LG.seq, rows: (x.rows || []).map((r) => Object.assign({}, r, { id: ++LG.seq })) }));
+        LG.cur = LG.groups[Math.max(0, d.groups.findIndex((x) => x.id === d.cur))].id;
+      }
+    } catch { /* lista nova */ }
+    if (!LG.groups.length) { const g = lsNewGroup(L.lsGroupNew(1)); g.dir = (dlSet().recentDirs || [])[0] || ''; LG.groups.push(g); LG.cur = g.id; }
+  }
+
+  /* Nome do arquivo: modelo com etiquetas ({usuario}_{titulo}_{id}). Etiqueta vazia some junto com o separador antes dela. */
+  const NM_TAGS = [['user', 'usuario'], ['title', 'titulo'], ['id', 'link'], ['site', 'site'], ['date', 'data'], ['quality', 'qualidade']];
+  const nmKey = (k) => { k = k.toLowerCase(); const t = NM_TAGS.find((x) => x[0] === k || x[1] === k); return t ? t[0] : null; };
+  const nmTag = (k) => `{${S.set.lang === 'pt' ? NM_TAGS.find((x) => x[0] === k)[1] : k}}`;
+  const nmDefault = () => (S.set.lang === 'pt' ? '{usuario}_{titulo}_{id}' : '{user}_{title}_{id}');
+  const nmTemplate = () => dlSet().nameTpl || nmDefault();
+  // o que o Windows não aceita no nome vira espaço/traço; sem espaços repetidos nem ponto no fim
+  const nmClean = (s) => String(s || '').replace(/[\\/:*?"<>|\u0000-\u001f]+/g, ' ').replace(/\s+/g, ' ').replace(/[ .]+$/, '').trim();
+  function nmValue(k, i, h) {
+    if (!i) return '';
+    switch (k) {
+      case 'user': { const u = i.uploader_id || ''; return u ? (/^(UC|@)/.test(u) && u.length > 20 ? i.uploader || u : u.startsWith('@') ? u : '@' + u) : (i.uploader || ''); }
+      case 'title': {
+        let t = String(i.title || '');
+        // no X o título vem como "Nome - texto do post": o nome já vai no {usuario}
+        if (i.uploader && t.startsWith(i.uploader + ' - ')) t = t.slice(i.uploader.length + 3);
+        t = nmClean(t); return t.length > 80 ? t.slice(0, 80).replace(/\s+\S*$/, '') : t;
+      }
+      case 'id': return i.id || '';
+      case 'site': return dlSite({ url: '', meta: { site: i.extractor_key } }) || '';
+      case 'date': { const d = String(i.upload_date || ''); return d.length === 8 ? `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6)}` : ''; }
+      case 'quality': return h ? `${h}p` : '';
+    }
+    return '';
+  }
+  function nmApply(tpl, info, h) {
+    const parts = []; const re = /\{([a-zA-Zçã]+)\}/g; let last = 0, m;
+    while ((m = re.exec(tpl))) {
+      const key = nmKey(m[1]); const lit = tpl.slice(last, m.index); last = re.lastIndex;
+      if (!key) { parts.push({ lit: lit + m[0], v: '' }); continue; }
+      parts.push({ lit, v: nmClean(nmValue(key, info, h)), tag: true });
+    }
+    let out = '';
+    // etiqueta vazia leva junto o separador antes dela (mas não um texto fixo, como "meme_")
+    parts.forEach((p) => { if (p.tag && !p.v && /^[\s_\-.]*$/.test(p.lit)) return; out += p.lit + p.v; });
+    out += tpl.slice(last);
+    return nmClean(out.replace(/([_\-.])\1+/g, '$1').replace(/^[\s_\-.]+|[\s_\-]+$/g, ''));
+  }
+  const lsExt = (g) => (g.kind === 'audio' ? '.' + (dlSet().audio || 'wav') : g.kind === 'gif' ? '.gif' : g.kind === 'thumb' ? '.jpg' : '.mp4');
+  const lsBase = (g, r) => r.name || (r.info ? nmApply(nmTemplate(), r.info, g.kind === 'video' ? (g.q || r.info.height || 0) : 0) : '') || dlShort(r.url);
+  // prefixo/sufixo do grupo: {grupo} vira o nome do grupo; o resto fica como digitado (só sem o que o Windows não aceita)
+  const fxClean = (s) => String(s || '').replace(/[\\/:*?"<>|\u0000-\u001f]+/g, ' ');
+  const lsAffix = (g, o) => (o.on ? fxClean(String(o.text || '').replace(/\{(grupo|group)\}/gi, g.name || L.lsGroupNew(LG.groups.indexOf(g) + 1))) : '');
+  const lsFull = (g, base) => nmClean(lsAffix(g, g.pre) + base + lsAffix(g, g.suf));
+  const lsLeaf = (d) => String(d).split(/[\\/]/).filter(Boolean).pop() || d;
+  const lsDirOf = (g, r) => [g.dir, g.sub.on && nmClean(lsAffix(g, g.sub)), r && r.dir && nmClean(r.dir)].filter(Boolean).join('\\');
+
+
+  /* Edição com várias agulhas: cada nome selecionado tem o seu texto (t), agulha (c) e âncora da seleção (a). */
+  const mcWord = (ch) => /[\p{L}\p{N}]/u.test(ch || '');
+  function mcMove(t, c, dir, word) {
+    if (!word) return Math.max(0, Math.min(t.length, c + dir));
+    if (dir > 0) { while (c < t.length && mcWord(t[c])) c++; while (c < t.length && !mcWord(t[c])) c++; return c; }
+    while (c > 0 && !mcWord(t[c - 1])) c--; while (c > 0 && mcWord(t[c - 1])) c--; return c;
+  }
+  function mcStart(clickId) {
+    const g = lsG(); const rows = g.rows.filter((r) => LG.sel.has(r.id) && r.st !== 'err'); if (!rows.length) return;
+    LG.mc = { cur: new Map(), hist: [] };
+    // como no Windows: o nome todo selecionado; Home/End ou as setas soltam a seleção
+    rows.forEach((r) => { const t = lsBase(g, r); LG.mc.cur.set(r.id, { t, a: 0, c: t.length }); });
+    lsRenderRows();
+  }
+  const mcSnap = () => { const m = LG.mc; m.hist.push(new Map([...m.cur].map(([k, v]) => [k, Object.assign({}, v)]))); if (m.hist.length > 200) m.hist.shift(); };
+  function mcEach(fn) { LG.mc.cur.forEach((s) => fn(s)); }
+  function mcInsert(txt) {
+    txt = fxClean(txt).replace(/[\r\n]+/g, ' '); if (!txt) return;
+    mcSnap(); mcEach((s) => { const a = Math.min(s.a, s.c), b = Math.max(s.a, s.c); s.t = s.t.slice(0, a) + txt + s.t.slice(b); s.c = s.a = a + txt.length; });
+    lsRenderRows();
+  }
+  function mcDelete(dir, word) {
+    mcSnap();
+    mcEach((s) => {
+      let a = Math.min(s.a, s.c), b = Math.max(s.a, s.c);
+      if (a === b) { if (dir < 0) a = mcMove(s.t, a, -1, word); else b = mcMove(s.t, b, 1, word); }
+      s.t = s.t.slice(0, a) + s.t.slice(b); s.c = s.a = a;
+    });
+    lsRenderRows();
+  }
+  function mcKey(e) {
+    const m = LG.mc; const ctrl = e.ctrlKey || e.metaKey; const k = e.key;
+    const nav = (fn) => { e.preventDefault(); mcEach((s) => { const has = s.a !== s.c; let c = fn(s, has); s.c = c; if (!e.shiftKey) s.a = c; }); lsRenderRows(); };
+    if (k === 'Enter') { e.preventDefault(); mcCommit(); return true; }
+    if (k === 'Escape') { e.preventDefault(); mcCancel(); return true; }
+    if (k === 'ArrowLeft') { nav((s, has) => (has && !e.shiftKey && !ctrl ? Math.min(s.a, s.c) : mcMove(s.t, s.c, -1, ctrl))); return true; }
+    if (k === 'ArrowRight') { nav((s, has) => (has && !e.shiftKey && !ctrl ? Math.max(s.a, s.c) : mcMove(s.t, s.c, 1, ctrl))); return true; }
+    if (k === 'Home' || k === 'ArrowUp') { nav(() => 0); return true; }
+    if (k === 'End' || k === 'ArrowDown') { nav((s) => s.t.length); return true; }
+    if (k === 'Backspace') { e.preventDefault(); mcDelete(-1, ctrl); return true; }
+    if (k === 'Delete') { e.preventDefault(); mcDelete(1, ctrl); return true; }
+    if (ctrl && k.toLowerCase() === 'a') { e.preventDefault(); mcEach((s) => { s.a = 0; s.c = s.t.length; }); lsRenderRows(); return true; }
+    if (ctrl && k.toLowerCase() === 'z') { e.preventDefault(); if (m.hist.length) { m.cur = m.hist.pop(); lsRenderRows(); } return true; }
+    if (ctrl && k.toLowerCase() === 'c') {
+      e.preventDefault(); const s = m.cur.values().next().value; if (s && s.a !== s.c) copyText(s.t.slice(Math.min(s.a, s.c), Math.max(s.a, s.c)));
+      return true;
+    }
+    if (k === 'Tab') { e.preventDefault(); return true; }
+    return false;   // letras e colar chegam pelo campo escondido (acentos e Ctrl+V funcionam)
+  }
+  function mcCommit() {
+    const g = lsG(); const m = LG.mc; if (!m) return;
+    m.cur.forEach((s, id) => {
+      const r = g.rows.find((x) => x.id === id); if (!r) return;
+      const v = nmClean(s.t); if (!v) return;   // nome vazio: fica o de antes
+      const auto = r.info ? nmApply(nmTemplate(), r.info, g.kind === 'video' ? (g.q || r.info.height || 0) : 0) : '';
+      r.name = v === auto ? '' : v;
+    });
+    LG.mc = null; lsRenderRows(); lsSave(); $('#lsRows').focus();
+  }
+  function mcCancel() { LG.mc = null; lsRenderRows(); $('#lsRows').focus(); }
+  function mcHtml(s) {
+    const a = Math.min(s.a, s.c), b = Math.max(s.a, s.c); const car = '<i class="mc-car"></i>';
+    if (a === b) return esc(s.t.slice(0, a)) + car + esc(s.t.slice(a));
+    const sel = `<mark>${esc(s.t.slice(a, b))}</mark>`;
+    return esc(s.t.slice(0, a)) + (s.c === a ? car + sel : sel + car) + esc(s.t.slice(b));
+  }
+  // clique dentro de um nome editando: põe a agulha naquele ponto em todos (Shift: estende a seleção)
+  function mcClickAt(e, row) {
+    const s0 = LG.mc.cur.get(+row.dataset.id); if (!s0) return false;
+    const span = row.querySelector('.mc-t'); if (!span) return false;
+    const rg = document.caretRangeFromPoint ? document.caretRangeFromPoint(e.clientX, e.clientY) : null;
+    let off = s0.t.length;
+    if (rg && span.contains(rg.startContainer)) {
+      // conta os caracteres de texto antes do ponto (a agulha e a marca não contam)
+      const w = document.createTreeWalker(span, NodeFilter.SHOW_TEXT); let n = 0, node;
+      while ((node = w.nextNode())) { if (node === rg.startContainer) { n += rg.startOffset; break; } n += node.length; }
+      off = n;
+    }
+    mcEach((s) => { const c = Math.min(off, s.t.length); s.c = c; if (!e.shiftKey) s.a = c; });
+    lsRenderRows(); return true;
+  }
+  function lsOpen() {
+    if (!LG.groups.length) lsLoad();
+    $('#dlListBg').hidden = false; lsRender();
+    LG.groups.forEach((g) => { if (g.rows.some((r) => r.st === 'wait')) lsPump(); });
+    requestAnimationFrame(() => { const f = $('#lsUrl'); if (f && !lsG().rows.length) f.focus(); });
+  }
+  function lsClose() { if (LG.mc) mcCommit(); LG.subEd = false; $('#dlListBg').hidden = true; lsSave(); }
+  // o mesmo vídeo por links diferentes (twitter.com/x.com, ?s=20, www.): a chave junta tudo
+  function lsKey(r) {
+    let u = String(r.url || '').trim();
+    const st = u.match(/(?:twitter\.com|x\.com)\/(?:[^/]+|i\/web)\/status\/(\d+)/i); if (st) return 'x:' + st[1];
+    if (r.info && r.info.id && r.info.extractor_key) return (r.info.extractor_key + ':' + r.info.id).toLowerCase();
+    u = u.replace(/^https?:\/\//i, '').replace(/^(www\.|m\.|mobile\.)/i, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+    return u.toLowerCase();
+  }
+  // repetidos de um grupo: fica o primeiro de cada vídeo
+  function lsDups(g) {
+    const seen = new Set(); const d = new Set();
+    g.rows.forEach((r) => { if (r.st === 'err') return; const k = lsKey(r); if (seen.has(k)) d.add(r.id); else seen.add(k); });
+    return d;
+  }
+  function lsAddLinks(g, text) {
+    let n = 0;
+    dlLinks(text, true).forEach((url) => { g.rows.push({ id: ++LG.seq, url, st: 'wait', info: null, name: '', dir: '' }); n++; });
+    if (n) { lsRenderRows(); lsPump(); lsSave(); }
     return n;
   }
   function lsPump() {
-    while (LS.reading < 3) {
-      const r = LS.rows.find((x) => x.st === 'wait'); if (!r) break;
-      r.st = 'read'; LS.reading++; lsRead(r);
+    while (LG.reading < 3) {
+      let r = null, g = null;
+      for (const x of [lsG()].concat(LG.groups)) { r = x.rows.find((y) => y.st === 'wait'); if (r) { g = x; break; } }
+      if (!r) break;
+      r.st = 'read'; LG.reading++; lsRead(g, r);
     }
   }
-  async function lsRead(r) {
+  async function lsRead(g, r) {
     try {
       const info = REAL ? await inv('dl_info', { url: r.url }) : await new Promise((ok, no) => setTimeout(() => (/fail/.test(r.url) ? no('dl-login|demo') : ok(dlIsList(r.url) ? dlDemoList() : lsDemoInfo(r.url))), 300 + Math.random() * 900));
-      if (!LS.rows.includes(r)) return;
+      if (!g.rows.includes(r)) return;
       if (info.entries) {
-        // playlist ou perfil: cada vídeo vira uma linha da lista
-        const have = new Set(LS.rows.map((x) => x.url)); const at = LS.rows.indexOf(r);
-        const add = info.entries.filter((e) => e.url && !have.has(e.url)).map((e) => ({ id: ++LS.seq, url: e.url, st: 'ok', info: { title: e.title, duration: e.duration, thumbnail: e.thumbnail || (e.thumbnails && e.thumbnails.length ? e.thumbnails[e.thumbnails.length - 1].url : ''), extractor_key: info.extractor_key } }));
-        LS.rows.splice(at, 1, ...add);
-      } else { r.info = info; r.st = 'ok'; }
+        // playlist ou perfil: cada vídeo vira uma linha
+        const have = new Set(g.rows.map((x) => x.url)); const at = g.rows.indexOf(r);
+        const add = info.entries.filter((e) => e.url && !have.has(e.url)).map((e) => ({ id: ++LG.seq, url: e.url, st: 'ok', name: '', dir: '',
+          info: lsSlim({ title: e.title, duration: e.duration, id: e.id, uploader: e.uploader || info.uploader, uploader_id: e.uploader_id || info.uploader_id, thumbnail: e.thumbnail || (e.thumbnails && e.thumbnails.length ? e.thumbnails[e.thumbnails.length - 1].url : ''), extractor_key: info.extractor_key }) }));
+        g.rows.splice(at, 1, ...add);
+      } else {
+        const sm = info.formats ? dlSummary(info, dlSet().web) : null;
+        r.info = lsSlim(Object.assign({}, info, sm && sm.rows[0] ? { height: sm.rows[0].p } : {})); r.st = 'ok';
+      }
     } catch (e) {
-      if (!LS.rows.includes(r)) return;
+      if (!g.rows.includes(r)) return;
       const s = String(e); const i = s.indexOf('|'); r.st = 'err'; r.code = i > 0 ? s.slice(0, i) : s.startsWith('dl-') ? s : 'unknown'; r.err = i > 0 ? s.slice(i + 1) : s;
-    } finally { LS.reading--; }
-    if (!$('#dlListBg').hidden) lsRenderRows(); lsPump();
+    } finally { LG.reading--; }
+    if (!$('#dlListBg').hidden) { if (g === lsG()) lsRenderRows(); lsRenderTabs(); }
+    lsSave(); lsPump();
   }
-  function lsRowHtml(r) {
+
+
+  function lsRowHtml(g, r, dups) {
     const i = r.info || {}; const site = dlSite({ url: r.url, meta: { site: i.extractor_key } });
+    const user = nmValue('user', i);
+    const sel = LG.sel.has(r.id); const ms = LG.mc && LG.mc.cur.get(r.id);
+    const base = lsBase(g, r);
     const sub = r.st === 'err' ? `<span class="dk-err" title="${esc(r.err || '')}">${esc((L.dlErrs && L.dlErrs[r.code]) || L.dlErrs.unknown)}</span>`
-      : r.st === 'ok' ? esc([site, i.duration ? dlDur(i.duration) : ''].filter(Boolean).join(' · ')) : `<span class="dk-muted">${esc(L.dlReading)}</span>`;
+      : r.st === 'ok' ? esc([site, user, i.duration ? dlDur(i.duration) : ''].filter(Boolean).join(' · ')) : `<span class="dk-muted">${esc(L.dlReading)}</span>`;
     const th = i.thumbnail ? `<img src="${esc(i.thumbnail)}" referrerpolicy="no-referrer" alt="" loading="lazy">` : `<i class="ls-ph ${r.st}"></i>`;
-    return `<div class="ls-row ${r.st}" data-id="${r.id}"><span class="ls-th">${th}</span><span class="ls-tx"><b class="${i.title ? '' : 'ls-url'}">${esc(i.title || dlShort(r.url))}</b><small>${sub}</small></span>
-      <button class="dk-ib x" data-act="rm" title="${esc(L.lsRemove)}">${ICONS.x}</button></div>`;
+    const dir = r.dir ? nmClean(r.dir) : '';
+    const pre = lsAffix(g, g.pre), suf = lsAffix(g, g.suf);
+    const nm = ms ? `<b class="mc-t">${mcHtml(ms)}</b>` : `<b class="${r.info || r.name ? '' : 'ls-url'}">${esc(base)}</b>`;
+    return `<div class="ls-row ${r.st}${sel ? ' sel' : ''}${ms ? ' mc' : ''}" data-id="${r.id}"><span class="ls-ck${sel ? ' on' : ''}" data-act="ck" role="checkbox" aria-checked="${sel}"></span><span class="ls-th">${th}</span>
+      <span class="ls-tx"><span class="ls-nm" title="${ms ? '' : esc(L.lsRenameTip)}">${pre ? `<i class="ls-fx">${esc(pre)}</i>` : ''}${nm}${suf ? `<i class="ls-fx">${esc(suf)}</i>` : ''}<i class="ls-ext">${esc(lsExt(g))}</i></span>
+      <small>${dups && dups.has(r.id) ? `<span class="ls-dup-b">${esc(L.lsDupBadge)}</span>` : ''}${dir ? `<span class="ls-sub" title="${esc(L.lsSubfolder)}">${DL_ICONS.folder}${esc(dir)}</span>` : ''}${sub}</small></span>
+      <span class="ls-acts"><button class="dk-ib" data-act="link" title="${esc(L.dlCopyLink)}">${DL_ICONS.link}</button><button class="dk-ib x" data-act="rm" title="${esc(L.lsRemove)}">${ICONS.x}</button></span></div>`;
   }
-  function lsCounts() {
-    const ok = LS.rows.filter((r) => r.st === 'ok').length; const bad = LS.rows.filter((r) => r.st === 'err').length;
-    return { ok, bad, go: LS.rows.length - bad };
+  function lsRenderTabs() {
+    const t = $('#lsTabs'); if (!t) return;
+    t.innerHTML = LG.groups.map((g) => {
+      const n = g.rows.filter((r) => r.st !== 'err').length;
+      return `<div class="ls-tab${g.id === LG.cur ? ' on' : ''}" data-g="${g.id}"><span>${esc(g.name || L.lsGroupNew(LG.groups.indexOf(g) + 1))}</span>${n ? `<em>${n}</em>` : ''}<button data-gx="${g.id}" title="${esc(L.lsGroupDel)}">${ICONS.x}</button></div>`;
+    }).join('') + `<button class="ls-tab-add" id="bLsAdd" title="${esc(L.lsGroupAdd)}">+</button>`;
   }
   function lsRenderRows() {
-    const b = $('#lsRows'); if (!b) return; const sc = b.scrollTop;
-    b.innerHTML = LS.rows.length ? LS.rows.map(lsRowHtml).join('') : `<div class="ls-empty">${esc(L.lsEmpty)}</div>`;
+    const b = $('#lsRows'); if (!b) return; const g = lsG(); const sc = b.scrollTop;
+    b.classList.toggle('editing', !!LG.mc);
+    const dups = lsDups(g);
+    b.innerHTML = g.rows.length ? g.rows.map((r) => lsRowHtml(g, r, dups)).join('') : `<div class="ls-empty">${esc(L.lsEmpty)}</div>`;
+    const db = $('#lsDup'); db.hidden = !dups.size || !!LG.mc;
+    if (dups.size) db.innerHTML = `${ICONS.warn || ''}<span>${esc(L.lsDupMsg(dups.size))}</span><span class="ls-grow"></span><button class="link" data-s="dupsel">${esc(L.lsDupSel)}</button><button class="dk-btn dk-sec ls-sm" data-s="duprm">${esc(L.lsDupRm)}</button>`;
     b.scrollTop = sc;
-    const c = lsCounts();
-    $('#lsCount').textContent = LS.rows.length ? [L.dlListN(LS.rows.length), c.bad ? L.lsBad(c.bad) : '', LS.rows.some((r) => r.st === 'wait' || r.st === 'read') ? L.dlReading : ''].filter(Boolean).join(' · ') : '';
-    const g = $('#bLsGo'); g.disabled = !c.go || !LS.dir; g.textContent = L.lsGo(c.go);
-    $('#bLsClear').hidden = !LS.rows.length;
+    const bad = g.rows.filter((r) => r.st === 'err').length; const go = g.rows.length - bad;
+    $('#lsCount').textContent = g.rows.length ? [L.dlListN(g.rows.length), bad ? L.lsBad(bad) : '', g.rows.some((r) => r.st === 'wait' || r.st === 'read') ? L.dlReading : ''].filter(Boolean).join(' · ') : '';
+    const all = LG.groups.reduce((a, x) => a + (x.dir ? x.rows.filter((r) => r.st !== 'err').length : 0), 0);
+    const bg = $('#bLsGo'); bg.disabled = !go || !g.dir; bg.textContent = L.lsGoGroup(g.name || L.lsGroupNew(LG.groups.indexOf(g) + 1), go);
+    const ba = $('#bLsAll'); ba.hidden = LG.groups.filter((x) => x.rows.length).length < 2; ba.disabled = !all; ba.textContent = L.lsGoAll(all);
+    $('#lsNote').textContent = g.dir ? '' : L.lsNeedFolder;
+    lsRenderSelBar();
+    // editando: as teclas vão para o campo escondido (acentos, colar)
+    if (LG.mc) { const k = $('#lsMcIn'); if (k && document.activeElement !== k) k.focus({ preventScroll: true }); }
   }
+  // barra dos selecionados: "3 selecionados · Renomear F2 · Subpasta · Tirar"; editando, só a dica das teclas
+  function lsRenderSelBar() {
+    const el = $('#lsSel'); if (!el) return; const g = lsG(); const n = g.rows.filter((r) => LG.sel.has(r.id)).length;
+    el.hidden = !n || !!LG.mc;
+    if (el.hidden) return;
+    if (LG.subEd) {
+      if (el.querySelector('#lsSubIn')) return;
+      const cur = g.rows.filter((r) => LG.sel.has(r.id)).map((r) => r.dir || ''); const same = cur.every((d) => d === cur[0]) ? cur[0] : '';
+      el.innerHTML = `<span class="ls-sel-n">${esc(L.lsSubFor(n))}</span><input id="lsSubIn" value="${esc(same)}" spellcheck="false" placeholder="${esc(L.lsSubPh)}">
+        <button class="dk-go ls-sm" data-s="subx">${esc(L.cancel)}</button><button class="dk-btn dk-pri ls-sm" data-s="subok">OK</button>`;
+      requestAnimationFrame(() => { const i = $('#lsSubIn'); if (i) { i.focus(); i.select(); } });
+      return;
+    }
+    el.innerHTML = `<span class="ls-sel-n">${esc(L.lsSelN(n))}</span><button class="link" data-s="all">${esc(L.lsSelAll)}</button><span class="ls-grow"></span>
+      <button class="dk-btn dk-sec ls-sm" data-s="ren">${esc(L.lsRename)}<kbd>F2</kbd></button><button class="dk-btn dk-sec ls-sm" data-s="sub">${DL_ICONS.folder}${esc(L.lsSubfolder)}</button><button class="dk-btn dk-sec ls-sm" data-s="links">${DL_ICONS.link}${esc(n === 1 ? L.dlCopyLink : L.lsCopyLinks)}</button><button class="dk-btn dk-sec ls-sm" data-s="rm">${esc(L.lsRemoveSel)}</button>`;
+  }
+  // tirar da lista (um, ou todos os selecionados) com desfazer: Ctrl+Shift+Z (ou Ctrl+Z)
+  function lsRemove(ids) {
+    const g = lsG(); const items = []; g.rows.forEach((r, i) => { if (ids.has(r.id)) items.push({ r, i }); });
+    if (!items.length) return;
+    g.rows = g.rows.filter((r) => !ids.has(r.id)); items.forEach((x) => LG.sel.delete(x.r.id));
+    LG.undo = (LG.undo || []).concat([{ gid: g.id, items }]).slice(-30);
+    lsRenderRows(); lsRenderTabs(); lsSave();
+    toast(L.lsRemoved(items.length));
+  }
+  function lsUndo() {
+    const u = (LG.undo || []).pop(); if (!u) return;
+    const g = LG.groups.find((x) => x.id === u.gid); if (!g) return;
+    if (g.id !== LG.cur) { LG.cur = g.id; lsRender(); }
+    LG.sel.clear();
+    u.items.forEach(({ r, i }) => { g.rows.splice(Math.min(i, g.rows.length), 0, r); LG.sel.add(r.id); });
+    lsRenderRows(); lsRenderTabs(); lsSave(); toast(L.lsRestored(u.items.length), true);
+  }
+  function lsSubApply(v) {
+    const g = lsG(); const d = nmClean(v);
+    g.rows.forEach((r) => { if (LG.sel.has(r.id)) r.dir = d; });
+    LG.subEd = false; lsRenderRows(); lsSave(); $('#lsRows').focus();
+  }
+  function lsSelect(id, e) {
+    const g = lsG(); const ids = g.rows.map((r) => r.id);
+    if (e.shiftKey && LG.anchor) { const a = ids.indexOf(LG.anchor), b = ids.indexOf(id); if (!e.ctrlKey && !e.metaKey) LG.sel.clear(); ids.slice(Math.min(a, b), Math.max(a, b) + 1).forEach((x) => LG.sel.add(x)); }
+    else if (e.ctrlKey || e.metaKey) { if (LG.sel.has(id)) LG.sel.delete(id); else LG.sel.add(id); LG.anchor = id; }
+    else { LG.sel.clear(); LG.sel.add(id); LG.anchor = id; }
+  }
+
   function lsRender() {
-    const el = $('#dlList'); const set = dlSet();
-    const recent = (set.recentDirs || []).filter((d) => d !== LS.dir).slice(0, 4);
-    const leaf = (d) => String(d).split(/[\\/]/).filter(Boolean).pop() || d;
+    const el = $('#dlList'); const set = dlSet(); const g = lsG();
+    const recent = (set.recentDirs || []).filter((d) => d !== g.dir).slice(0, 4);
     const kinds = [['video', L.dlVideoShort], ['audio', L.dlAudioShort], ['gif', 'GIF'], ['thumb', L.lsThumbOnly]];
-    el.innerHTML = `<div class="dk-pk-head"><div><b>${esc(L.lsTitle)}</b><small id="lsCount"></small></div>
-        <button class="link" id="bLsClear">${esc(L.lsClear)}</button><button class="dk-ib x" id="bLsX" title="${esc(L.close || L.cancel)}">${ICONS.x}</button></div>
+    const gname = g.name || L.lsGroupNew(LG.groups.indexOf(g) + 1);
+    // como o Sufixo e a Subpasta do Converter: campo sempre à vista (apagado quando desligado), { } das etiquetas e o botão
+    const affix = (k, lbl, ph, tags) => `<div class="ls-fx2"><span class="ls-fx2-l">${esc(lbl)}</span><div class="field ${tags ? 'tagged' : ''} ${g[k].on ? '' : 'off'}"><input data-fxt="${k}" value="${esc(g[k].text)}" class="txt" spellcheck="false" placeholder="${esc(ph)}">${tags ? `<button class="tag-btn" data-fxg="${k}" title="${esc(L.tagsTitle)}">{ }</button>` : ''}</div><span class="switch ${g[k].on ? 'on' : ''}" data-fx="${k}"></span></div>`;
+    el.innerHTML = `<div class="dk-pk-head ls-head"><div><b>${esc(L.lsTitle)}</b><small id="lsCount"></small></div><button class="dk-ib x" id="bLsX" title="${esc(L.close || L.cancel)}">${ICONS.x}</button></div>
+      <div class="ls-tabs" id="lsTabs"></div>
       <div class="ls-main">
         <div class="ls-left">
           <div class="dk-pk-link"><textarea id="lsUrl" rows="2" spellcheck="false" placeholder="${esc(L.lsPaste)}"></textarea></div>
-          <div class="ls-rows" id="lsRows"></div>
+          <div class="ls-dup" id="lsDup" hidden></div>
+          <div class="ls-selbar" id="lsSel" hidden></div>
+          <div class="ls-rows" id="lsRows" tabindex="-1"></div>
+          <textarea id="lsMcIn" class="mc-in" rows="1" spellcheck="false" autocomplete="off" aria-hidden="true"></textarea>
         </div>
         <div class="ls-side">
+          <p class="dk-cap">${esc(L.lsGroupName)}</p>
+          <input class="ls-gname" id="lsGName" value="${esc(g.name)}" placeholder="${esc(L.lsGroupPh)}" spellcheck="false">
           <p class="dk-cap">${esc(L.lsFolder)}</p>
-          <button class="ls-dir ${LS.dir ? '' : 'none'}" id="bLsDir" title="${esc(LS.dir)}">${DL_ICONS.folder}<span><b>${esc(LS.dir ? leaf(LS.dir) : L.lsPickFolder)}</b>${LS.dir ? `<small>${esc(LS.dir)}</small>` : ''}</span></button>
-          ${recent.length ? `<div class="ls-recent">${recent.map((d) => `<button data-dir="${esc(d)}" title="${esc(d)}">${esc(leaf(d))}</button>`).join('')}</div>` : ''}
+          <button class="ls-dir ${g.dir ? '' : 'none'}" id="bLsDir" title="${esc(g.dir)}">${DL_ICONS.folder}<span><b>${esc(g.dir ? lsLeaf(g.dir) : L.lsPickFolder)}</b>${g.dir ? `<small>${esc(g.dir)}</small>` : ''}</span></button>
+          ${recent.length ? `<div class="ls-recent">${recent.map((d) => `<button data-dir="${esc(d)}" title="${esc(d)}">${esc(lsLeaf(d))}</button>`).join('')}</div>` : ''}
+          ${affix('sub', L.lsSubfolder, L.lsSubPh, true)}
+          ${g.dir ? `<p class="ls-path tnum" title="${esc(lsDirOf(g))}">${esc(lsDirOf(g))}</p>` : ''}
+          <p class="dk-cap">${esc(L.lsNameCap)}</p>
+          ${affix('pre', L.lsPrefix, `${L.lsGroupTag}_`, true)}
+          ${affix('suf', L.lsSuffix, `_${L.lsGroupTag}`, true)}
+          <p class="ls-hint">${esc(L.lsFxHint)}</p>
+          <button class="link ls-tpl" id="bLsTpl">${esc(L.lsTplLink(nmTemplate()))}</button>
           <p class="dk-cap">${esc(L.lsWhat)}</p>
-          <div id="lsKind">${segH('lsKind', LS.kind, kinds)}</div>
-          ${LS.kind === 'video' ? `<p class="dk-cap">${esc(L.lsQuality)}</p><div id="lsQ">${segH('lsQ', LS.q, [[0, L.lsMax], [1080, '1080'], [720, '720'], [480, '480']])}</div>
+          <div id="lsKind">${segH('lsKind', g.kind, kinds)}</div>
+          ${g.kind === 'video' ? `<p class="dk-cap">${esc(L.lsQuality)}</p><div id="lsQ">${segH('lsQ', g.q, [[0, L.lsMax], [1080, '1080'], [720, '720'], [480, '480']])}</div>
             <label class="ls-sw" title="${esc(L.dlWebSub)}"><span>${esc(L.dlWeb)}</span><span class="switch ${set.web ? 'on' : ''}" id="lsWeb"></span></label>` : ''}
-          ${LS.kind === 'audio' ? `<p class="ls-note">${esc(L.lsAudioFmt(String(set.audio).toUpperCase()))}</p>` : ''}
-          ${LS.kind === 'gif' ? `<p class="ls-note">${esc(['GIF', dlGifTxt(dlGifCfg())].join(' · '))}</p>` : ''}
-          ${LS.kind === 'video' || LS.kind === 'audio' ? `<p class="dk-cap">${esc(L.dlExtras)}</p>
-            <label class="ls-sw"><span>${esc(L.dlWithSubs)}</span>${LS.sub ? `<button class="field pick dd" id="lsLang" data-menu="1">${esc(lsLangLabel(LS.subLang))}${ICONS.chev || ''}</button>` : ''}<span class="switch ${LS.sub ? 'on' : ''}" id="lsSub"></span></label>
-            <label class="ls-sw"><span>${esc(L.dlWithThumb)}</span><span class="switch ${LS.thumb ? 'on' : ''}" id="lsThumb"></span></label>` : ''}
+          ${g.kind === 'audio' ? `<p class="ls-note">${esc(L.lsAudioFmt(String(set.audio).toUpperCase()))}</p>` : ''}
+          ${g.kind === 'gif' ? `<p class="ls-note">${esc(['GIF', dlGifTxt(dlGifCfg())].join(' · '))}</p>` : ''}
+          ${g.kind === 'video' || g.kind === 'audio' ? `<p class="dk-cap">${esc(L.dlExtras)}</p>
+            <label class="ls-sw"><span>${esc(L.dlWithSubs)}</span>${g.subs ? `<button class="field pick dd" id="lsLang">${esc(lsLangLabel(g.subLang))}${ICONS.chev || ''}</button>` : ''}<span class="switch ${g.subs ? 'on' : ''}" id="lsSub"></span></label>
+            <label class="ls-sw"><span>${esc(L.dlWithThumb)}</span><span class="switch ${g.thumb ? 'on' : ''}" id="lsThumb"></span></label>` : ''}
         </div>
       </div>
-      <div class="dk-pk-foot"><span class="ls-foot-note" id="lsNote"></span><button class="dk-go" id="bLsCancel">${esc(L.close || L.cancel)}</button><button class="dk-btn dk-pri dk-pk-go" id="bLsGo"></button></div>`;
-    lsRenderRows();
-    $('#lsNote').textContent = LS.dir ? '' : L.lsNeedFolder;
-    const f = $('#lsUrl'); f.value = LS.text;
-    const take = () => { const n = lsAddLinks(f.value); if (n || !dlLinks(f.value).length) { f.value = ''; LS.text = ''; } };
-    f.addEventListener('input', () => { LS.text = f.value; });
+      <div class="dk-pk-foot"><span class="ls-foot-note" id="lsNote"></span><button class="dk-go" id="bLsCancel">${esc(L.close || L.cancel)}</button><button class="dk-btn dk-sec" id="bLsAll"></button><button class="dk-btn dk-pri dk-pk-go" id="bLsGo"></button></div>`;
+    lsRenderTabs(); lsRenderRows();
+    const f = $('#lsUrl'); f.value = g.text || '';
+    const take = () => { const v = f.value; g.text = ''; f.value = ''; if (!lsAddLinks(g, v) && !dlLinks(v).length) { f.value = v; g.text = v; } };
+    f.addEventListener('input', () => { g.text = f.value; });
     f.addEventListener('paste', () => setTimeout(take, 0));
     f.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); take(); } if (e.key === 'Escape') lsClose(); });
     $('#bLsX').onclick = lsClose; $('#bLsCancel').onclick = lsClose;
-    $('#bLsClear').onclick = () => { LS.rows = []; lsRenderRows(); };
-    $('#lsRows').onclick = (e) => { const b = e.target.closest('[data-act="rm"]'); if (!b) return; const id = +b.closest('.ls-row').dataset.id; LS.rows = LS.rows.filter((r) => r.id !== id); lsRenderRows(); };
+    $('#lsGName').addEventListener('input', (e) => { g.name = e.target.value; lsRenderTabs(); lsRenderRows(); lsSave(); });
+    $('#lsGName').addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') e.target.blur(); });
     $('#bLsDir').onclick = async () => {
       let d = null;
-      if (REAL) { try { d = await inv('pick_dir', { start: LS.dir || set.dir || null }); } catch (er) { toast(String(er)); } } else d = 'D:\\Memes';
-      if (d) { LS.dir = d; lsRender(); }
+      if (REAL) { try { d = await inv('pick_dir', { start: g.dir || set.dir || null }); } catch (er) { toast(String(er)); } } else d = 'D:\\Edição\\' + (g.name || 'Memes');
+      if (d) { g.dir = d; lsRender(); lsSave(); }
     };
-    $$('.ls-recent button', el).forEach((b) => { b.onclick = () => { LS.dir = b.dataset.dir; lsRender(); }; });
-    seg($('#lsKind .seg'), (v) => { LS.kind = v; lsRender(); });
-    const q = $('#lsQ .seg'); if (q) seg(q, (v) => { LS.q = +v; });
-    const w = $('#lsWeb'); if (w) w.onclick = (e) => { e.preventDefault(); set.web = !set.web; saveSettings(); w.classList.toggle('on', set.web); dlRenderOpts(); };
-    const sb = $('#lsSub'); if (sb) sb.onclick = (e) => { e.preventDefault(); LS.sub = !LS.sub; lsRender(); };
-    const th = $('#lsThumb'); if (th) th.onclick = (e) => { e.preventDefault(); LS.thumb = !LS.thumb; th.classList.toggle('on', LS.thumb); };
-    const lg = $('#lsLang'); if (lg) lg.onclick = (e) => { e.preventDefault(); e.stopPropagation(); openMenu(e.currentTarget, LS_SUBS.map(([k]) => ({ label: lsLangLabel(k), value: k, sel: k === LS.subLang })), (v) => { LS.subLang = v; lsRender(); }); };
-    $('#bLsGo').onclick = lsGo;
-  }
-  const lsLangLabel = (k) => (k === 'orig' ? L.lsSubOrig : dlLangName(k));
-  function lsGo() {
-    const rows = LS.rows.filter((r) => r.st !== 'err'); if (!rows.length || !LS.dir) return;
-    const set = dlSet(); const kind = LS.kind; const now = Date.now();
-    // pasta da lista entra nas recentes (para a próxima lista de memes já estar ali)
-    set.recentDirs = [LS.dir].concat((set.recentDirs || []).filter((d) => d !== LS.dir)).slice(0, 6); saveSettings();
-    const extras = kind === 'video' || kind === 'audio';
-    rows.slice().reverse().forEach((r) => {
-      const i = r.info || {}; let w = 0, h = 0;
-      if (kind === 'video' && i.formats) { const sm = dlSummary(i, set.web); const pick = sm.rows.find((x) => !LS.q || x.p <= LS.q) || sm.rows[sm.rows.length - 1]; if (pick) { w = pick.w; h = pick.h; } }
-      DL.list.unshift({ id: ++DL.seq, url: r.url, kind, status: 'wait', step: null, t: now, web: '', dest: LS.dir,
-        height: kind === 'video' ? LS.q : 0, subs: extras && LS.sub ? lsSubArg(LS.subLang) : [], thumb: extras && LS.thumb,
-        gif: kind === 'gif' ? dlGifCfg() : undefined,
-        meta: r.info ? { title: i.title || '', site: i.extractor_key, duration: i.duration || 0, thumbnail: i.thumbnail || '', width: w, height: h } : null });
+    $$('.ls-recent button', el).forEach((b) => { b.onclick = () => { g.dir = b.dataset.dir; lsRender(); lsSave(); }; });
+    $$('[data-fx]', el).forEach((s) => { s.onclick = (e) => { e.preventDefault(); const k = s.dataset.fx; g[k].on = !g[k].on;
+      if (g[k].on && !g[k].text && k !== 'sub') g[k].text = k === 'pre' ? `${L.lsGroupTag}_` : `_${L.lsGroupTag}`;
+      lsRender(); lsSave(); if (g[k].on && !g[k].text) { const i = $(`[data-fxt="${k}"]`); if (i) i.focus(); } }; });
+    $$('[data-fxt]', el).forEach((i) => {
+      i.addEventListener('input', () => { const o = g[i.dataset.fxt]; o.text = i.value;
+        if (!o.on && i.value) { o.on = true; i.closest('.field').classList.remove('off'); i.closest('.ls-fx2').querySelector('.switch').classList.add('on'); }
+        lsRenderRows(); const p = $('.ls-path', el); if (p) p.textContent = lsDirOf(g); lsSave(); });
+      i.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') i.blur(); });
     });
-    toast(L.lsQueued(rows.length, String(LS.dir).split(/[\\/]/).filter(Boolean).pop() || LS.dir));
-    LS.rows = []; LS.text = ''; lsClose();
+    // { }: {grupo} entra onde está a agulha do campo (e liga a opção)
+    $$('[data-fxg]', el).forEach((b) => { b.onmousedown = (e) => e.preventDefault(); b.onclick = (e) => {
+      e.stopPropagation(); const k = b.dataset.fxg; const i = $(`[data-fxt="${k}"]`, el);
+      openMenu(b, [{ label: `${L.lsGroupTag}  ${L.lsGroupTagTip} · ${gname}`, value: 'g' }], () => {
+        const t = L.lsGroupTag; const a = i.selectionStart ?? i.value.length, z = i.selectionEnd ?? a;
+        i.value = i.value.slice(0, a) + t + i.value.slice(z); i.dispatchEvent(new Event('input')); i.focus(); i.setSelectionRange(a + t.length, a + t.length); lsSave();
+      }); }; });
+    $('#bLsTpl').onclick = () => { $('#dlOptsBg').hidden = false; dlRenderOpts(); const t = $('#dlNameTpl'); if (t) t.focus(); };
+    seg($('#lsKind .seg'), (v) => { g.kind = v; lsRender(); lsSave(); });
+    const q = $('#lsQ .seg'); if (q) seg(q, (v) => { g.q = +v; lsRenderRows(); lsSave(); });
+    const w = $('#lsWeb'); if (w) w.onclick = (e) => { e.preventDefault(); set.web = !set.web; saveSettings(); w.classList.toggle('on', set.web); };
+    const sb = $('#lsSub'); if (sb) sb.onclick = (e) => { e.preventDefault(); g.subs = !g.subs; lsRender(); lsSave(); };
+    const th = $('#lsThumb'); if (th) th.onclick = (e) => { e.preventDefault(); g.thumb = !g.thumb; th.classList.toggle('on', g.thumb); lsSave(); };
+    const lg = $('#lsLang'); if (lg) lg.onclick = (e) => { e.preventDefault(); e.stopPropagation(); openMenu(e.currentTarget, LS_SUBS.map(([k]) => ({ label: lsLangLabel(k), value: k, sel: k === g.subLang })), (v) => { g.subLang = v; lsRender(); lsSave(); }); };
+    $('#bLsGo').onclick = () => lsGo([g]);
+    $('#bLsAll').onclick = () => lsGo(LG.groups.filter((x) => x.dir && x.rows.some((r) => r.st !== 'err')));
+  }
+  // abas: trocar, apagar (no X, com confirmação se tiver links), nova
+  // abas: trocar, apagar (no X, com confirmação se tiver links), nova; linhas: selecionar, renomear, tirar
+  $('#dlList').addEventListener('mousedown', (e) => {
+    if (!LG.mc) return;
+    const row = e.target.closest('.ls-row.mc');
+    if (row && e.target.closest('.ls-nm')) { e.preventDefault(); mcClickAt(e, row); return; }
+    // clicou fora dos nomes: salva (como no Explorer)
+    if (!e.target.closest('#lsMcIn')) mcCommit();
+  });
+  $('#dlList').addEventListener('click', (e) => {
+    const gx = e.target.closest('[data-gx]');
+    if (gx) {
+      e.stopPropagation(); const g = LG.groups.find((x) => x.id === +gx.dataset.gx); if (!g) return;
+      if (g.rows.length && !confirm(L.lsGroupDelAsk(g.name || L.lsGroupNew(LG.groups.indexOf(g) + 1), g.rows.length))) return;
+      LG.groups = LG.groups.filter((x) => x !== g);
+      if (!LG.groups.length) { const n = lsNewGroup(L.lsGroupNew(1)); LG.groups.push(n); }
+      if (LG.cur === g.id) LG.cur = LG.groups[0].id;
+      LG.sel.clear(); LG.subEd = false; lsRender(); lsSave(); return;
+    }
+    const tab = e.target.closest('.ls-tab'); if (tab) { if (+tab.dataset.g !== LG.cur) { LG.cur = +tab.dataset.g; LG.sel.clear(); LG.subEd = false; lsRender(); lsSave(); } return; }
+    if (e.target.closest('#bLsAdd')) {
+      const cur = lsG(); const n = lsNewGroup(''); n.kind = cur.kind; n.q = cur.q;
+      LG.groups.push(n); LG.cur = n.id; LG.sel.clear(); LG.subEd = false; lsRender(); lsSave(); requestAnimationFrame(() => $('#lsGName').focus());
+      return;
+    }
+    const s = e.target.closest('#lsSel [data-s], #lsDup [data-s]');
+    if (s) {
+      const g = lsG(); const a = s.dataset.s;
+      if (a === 'all') { g.rows.forEach((r) => LG.sel.add(r.id)); lsRenderRows(); }
+      else if (a === 'ren') mcStart();
+      else if (a === 'sub') { LG.subEd = true; lsRenderSelBar(); }
+      else if (a === 'subx') { LG.subEd = false; lsRenderSelBar(); }
+      else if (a === 'subok') lsSubApply($('#lsSubIn').value);
+      else if (a === 'rm') lsRemove(new Set(LG.sel));
+      else if (a === 'duprm') lsRemove(lsDups(g));
+      else if (a === 'dupsel') { LG.sel = new Set(lsDups(g)); lsRenderRows(); }
+      else if (a === 'links') { const u = g.rows.filter((r) => LG.sel.has(r.id)).map((r) => r.url); copyText(u.join('\n'), u.length === 1 ? L.dlLinkCopied : L.lsLinksCopied(u.length)); }
+      return;
+    }
+    if (LG.mc) return;
+    const row = e.target.closest('.ls-row');
+    if (row) {
+      if (e.target.closest('[data-act="link"]')) { const r = lsG().rows.find((x) => x.id === +row.dataset.id); if (r) copyText(r.url, L.dlLinkCopied); return; }
+      if (e.target.closest('[data-act="ck"]')) { const id = +row.dataset.id; if (LG.sel.has(id)) LG.sel.delete(id); else LG.sel.add(id); LG.anchor = id; LG.subEd = false; lsRenderRows(); return; }
+      // X numa linha selecionada tira todos os selecionados; numa linha fora da seleção, só ela
+      if (e.target.closest('[data-act="rm"]')) { const id = +row.dataset.id; lsRemove(LG.sel.has(id) ? new Set(LG.sel) : new Set([id])); return; }
+      // segundo clique no nome (clique duplo): renomeia o que está selecionado (ou só esta linha)
+      if (e.detail === 2 && e.target.closest('.ls-nm')) { const id = +row.dataset.id; if (!LG.sel.has(id)) { LG.sel.clear(); LG.sel.add(id); } mcStart(); return; }
+      LG.subEd = false; lsSelect(+row.dataset.id, e); lsRenderRows();
+    } else if (e.target.closest('#lsRows')) { LG.sel.clear(); LG.subEd = false; lsRenderRows(); }
+  });
+  // letras, acentos e colar: chegam no campo escondido e entram em todos os nomes
+  $('#dlList').addEventListener('compositionend', (e) => { if (e.target.id === 'lsMcIn' && LG.mc) { mcInsert(e.target.value); e.target.value = ''; } });
+  $('#dlList').addEventListener('input', (e) => {
+    if (e.target.id !== 'lsMcIn') return;
+    if (!LG.mc || e.isComposing) { if (!LG.mc) e.target.value = ''; return; }
+    mcInsert(e.target.value); e.target.value = '';
+  });
+  $('#dlList').addEventListener('keydown', (e) => {
+    if (e.target.id === 'lsMcIn') { e.stopPropagation(); if (LG.mc && !e.isComposing) mcKey(e); return; }
+    if (e.target.id === 'lsSubIn') {
+      e.stopPropagation();
+      if (e.key === 'Enter') { e.preventDefault(); lsSubApply(e.target.value); }
+      if (e.key === 'Escape') { e.preventDefault(); LG.subEd = false; lsRenderSelBar(); $('#lsRows').focus(); }
+      return;
+    }
+    if (e.target.closest('input, textarea')) return;
+    const g = lsG();
+    if (e.key === 'F2') { e.preventDefault(); e.stopPropagation(); mcStart(); }
+    else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') { e.preventDefault(); e.stopPropagation(); g.rows.forEach((r) => LG.sel.add(r.id)); lsRenderRows(); }
+    else if (e.key === 'Delete' && LG.sel.size) { e.preventDefault(); e.stopPropagation(); lsRemove(new Set(LG.sel)); }
+  });
+  const lsLangLabel = (k) => (k === 'orig' ? L.lsSubOrig : dlLangName(k));
+  function lsGo(groups) {
+    const set = dlSet(); const now = Date.now(); let total = 0; const names = [];
+    groups.forEach((g) => {
+      const rows = g.rows.filter((r) => r.st !== 'err'); if (!rows.length || !g.dir) return;
+      set.recentDirs = [g.dir].concat((set.recentDirs || []).filter((d) => d !== g.dir)).slice(0, 6);
+      const extras = g.kind === 'video' || g.kind === 'audio';
+      rows.slice().reverse().forEach((r) => {
+        const i = r.info || {}; const h = g.kind === 'video' ? (g.q ? Math.min(g.q, i.height || g.q) : i.height || 0) : 0;
+        DL.list.unshift({ id: ++DL.seq, url: r.url, kind: g.kind, status: 'wait', step: null, t: now, web: '', dest: lsDirOf(g, r), group: g.name || '',
+          // com o vídeo já lido, o nome vai pronto; sem (ainda lendo), o motor monta pelo modelo
+          name: r.info || r.name ? lsFull(g, lsBase(g, r)) : '', nameTpl: r.info || r.name ? '' : lsAffix(g, g.pre) + nmTemplate() + lsAffix(g, g.suf),
+          height: g.kind === 'video' ? g.q : 0, subs: extras && g.subs ? lsSubArg(g.subLang) : [], thumb: extras && g.thumb,
+          gif: g.kind === 'gif' ? dlGifCfg() : undefined,
+          meta: r.info ? { title: i.title || '', site: i.extractor_key, duration: i.duration || 0, thumbnail: i.thumbnail || '', width: i.width || 0, height: h } : null });
+      });
+      total += rows.length; names.push(g.name || lsLeaf(g.dir));
+      g.rows = []; g.text = '';   // o grupo fica (nome, pasta e opções); só os links saem
+    });
+    if (!total) return;
+    saveSettings(); LG.sel.clear(); LG.mc = null; lsSave();
+    toast(L.lsQueued(total, names.join(', ')));
+    lsClose();
     DL.tab = 'active'; dlRender(); dlPump();
   }
   function lsDemoInfo(url) {
-    const t = ['quando o cliente pede pra mudar só uma coisinha', 'eu explicando o render pela 5ª vez', 'o Premiere fechando sem salvar', 'gato julgando a minha edição', 'POV: chegou o pagamento da gringa'];
-    const k = Math.abs([...url].reduce((a, c) => a * 31 + c.charCodeAt(0) | 0, 7)) % t.length;
-    const info = dlDemoInfo(); return Object.assign(info, { title: t[k], duration: 8 + k * 5, extractor_key: /x\.com|twitter/.test(url) ? 'Twitter' : /instagram/.test(url) ? 'Instagram' : 'TikTok',
-      thumbnail: 'data:image/svg+xml,' + encodeURIComponent(scene(200 + k * 40, k % 2 === 0).replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ')) });
+    const t = ['quando o cliente pede pra mudar só uma coisinha', 'eu explicando o render pela 5ª vez', 'o Premiere fechando sem salvar', 'gato julgando a minha edição', 'POV: chegou o pagamento da gringa', 'Tony Stark olhando o orçamento', 'Tony Stark quando o render termina'];
+    const u = ['_Hybreed_', 'memesbr', 'editorzinho', 'tonystarkfan', 'gringopay'];
+    const key = lsKey({ url }); const k = Math.abs([...key].reduce((a, c) => a * 31 + c.charCodeAt(0) | 0, 7));
+    const info = dlDemoInfo(); const id = String(2120237782186459505n + BigInt(k % 99991));
+    return Object.assign(info, { title: t[k % t.length], uploader: u[k % u.length], uploader_id: u[k % u.length], id, duration: 8 + (k % 5) * 5,
+      extractor_key: /x\.com|twitter/.test(url) ? 'Twitter' : /instagram/.test(url) ? 'Instagram' : 'TikTok', upload_date: '20261109',
+      thumbnail: 'data:image/svg+xml,' + encodeURIComponent(scene(200 + (k % 7) * 40, k % 2 === 0).replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ')) });
   }
   $('#bDlList').onclick = lsOpen;
   $('#dlListBg').addEventListener('mousedown', (e) => { if (e.target.id === 'dlListBg') lsClose(); });
-  addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#dlListBg').hidden && !$('#menu').classList.contains('show')) { e.stopPropagation(); lsClose(); } }, true);
+  // desfazer o "tirar" vale na janela toda (o X que foi clicado some e leva o foco junto)
+  addEventListener('keydown', (e) => {
+    if ($('#dlListBg').hidden || !$('#dlOptsBg').hidden || LG.mc || !(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'z') return;
+    if (e.target.closest && e.target.closest('input, textarea') && e.target.id !== 'lsMcIn') return;
+    e.preventDefault(); e.stopPropagation(); lsUndo();
+  }, true);
+  addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || $('#dlListBg').hidden || $('#menu').classList.contains('show') || !$('#dlOptsBg').hidden) return;
+    if (LG.mc || e.target.id === 'lsSubIn') return;   // o campo trata (cancela só a edição)
+    e.stopPropagation();
+    if (LG.subEd) { LG.subEd = false; lsRenderSelBar(); } else if (LG.sel.size) { LG.sel.clear(); lsRenderRows(); } else lsClose();
+  }, true);
   function dlDemoList() {
     const t = ['Hug Challenge com estranhos na Paulista', 'Perguntei para casais quanto eles ganham', 'Quiz de 100 reais no metrô', 'Liguei para minha ex no FaceTime', 'Quem acerta a música ganha'];
     return { _type: 'playlist', title: '@frankiebruno', extractor_key: 'TikTokUser', entries: t.map((title, i) => ({ url: `https://www.tiktok.com/@frankiebruno/video/74318042198${i}`, title, duration: 31 + i * 9 })) };

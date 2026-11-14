@@ -162,7 +162,8 @@ pub async fn dl_update(app: AppHandle, state: State<'_, AppState>) -> Result<Str
 #[tauri::command]
 pub async fn dl_start(app: AppHandle, state: State<'_, AppState>, id: u64, url: String, kind: String, web: bool, audio: String,
                       dest: Option<PathBuf>, height: Option<u32>, subs: Option<Vec<String>>, thumb: Option<bool>,
-                      section: Option<Vec<f64>>, gif: Option<mec_core::preset::Gif>) -> Result<download::Done, String> {
+                      section: Option<Vec<f64>>, gif: Option<mec_core::preset::Gif>,
+                      name: Option<String>, name_tpl: Option<String>) -> Result<download::Done, String> {
     let yt = ytdlp_path(&app);
     if !yt.is_file() { return Err("dl-setup".into()); }
     let deno = Some(deno_path(&app)).filter(|d| d.is_file());
@@ -178,7 +179,8 @@ pub async fn dl_start(app: AppHandle, state: State<'_, AppState>, id: u64, url: 
     let dest = dest.filter(|d| !d.as_os_str().is_empty()).unwrap_or_else(|| default_dir(&app));
     let kind = match kind.as_str() { "audio" => Kind::Audio, "thumb" => Kind::Thumb, "gif" => Kind::Gif, _ => Kind::Video };
     let job = Job { url, kind, web, audio, dest, height: height.unwrap_or(0), subs: subs.unwrap_or_default(), thumb: thumb.unwrap_or(false),
-                    section: section.filter(|v| v.len() == 2 && v[1] > v[0]).map(|v| (v[0], v[1])), gif: gif.unwrap_or_default() };
+                    section: section.filter(|v| v.len() == 2 && v[1] > v[0]).map(|v| (v[0], v[1])), gif: gif.unwrap_or_default(),
+                    name: name.unwrap_or_default(), name_tpl: name_tpl.unwrap_or_default() };
     let work = tools_dir(&app).join("work").join(id.to_string());
     let dls = state.downloads.clone();
     let cancel = Arc::new(AtomicBool::new(false));
