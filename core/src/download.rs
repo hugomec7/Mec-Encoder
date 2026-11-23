@@ -239,6 +239,7 @@ pub fn ytdlp_args(job: &Job, t: &Tools, work: &Path) -> Vec<String> {
     if let Some(d) = &t.deno { a.extend(["--js-runtimes".into(), format!("deno:{}", d.display())]); }
     if let Some(c) = &t.cookies { a.extend(["--cookies".into(), c.to_string_lossy().into_owned()]); }
     match &t.cache { Some(c) => a.extend(["--cache-dir".into(), c.to_string_lossy().into_owned()]), None => a.push("--no-cache-dir".into()) }
+    a.extend(site_headers(&job.url));
     let name = match job.section {
         Some((x, y)) if job.kind != Kind::Thumb => format!("%(title).130B ({}-{}).%(ext)s", section_label(x), section_label(y)),
         _ => "%(title).150B.%(ext)s".into(),
@@ -298,8 +299,57 @@ pub fn info_args(url: &str, t: &Tools) -> Vec<String> {
     if let Some(d) = &t.deno { a.extend(["--js-runtimes".into(), format!("deno:{}", d.display())]); }
     if let Some(c) = &t.cookies { a.extend(["--cookies".into(), c.to_string_lossy().into_owned()]); }
     match &t.cache { Some(c) => a.extend(["--cache-dir".into(), c.to_string_lossy().into_owned()]), None => a.push("--no-cache-dir".into()) }
+    a.extend(site_headers(url));
     a.extend(["--".into(), url.trim().to_string()]);
     a
+}
+
+/// Sites cujos arquivos só abrem vindo da página deles (o servidor de vídeo confere o Referer).
+pub fn site_headers(url: &str) -> Vec<String> {
+    let host = url.split("://").nth(1).unwrap_or(url).split(['/', '?', '#']).next().unwrap_or("").to_lowercase();
+    if host == "erome.com" || host.ends_with(".erome.com") { return vec!["--referer".into(), "https://www.erome.com/".into()]; }
+    Vec::new()
+}
+
+/// Álbum do Erome (erome.com/a/<id>): o yt-dlp não lê esse site, então o app lê a página e cada vídeo vira um link
+/// direto (baixado pelo yt-dlp com o Referer do site, ver [`site_headers`]).
+pub fn erome_album_id(url: &str) -> Option<String> {
+    let low = url.to_lowercase();
+    let i = low.find("erome.com/a/")? + "erome.com/a/".len();
+    let id: String = url[i..].chars().take_while(|c| c.is_ascii_alphanumeric()).collect();
+    (!id.is_empty()).then_some(id)
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct AlbumItem { pub url: String, pub thumb: String }
+
+/// Título (og:title) e os vídeos do álbum, na ordem da página (cada `media-group` com `<video>`: `<source src>` e `poster`).
+pub fn erome_parse(html: &str) -> (String, Vec<AlbumItem>) {
+    let attr = |tag: &str, name: &str| -> Option<String> {
+        let k = format!("{name}=\"");
+        let i = tag.find(&k)? + k.len();
+        let v = &tag[i..tag[i..].find('"')? + i];
+        Some(unescape(v.trim()))
+    };
+    let title = html.find("property=\"og:title\"").and_then(|i| {
+        let start = html[..i].rfind('<')?; let end = i + html[i..].find('>')?;
+        attr(&html[start..end], "content")
+    }).unwrap_or_default();
+    let mut items = Vec::new();
+    for group in html.split("class=\"media-group\"").skip(1) {
+        let Some(v) = group.find("<video") else { continue };   // foto: fica de fora
+        let tag_end = v + group[v..].find('>').unwrap_or(0);
+        let poster = attr(&group[v..tag_end], "poster").unwrap_or_default();
+        let src = group[v..].find("<source").and_then(|s| { let st = v + s; let e = st + group[st..].find('>')?; attr(&group[st..e], "src") });
+        if let Some(u) = src.filter(|u| u.starts_with("http")) {
+            if !items.iter().any(|x: &AlbumItem| x.url == u) { items.push(AlbumItem { url: u, thumb: poster }); }
+        }
+    }
+    (title, items)
+}
+
+fn unescape(s: &str) -> String {
+    s.replace("&amp;", "&").replace("&quot;", "\"").replace("&#39;", "'").replace("&#039;", "'").replace("&lt;", "<").replace("&gt;", ">")
 }
 
 /// Roda o yt-dlp só para ler o link. Devolve o JSON (texto) ou o erro traduzido ("código|detalhe").
@@ -737,6 +787,22 @@ mod tests {
     fn tools_() -> Tools {
         Tools { ytdlp: "/t/yt-dlp".into(), deno: Some("/t/deno".into()), ffmpeg: "/f/ffmpeg".into(), ffprobe: "/f/ffprobe".into(),
                 encoder: Encoder::Nvenc, cache: None, cookies: None }
+    }
+
+    #[test]
+    fn erome() {
+        assert_eq!(erome_album_id("https://www.erome.com/a/8ABBoUjT?x=1"), Some("8ABBoUjT".into()));
+        assert_eq!(erome_album_id("https://www.erome.com/user"), None);
+        assert_eq!(site_headers("https://v12.erome.com/1/8ABBoUjT/abc_720p.mp4"), vec!["--referer".to_string(), "https://www.erome.com/".into()]);
+        assert!(site_headers("https://x.com/a/status/1").is_empty());
+        let html = r#"<meta property="og:title" content="Memes &amp; coisas"><div class="media-group" id="1"><div class="img" data-src="https://s1.erome.com/1/a.jpg"></div></div>
+          <div class="media-group" id="2"><div class="video"><video class="video-js" poster="https://s1.erome.com/1/b.jpg" preload="none">
+          <source src="https://v1.erome.com/1/8ABB/b_720p.mp4?v=1&amp;x=2" type='video/mp4' res='720' label='HD'></video></div></div>
+          <div class="media-group" id="3"><video poster="https://s1.erome.com/1/c.jpg"><source src="https://v1.erome.com/1/8ABB/c_480p.mp4" type="video/mp4"></video></div>"#;
+        let (t, v) = erome_parse(html);
+        assert_eq!(t, "Memes & coisas");
+        assert_eq!(v, vec![AlbumItem { url: "https://v1.erome.com/1/8ABB/b_720p.mp4?v=1&x=2".into(), thumb: "https://s1.erome.com/1/b.jpg".into() },
+                           AlbumItem { url: "https://v1.erome.com/1/8ABB/c_480p.mp4".into(), thumb: "https://s1.erome.com/1/c.jpg".into() }]);
     }
 
     #[test]

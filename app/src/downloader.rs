@@ -310,10 +310,44 @@ pub async fn dl_login(app: AppHandle, site: String, title: String) -> Result<(),
 
 /// Lê o que o link tem (para "Escolher qualidade…"): título, duração, formatos, legendas e miniatura.
 /// Só os campos que a janela usa (o JSON inteiro do YouTube passa de 1 MB).
+/// Lê um álbum do Erome (como o gallery-dl): a página às vezes pede "Please wait a few moments" (proteção do site) e
+/// abre na tentativa seguinte. Devolve no formato de playlist do yt-dlp que a tela já entende.
+fn erome_album(page: &str, id: &str) -> Result<Value, String> {
+    let agent = ureq::AgentBuilder::new().timeout(std::time::Duration::from_secs(30))
+        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36").build();
+    let url = format!("https://www.erome.com/a/{id}");
+    let mut html = String::new();
+    for attempt in 0..5 {
+        match agent.get(&url).set("Accept-Language", "en-US,en;q=0.9").set("Referer", "https://www.erome.com/").call() {
+            Ok(r) => { html = r.into_string().map_err(|e| format!("dl-network|{e}"))?; }
+            Err(ureq::Error::Status(410, _)) | Err(ureq::Error::Status(404, _)) => return Err(format!("dl-unavailable|{page}")),
+            Err(ureq::Error::Status(c, _)) => return Err(format!("dl-network|HTTP {c}")),
+            Err(e) => return Err(format!("dl-network|{e}")),
+        }
+        if !html.get(..2000).unwrap_or(&html).contains("Please wait a few moments") { break; }
+        if attempt < 4 { std::thread::sleep(std::time::Duration::from_secs(5)); }
+    }
+    let (title, items) = download::erome_parse(&html);
+    if items.is_empty() { return Err(format!("dl-unsupported|erome: nenhum vídeo no álbum {id}")); }
+    let title = if title.trim().is_empty() { id.to_string() } else { title };
+    let entries: Vec<Value> = items.iter().enumerate().map(|(i, it)| {
+        let stem = it.url.rsplit('/').next().unwrap_or("").split(['?', '.']).next().unwrap_or("").to_string();
+        json!({ "url": it.url, "title": format!("{title} {}", i + 1), "thumbnail": it.thumb, "id": stem, "duration": Value::Null,
+                "uploader": Value::Null, "uploader_id": Value::Null })
+    }).collect();
+    Ok(json!({ "_type": "playlist", "title": title, "extractor_key": "Erome", "id": id, "webpage_url": url,
+               "playlist_count": entries.len(), "entries": entries, "formats": [], "subs": [], "autoSubs": [] }))
+}
+
 #[tauri::command]
 pub async fn dl_info(app: AppHandle, state: State<'_, AppState>, url: String) -> Result<Value, String> {
     let yt = ytdlp_path(&app);
     if !yt.is_file() { return Err("dl-setup".into()); }
+    // Erome: o yt-dlp não lê o site; o app lê o álbum e cada vídeo vira um link direto
+    if let Some(id) = download::erome_album_id(&url) {
+        let page = url.clone();
+        return tauri::async_runtime::spawn_blocking(move || erome_album(&page, &id)).await.map_err(|e| e.to_string())?;
+    }
     let e = state.engine.clone();
     let deno = Some(deno_path(&app)).filter(|d| d.is_file());
     let files = account_files(&app);

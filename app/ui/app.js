@@ -2837,7 +2837,7 @@
     return out;
   }
   const dlShort = (u) => u.replace(/^https?:\/\/(www\.)?/i, '');
-  const SITE = { youtube: 'YouTube', tiktok: 'TikTok', twitter: 'X', instagram: 'Instagram', facebook: 'Facebook', reddit: 'Reddit', vimeo: 'Vimeo', twitch: 'Twitch', kwai: 'Kwai', pinterest: 'Pinterest', dailymotion: 'Dailymotion', soundcloud: 'SoundCloud', threads: 'Threads', bluesky: 'Bluesky', generic: '' };
+  const SITE = { erome: 'Erome', youtube: 'YouTube', tiktok: 'TikTok', twitter: 'X', instagram: 'Instagram', facebook: 'Facebook', reddit: 'Reddit', vimeo: 'Vimeo', twitch: 'Twitch', kwai: 'Kwai', pinterest: 'Pinterest', dailymotion: 'Dailymotion', soundcloud: 'SoundCloud', threads: 'Threads', bluesky: 'Bluesky', generic: '' };
   function dlSite(it) {
     const k = String((it.meta && it.meta.site) || '').toLowerCase();
     const hit = Object.keys(SITE).find((s) => k.startsWith(s));
@@ -2944,6 +2944,7 @@
     if (/(^|\.)tiktok\.com$/.test(h)) return /^@/.test(parts[0] || '') && !['video', 'photo'].includes(parts[1]);
     if (/(^|\.)instagram\.com$/.test(h)) return parts.length === 1 && !['p', 'reel', 'reels', 'tv', 'stories', 'explore'].includes(parts[0]);
     if (/(^|\.)(x|twitter)\.com$/.test(h)) return parts.length === 1 || (parts.length === 2 && ['media', 'with_replies'].includes(parts[1]));
+    if (/(^|\.)erome\.com$/.test(h)) return parts[0] === 'a' && !!parts[1];   // álbum: cada vídeo vira um item
     return false;
   }
   // opts (de "Escolher qualidade…"): { height, subs, thumb }; sem opts, vale a Qualidade das opções
