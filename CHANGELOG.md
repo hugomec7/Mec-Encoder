@@ -1,5 +1,15 @@
 # Changelog · Novidades
 
+## 0.3.11
+
+**English**
+- **Support for new sites in Download.** When a site isn't recognized, Mec Encoder now looks for the video on the page itself. With one video it downloads right away; with several, the list opens so you can choose.
+- **Link list**: the recent folder shortcuts have an X on hover to remove them from the history (the folder on disk isn't touched).
+
+**Português**
+- **Suporte a novos sites no Baixar.** Quando o site não é reconhecido, o Mec Encoder agora procura o vídeo na própria página. Com um vídeo, baixa direto; com vários, abre a lista para você escolher.
+- **Lista de links**: os atalhos de pastas recentes têm um X ao passar o mouse, para tirar do histórico (a pasta no disco não é mexida).
+
 ## 0.3.10
 
 **English**

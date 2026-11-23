@@ -3807,7 +3807,7 @@
           <input class="ls-gname" id="lsGName" value="${esc(g.name)}" placeholder="${esc(L.lsGroupPh)}" spellcheck="false">
           <p class="dk-cap">${esc(L.lsFolder)}</p>
           <button class="ls-dir ${g.dir ? '' : 'none'}" id="bLsDir" title="${esc(g.dir)}">${DL_ICONS.folder}<span><b>${esc(g.dir ? lsLeaf(g.dir) : L.lsPickFolder)}</b>${g.dir ? `<small>${esc(g.dir)}</small>` : ''}</span></button>
-          ${recent.length ? `<div class="ls-recent">${recent.map((d) => `<button data-dir="${esc(d)}" title="${esc(d)}">${esc(lsLeaf(d))}</button>`).join('')}</div>` : ''}
+          ${recent.length ? `<div class="ls-recent">${recent.map((d) => `<span class="ls-rc"><button data-dir="${esc(d)}" title="${esc(d)}">${esc(lsLeaf(d))}</button><button class="ls-rc-x" data-rmdir="${esc(d)}" title="${esc(L.lsRecentRm)}">${ICONS.x}</button></span>`).join('')}</div>` : ''}
           ${affix('sub', L.lsSubfolder, L.lsSubPh, true)}
           ${g.dir ? `<p class="ls-path tnum" title="${esc(lsDirOf(g))}">${esc(lsDirOf(g))}</p>` : ''}
           <p class="dk-cap">${esc(L.lsNameCap)}</p>
@@ -3842,7 +3842,9 @@
       if (REAL) { try { d = await inv('pick_dir', { start: g.dir || set.dir || null }); } catch (er) { toast(String(er)); } } else d = 'D:\\Edição\\' + (g.name || 'Memes');
       if (d) { g.dir = d; lsRender(); lsSave(); }
     };
-    $$('.ls-recent button', el).forEach((b) => { b.onclick = () => { g.dir = b.dataset.dir; lsRender(); lsSave(); }; });
+    $$('.ls-recent [data-dir]', el).forEach((b) => { b.onclick = () => { g.dir = b.dataset.dir; lsRender(); lsSave(); }; });
+    // X no atalho: tira a pasta do histórico (a pasta no disco não é mexida)
+    $$('.ls-recent [data-rmdir]', el).forEach((b) => { b.onclick = (e) => { e.stopPropagation(); set.recentDirs = (set.recentDirs || []).filter((d) => d !== b.dataset.rmdir); saveSettings(); lsRender(); }; });
     $$('[data-fx]', el).forEach((s) => { s.onclick = (e) => { e.preventDefault(); const k = s.dataset.fx; g[k].on = !g[k].on;
       if (g[k].on && !g[k].text && k !== 'sub') g[k].text = k === 'pre' ? `${L.lsGroupTag}_` : `_${L.lsGroupTag}`;
       lsRender(); lsSave(); if (g[k].on && !g[k].text) { const i = $(`[data-fxt="${k}"]`); if (i) i.focus(); } }; });

@@ -1237,3 +1237,9 @@
 .ls-nm .ls-ren:hover{background:var(--fill)}
 .ls-row.sel .ls-nm .ls-ren:hover{background:color-mix(in srgb,var(--text) 10%,transparent)}
 #lsRows,#lsRows:focus,#lsRows:focus-visible{outline:none!important;box-shadow:none!important}
+/* histórico de pastas: X ao passar o mouse */
+.ls-rc{position:relative;display:inline-flex;max-width:100%}
+.ls-rc .ls-rc-x{position:absolute;top:-5px;right:-5px;width:16px;height:16px;padding:0;border-radius:50%;display:grid;place-items:center;background:var(--text-3);color:var(--bg);opacity:0;transition:opacity .12s}
+.ls-rc .ls-rc-x svg{width:8px;height:8px}
+.ls-rc:hover .ls-rc-x{opacity:1}
+.ls-rc .ls-rc-x:hover{background:var(--red,#FF453A);color:#fff}

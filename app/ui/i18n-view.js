@@ -264,3 +264,9 @@
   };
   Object.entries(T).forEach(([lang, [a, b, c, d]]) => { const L = window.MEC_I18N[lang]; if (L) Object.assign(L, { lsTplLbl: a, lsTplReset: b, lsTplOwn: c, lsTplLink: d }); });
 })();
+// Lista de links: tirar pasta do histórico
+(() => {
+  const T = { en: 'Remove from recent folders', pt: 'Tirar do histórico de pastas', es: 'Quitar de las carpetas recientes', fr: 'Retirer des dossiers récents', de: 'Aus den letzten Ordnern entfernen',
+    it: 'Togli dalle cartelle recenti', ru: 'Убрать из недавних папок', ja: '最近のフォルダから外す', ko: '최근 폴더에서 빼기', zh: '从最近文件夹中移除' };
+  Object.entries(T).forEach(([lang, v]) => { const L = window.MEC_I18N[lang]; if (L) L.lsRecentRm = v; });
+})();
