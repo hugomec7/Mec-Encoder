@@ -288,7 +288,7 @@ pub fn ytdlp_args(job: &Job, t: &Tools, work: &Path) -> Vec<String> {
         format!("download:{P}P %(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s|%(info.format_id)s")]);
     a.extend(["--progress-template".into(), format!("postprocess:{P}Q %(progress.postprocessor)s|%(progress.status)s")]);
     a.push("--".into());
-    a.push(job.url.trim().to_string());
+    a.push(split_referer(job.url.trim()).0);
     a
 }
 
@@ -300,15 +300,129 @@ pub fn info_args(url: &str, t: &Tools) -> Vec<String> {
     if let Some(c) = &t.cookies { a.extend(["--cookies".into(), c.to_string_lossy().into_owned()]); }
     match &t.cache { Some(c) => a.extend(["--cache-dir".into(), c.to_string_lossy().into_owned()]), None => a.push("--no-cache-dir".into()) }
     a.extend(site_headers(url));
-    a.extend(["--".into(), url.trim().to_string()]);
+    a.extend(["--".into(), split_referer(url.trim()).0]);
     a
 }
 
 /// Sites cujos arquivos só abrem vindo da página deles (o servidor de vídeo confere o Referer).
+/// Um link direto achado numa página leva junto a página de onde veio ("#mec-ref=<página>"): o "#" não vai para o servidor,
+/// e o yt-dlp recebe o link limpo com --referer (muitos servidores de vídeo só entregam vindo da página deles).
+pub const REF_MARK: &str = "#mec-ref=";
+pub fn with_referer(media: &str, page: &str) -> String { format!("{media}{REF_MARK}{}", pct_encode(page)) }
+pub fn split_referer(url: &str) -> (String, Option<String>) {
+    match url.find(REF_MARK) {
+        Some(i) => (url[..i].to_string(), Some(pct_decode(&url[i + REF_MARK.len()..])).filter(|r| r.starts_with("http"))),
+        None => (url.to_string(), None),
+    }
+}
+fn pct_encode(s: &str) -> String {
+    s.bytes().map(|b| if b.is_ascii_alphanumeric() || b"-_.~/:".contains(&b) { (b as char).to_string() } else { format!("%{b:02X}") }).collect()
+}
+fn pct_decode(s: &str) -> String {
+    let b = s.as_bytes(); let mut out = Vec::with_capacity(b.len()); let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'%' && i + 2 < b.len() {
+            if let Some(v) = s.get(i + 1..i + 3).and_then(|h| u8::from_str_radix(h, 16).ok()) { out.push(v); i += 3; continue; }
+        }
+        out.push(b[i]); i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
 pub fn site_headers(url: &str) -> Vec<String> {
-    let host = url.split("://").nth(1).unwrap_or(url).split(['/', '?', '#']).next().unwrap_or("").to_lowercase();
+    let (clean, referer) = split_referer(url);
+    if let Some(r) = referer { return vec!["--referer".into(), r]; }
+    let host = clean.split("://").nth(1).unwrap_or(&clean).split(['/', '?', '#']).next().unwrap_or("").to_lowercase();
     if host == "erome.com" || host.ends_with(".erome.com") { return vec!["--referer".into(), "https://www.erome.com/".into()]; }
     Vec::new()
+}
+
+/// Vídeos de uma página que o yt-dlp não conhece (o "Baixar" de sites sem extrator). Procura, nesta ordem:
+/// og:video / twitter:player:stream, <video src>/<source src>, "contentUrl" (dados estruturados) e, se nada disso
+/// existir, links .mp4/.m3u8/.webm soltos no código. Devolve o título da página e os links (absolutos, sem repetir).
+pub fn page_media(html: &str, page: &str) -> (String, Vec<AlbumItem>) {
+    let meta = |prop: &str| -> Vec<String> {
+        let mut out = Vec::new(); let mut rest = html;
+        for key in [format!("property=\"{prop}\""), format!("name=\"{prop}\"")] {
+            rest = html;
+            while let Some(i) = rest.find(&key) {
+                let start = rest[..i].rfind('<').unwrap_or(0); let end = i + rest[i..].find('>').unwrap_or(0);
+                if let Some(v) = tag_attr(&rest[start..end], "content") { out.push(v); }
+                rest = &rest[i + key.len()..];
+            }
+        }
+        out
+    };
+    let title = meta("og:title").into_iter().next().or_else(|| {
+        let i = html.find("<title")?; let a = i + html[i..].find('>')? + 1; let b = a + html[a..].find("</title")?;
+        Some(unescape(html[a..b].trim()))
+    }).unwrap_or_default();
+    let thumb = meta("og:image").into_iter().next().map(|t| absolute(&t, page)).unwrap_or_default();
+    let media = |u: &str| { let l = u.to_lowercase(); let p = l.split(['?', '#']).next().unwrap_or(""); p.ends_with(".mp4") || p.ends_with(".m3u8") || p.ends_with(".webm") || p.ends_with(".mov") || p.ends_with(".m4v") };
+    let mut found: Vec<String> = Vec::new();
+    for k in ["og:video:secure_url", "og:video:url", "og:video", "twitter:player:stream"] { found.extend(meta(k).into_iter().filter(|u| media(u))); }
+    // <video src> e <source src>
+    for tag in ["<video", "<source"] {
+        let mut rest = html;
+        while let Some(i) = rest.find(tag) {
+            let end = i + rest[i..].find('>').unwrap_or(0);
+            if let Some(v) = tag_attr(&rest[i..end], "src").filter(|v| !v.starts_with("blob:") && !v.is_empty()) { found.push(v); }
+            rest = &rest[i + tag.len()..];
+        }
+    }
+    // dados estruturados: "contentUrl":"https:\/\/..."
+    let mut rest = html;
+    while let Some(i) = rest.find("\"contentUrl\"") {
+        let r = &rest[i + 12..];
+        if let Some(a) = r.find('"') { if let Some(b) = r[a + 1..].find('"') { let v = r[a + 1..a + 1 + b].replace("\\/", "/"); if media(&v) { found.push(v); } } }
+        rest = &rest[i + 12..];
+    }
+    // último recurso: links de vídeo soltos no código (players em JavaScript)
+    if found.is_empty() {
+        let text = html.replace("\\/", "/");
+        for ext in [".mp4", ".m3u8", ".webm"] {
+            let mut from = 0;
+            while let Some(j) = text[from..].find(ext) {
+                let at = from + j;
+                let start = text[..at].rfind(|c: char| c == '"' || c == '\'' || c.is_whitespace() || c == '(' || c == '=').map_or(0, |x| x + 1);
+                let tail = &text[at + ext.len()..];
+                let stop = tail.find(|c: char| c == '"' || c == '\'' || c.is_whitespace() || c == ')' || c == '<').unwrap_or(tail.len());
+                let u = format!("{}{}{}", &text[start..at], ext, &tail[..stop]);
+                if u.starts_with("http") || u.starts_with("//") || u.starts_with('/') { found.push(u); }
+                from = at + ext.len();
+            }
+        }
+    }
+    let mut items: Vec<AlbumItem> = Vec::new();
+    for u in found {
+        let u = absolute(&unescape(u.trim()), page);
+        if !u.starts_with("http") || items.iter().any(|x| x.url == u) { continue; }
+        items.push(AlbumItem { url: u, thumb: thumb.clone() });
+    }
+    (title, items)
+}
+
+fn tag_attr(tag: &str, name: &str) -> Option<String> {
+    for q in ['"', '\''] {
+        let k = format!(" {name}={q}");
+        if let Some(i) = tag.find(&k) {
+            let i = i + k.len(); let e = tag[i..].find(q)? + i;
+            return Some(unescape(tag[i..e].trim()));
+        }
+    }
+    None
+}
+
+/// Link relativo da página → absoluto.
+fn absolute(u: &str, page: &str) -> String {
+    if u.starts_with("http://") || u.starts_with("https://") { return u.to_string(); }
+    let scheme = if page.starts_with("http://") { "http:" } else { "https:" };
+    if let Some(r) = u.strip_prefix("//") { return format!("{scheme}//{r}"); }
+    let host_end = page.find("://").map(|i| i + 3 + page[i + 3..].find('/').unwrap_or(page.len() - i - 3)).unwrap_or(page.len());
+    if u.starts_with('/') { return format!("{}{u}", &page[..host_end]); }
+    let base = page.split(['?', '#']).next().unwrap_or(page);
+    let dir = &base[..base.rfind('/').filter(|&i| i >= host_end).map_or(base.len(), |i| i + 1)];
+    if dir.ends_with('/') { format!("{dir}{u}") } else { format!("{dir}/{u}") }
 }
 
 /// Álbum do Erome (erome.com/a/<id>): o yt-dlp não lê esse site, então o app lê a página e cada vídeo vira um link
@@ -787,6 +901,28 @@ mod tests {
     fn tools_() -> Tools {
         Tools { ytdlp: "/t/yt-dlp".into(), deno: Some("/t/deno".into()), ffmpeg: "/f/ffmpeg".into(), ffprobe: "/f/ffprobe".into(),
                 encoder: Encoder::Nvenc, cache: None, cookies: None }
+    }
+
+    #[test]
+    fn page_videos() {
+        let page = "https://site.example/videos/meme-123?x=1";
+        let html = r#"<title>Meme engraçado &amp; tal</title><meta property="og:image" content="/thumbs/1.jpg">
+          <video id="p" poster="/p.jpg"><source src="//cdn.example/v/123_720.mp4?t=9&amp;h=1" type="video/mp4"><source src='/v/123_480.mp4'></video>
+          <script>{"@type":"VideoObject","contentUrl":"https:\/\/cdn.example\/v\/123_720.mp4?t=9&h=1"}</script>"#;
+        let (t, v) = page_media(html, page);
+        assert_eq!(t, "Meme engraçado & tal");
+        let urls: Vec<&str> = v.iter().map(|x| x.url.as_str()).collect();
+        assert_eq!(urls, vec!["https://cdn.example/v/123_720.mp4?t=9&h=1", "https://site.example/v/123_480.mp4"]);
+        assert_eq!(v[0].thumb, "https://site.example/thumbs/1.jpg");
+        // só um player em JavaScript: o link solto no código
+        let js = r#"<html><script>player.setup({file: "https:\/\/media.example\/hls\/abc\/index.m3u8", image: "x.jpg"})</script>"#;
+        assert_eq!(page_media(js, page).1[0].url, "https://media.example/hls/abc/index.m3u8");
+        assert!(page_media("<html>nada</html>", page).1.is_empty());
+        // a página vai junto no link (depois do #), e o yt-dlp recebe o link limpo com --referer
+        let l = with_referer("https://cdn.example/v/1.mp4?a=b", page);
+        assert_eq!(split_referer(&l), ("https://cdn.example/v/1.mp4?a=b".to_string(), Some(page.to_string())));
+        assert_eq!(site_headers(&l), vec!["--referer".to_string(), page.into()]);
+        assert_eq!(*info_args(&l, &tools_()).last().unwrap(), "https://cdn.example/v/1.mp4?a=b".to_string());
     }
 
     #[test]

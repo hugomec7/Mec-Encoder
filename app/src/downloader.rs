@@ -312,21 +312,49 @@ pub async fn dl_login(app: AppHandle, site: String, title: String) -> Result<(),
 /// Só os campos que a janela usa (o JSON inteiro do YouTube passa de 1 MB).
 /// Lê um álbum do Erome (como o gallery-dl): a página às vezes pede "Please wait a few moments" (proteção do site) e
 /// abre na tentativa seguinte. Devolve no formato de playlist do yt-dlp que a tela já entende.
-fn erome_album(page: &str, id: &str) -> Result<Value, String> {
-    let agent = ureq::AgentBuilder::new().timeout(std::time::Duration::from_secs(30))
+/// Página como um navegador pediria. Se o site mostrar a espera da proteção ("Please wait a few moments" /
+/// "Just a moment"), espera e tenta de novo (até 5 vezes).
+fn fetch_page(url: &str, referer: &str) -> Result<String, String> {
+    let agent = ureq::AgentBuilder::new().timeout(std::time::Duration::from_secs(30)).redirects(8)
         .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36").build();
-    let url = format!("https://www.erome.com/a/{id}");
     let mut html = String::new();
     for attempt in 0..5 {
-        match agent.get(&url).set("Accept-Language", "en-US,en;q=0.9").set("Referer", "https://www.erome.com/").call() {
+        let mut rq = agent.get(url).set("Accept-Language", "en-US,en;q=0.9").set("Accept", "text/html,application/xhtml+xml,*/*;q=0.8");
+        if !referer.is_empty() { rq = rq.set("Referer", referer); }
+        match rq.call() {
             Ok(r) => { html = r.into_string().map_err(|e| format!("dl-network|{e}"))?; }
-            Err(ureq::Error::Status(410, _)) | Err(ureq::Error::Status(404, _)) => return Err(format!("dl-unavailable|{page}")),
+            Err(ureq::Error::Status(410, _)) | Err(ureq::Error::Status(404, _)) => return Err(format!("dl-unavailable|{url}")),
             Err(ureq::Error::Status(c, _)) => return Err(format!("dl-network|HTTP {c}")),
             Err(e) => return Err(format!("dl-network|{e}")),
         }
-        if !html.get(..2000).unwrap_or(&html).contains("Please wait a few moments") { break; }
+        let head = html.get(..3000).unwrap_or(&html);
+        if !head.contains("Please wait a few moments") && !head.contains("<title>Just a moment") { break; }
         if attempt < 4 { std::thread::sleep(std::time::Duration::from_secs(5)); }
     }
+    Ok(html)
+}
+
+/// Site que o yt-dlp não conhece: procura os vídeos na própria página (ver download::page_media). Cada link leva a
+/// página junto (download::with_referer). Devolve no formato de playlist que a tela já entende.
+fn page_videos(page: &str) -> Result<Value, String> {
+    let html = fetch_page(page, "")?;
+    let (title, items) = download::page_media(&html, page);
+    if items.is_empty() { return Err(format!("dl-unsupported|nenhum vídeo na página {page}")); }
+    let host = page.split("://").nth(1).unwrap_or(page).split('/').next().unwrap_or("").trim_start_matches("www.").to_string();
+    let title = if title.trim().is_empty() { host.clone() } else { title };
+    let many = items.len() > 1;
+    let entries: Vec<Value> = items.iter().enumerate().map(|(i, it)| {
+        let stem = it.url.split(['?', '#']).next().unwrap_or("").rsplit('/').next().unwrap_or("").split('.').next().unwrap_or("").to_string();
+        json!({ "url": download::with_referer(&it.url, page), "title": if many { format!("{title} {}", i + 1) } else { title.clone() },
+                "thumbnail": it.thumb, "id": stem, "duration": Value::Null, "uploader": Value::Null, "uploader_id": Value::Null })
+    }).collect();
+    Ok(json!({ "_type": "playlist", "title": title, "extractor_key": host, "webpage_url": page,
+               "playlist_count": entries.len(), "entries": entries, "formats": [], "subs": [], "autoSubs": [] }))
+}
+
+fn erome_album(page: &str, id: &str) -> Result<Value, String> {
+    let url = format!("https://www.erome.com/a/{id}");
+    let html = fetch_page(&url, "https://www.erome.com/").map_err(|e| if e.starts_with("dl-unavailable") { format!("dl-unavailable|{page}") } else { e })?;
     let (title, items) = download::erome_parse(&html);
     if items.is_empty() { return Err(format!("dl-unsupported|erome: nenhum vídeo no álbum {id}")); }
     let title = if title.trim().is_empty() { id.to_string() } else { title };
@@ -360,9 +388,20 @@ pub async fn dl_info(app: AppHandle, state: State<'_, AppState>, url: String) ->
     }).flatten();
     let tools = Tools { ytdlp: yt, deno, ffmpeg: e.ffmpeg()?, ffprobe: e.ffprobe()?, encoder: e.encoder.lock().unwrap().clone(),
                         cache: Some(tools_dir(&app).join("cache")), cookies: ck.clone() };
-    let res = tauri::async_runtime::spawn_blocking(move || download::info(&url, &tools)).await.map_err(|e| e.to_string())?;
+    let u2 = url.clone();
+    let res = tauri::async_runtime::spawn_blocking(move || download::info(&u2, &tools)).await.map_err(|e| e.to_string())?;
     if let Some(f) = ck { let _ = std::fs::remove_file(f); }
-    let text = res?;
+    // site que o yt-dlp não conhece: procura o vídeo na página (link direto já marcado não volta aqui)
+    let text = match res {
+        Err(e) if e.starts_with("dl-unsupported") && !url.contains(download::REF_MARK) => {
+            let page = url.clone();
+            return match tauri::async_runtime::spawn_blocking(move || page_videos(&page)).await.map_err(|x| x.to_string())? {
+                Ok(v) => Ok(v),
+                Err(_) => Err(e),   // nada na página: fica o erro do yt-dlp
+            };
+        }
+        r => r?,
+    };
     let v: Value = serde_json::from_str(&text).map_err(|e| e.to_string())?;
     let pick = |o: &Value, keys: &[&str]| -> Value {
         let mut m = serde_json::Map::new();

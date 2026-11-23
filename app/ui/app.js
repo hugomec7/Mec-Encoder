@@ -2836,7 +2836,7 @@
     });
     return out;
   }
-  const dlShort = (u) => u.replace(/^https?:\/\/(www\.)?/i, '');
+  const dlShort = (u) => u.replace(/#mec-ref=.*$/, '').replace(/^https?:\/\/(www\.)?/i, '');
   const SITE = { erome: 'Erome', youtube: 'YouTube', tiktok: 'TikTok', twitter: 'X', instagram: 'Instagram', facebook: 'Facebook', reddit: 'Reddit', vimeo: 'Vimeo', twitch: 'Twitch', kwai: 'Kwai', pinterest: 'Pinterest', dailymotion: 'Dailymotion', soundcloud: 'SoundCloud', threads: 'Threads', bluesky: 'Bluesky', generic: '' };
   function dlSite(it) {
     const k = String((it.meta && it.meta.site) || '').toLowerCase();
@@ -2852,7 +2852,7 @@
 
   function dlSave() {
     const keep = DL.list.filter((it) => ['done', 'err', 'cancel'].includes(it.status)).slice(0, 60)
-      .map(({ id, url, kind, status, meta, files, size, web, err, errCode, t, extras, height, subs, thumb, audioFmt, section, gif, dest, name, nameTpl }) => ({ id, url, kind, status, meta, files, size, web, err, errCode, t, extras, height, subs, thumb, audioFmt, section, gif, dest, name, nameTpl }));
+      .map(({ id, url, kind, status, meta, files, size, web, err, errCode, t, extras, height, subs, thumb, audioFmt, section, gif, dest, name, nameTpl, page }) => ({ id, url, kind, status, meta, files, size, web, err, errCode, t, extras, height, subs, thumb, audioFmt, section, gif, dest, name, nameTpl, page }));
     store.set('mec.downloads', JSON.stringify(keep));
   }
   function dlLoad() {
@@ -2986,6 +2986,19 @@
       if (s === 'cancelled') it.status = 'cancel';
       else { const i = s.indexOf('|'); it.status = 'err'; it.errCode = i > 0 ? s.slice(0, i) : s.startsWith('dl-') ? s : 'unknown'; it.err = i > 0 ? s.slice(i + 1) : s; }
       if (it.errCode === 'dl-setup') { DL.entered = false; dlEnter(); }
+      // site que o yt-dlp não conhece: procura o vídeo na própria página (um: baixa; vários: abre a lista para escolher)
+      if (it.errCode === 'dl-unsupported' && !it.page && !/#mec-ref=/.test(it.url)) {
+        try {
+          const info = await inv('dl_info', { url: it.url });
+          const es = (info && info.entries) || [];
+          if (es.length === 1) {
+            Object.assign(it, { page: it.url, url: es[0].url, status: 'wait', err: null, errCode: null,
+              meta: Object.assign({}, it.meta, { title: es[0].title || '', thumbnail: es[0].thumbnail || '', site: info.extractor_key }) });
+          } else if (es.length > 1) {
+            it.status = 'cancel'; DL.list = DL.list.filter((x) => x !== it); dlPickOpen(it.url, it.kind);
+          }
+        } catch { /* fica o erro de antes */ }
+      }
     }
     DL.running--; it.step = null;
     dlPatch(it); dlSave(); dlRenderHead(); dlPump(); dlAutoUpdate();
@@ -3176,7 +3189,7 @@
       else { const q = S.queue.find((x) => cutterOk(x)); setView('conv', true); if (q) { selectOnly(q.id); renderAll(); openCutter(true); } }
     }
     else if (a === 'login') { const acc = dlAccOf(it); if (acc) dlLogin(acc.id); }
-    else if (a === 'copylink') copyText(it.url, L.dlLinkCopied);
+    else if (a === 'copylink') copyText(it.page || it.url, L.dlLinkCopied);
     else if (a === 'gif') dlAdd([it.url], 'gif', { meta: Object.assign({}, it.meta), section: it.section || null });
     else if (a === 'again') dlPickOpen(it.url, it.kind === 'audio' ? 'audio' : 'video');
     else if (a === 'retry') dlRetry(it);
