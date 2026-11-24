@@ -64,6 +64,10 @@ pub struct AppState {
     proxy_children: Children,
     /// Aba Baixar: downloads rodando.
     downloads: Arc<downloader::Downloads>,
+    /// A tela já carregou (avisou por `ready`): antes disso, tarefas e pastas vigiadas esperam (os itens não se perdem).
+    ui_ready: AtomicBool,
+    /// Arquivos/pastas da linha de comando que chegaram antes da tela carregar.
+    cli_paths: Mutex<Vec<PathBuf>>,
     /// Motor de quadros do player (mecview), aberto no primeiro quadro pedido.
     viewer: Arc<viewer::Viewer>,
 }
@@ -96,6 +100,8 @@ fn file_sig(p: &std::path::Path) -> Option<(u64, u64)> {
 /// (terminou de copiar). Só a pasta de cima, sem subpastas, para não pegar o que o próprio app grava em "proxy\".
 fn watch_tick(app: &AppHandle) {
     let state = app.state::<AppState>();
+    // antes da tela carregar, os itens se perderiam (ninguém ouvindo): espera
+    if !state.ui_ready.load(Ordering::SeqCst) { return; }
     let dirs: Vec<WatchDir> = state.watch.lock().unwrap().iter().filter(|w| w.on && w.path.is_dir()).cloned().collect();
     for w in dirs {
         let Ok(rd) = std::fs::read_dir(&w.path) else { continue };
@@ -131,13 +137,25 @@ fn watch_tick(app: &AppHandle) {
 fn jobs_dir(app: &AppHandle) -> PathBuf { store::dir(app).join("jobs") }
 
 const JOBS_README: &str = "Mec Encoder - pasta de tarefas (automação)\r\n\r\n\
-Com o Mec Encoder aberto, coloque aqui um arquivo .json e ele entra na fila e renderiza sozinho:\r\n\r\n\
+Coloque aqui um arquivo .json e ele entra na fila e renderiza sozinho (com o app fechado, entra quando ele abrir):\r\n\r\n\
 {\r\n  \"files\": [\"D:\\\\Brutos\\\\IMG_4821.MOV\", \"D:\\\\Brutos\\\\Cartao B\"],\r\n  \"preset\": \"RAW\"\r\n}\r\n\r\n\
 Opcional: \"outputFolder\": \"D:\\\\Renders\", \"keepTree\": true, \"suffix\": \"_{data}\" (ou false), \"subfolder\": \"proxy\" (ou false),\r\n\
 \"trim\": [12.5, 40] (ou varios trechos: [[0, 5], [12, 20]]), \"join\": true (junta os trechos num arquivo; sem isso sai um arquivo por trecho),\r\n\
 \"deleteSource\": false.\r\n\r\n\
 O andamento fica em <nome>.status.json (state: queued, running, done ou failed; items com status, progress, output e error).\r\n\
 O pedido vai para running\\ enquanto renderiza e para done\\ no fim. Pedido com erro vai para failed\\.\r\n\r\n\
+SÓ ENFILEIRAR (sem converter): \"start\": false\r\n\
+{\r\n  \"files\": [\"D:\\\\Brutos\\\\IMG_4821.MOV\", \"D:\\\\Brutos\\\\C1165.MP4\"],\r\n  \"preset\": \"RAW\",\r\n  \"start\": false\r\n}\r\n\
+- Os arquivos entram na fila com a predefinição pedida e ficam parados até você clicar em Converter. Nada renderiza sozinho.\r\n\
+- As opções (outputFolder, keepTree, suffix, subfolder, trim, join, deleteSource) ficam guardadas em cada item e valem quando converter.\r\n\
+- Os itens ficam salvos na fila (queue.json): fechar e abrir o app não perde nada.\r\n\
+- O pedido termina ao entrar na fila: o .json vai para queued\\ e o <nome>.status.json fica com state \"queued\" (não muda sozinho\r\n\
+  para running; depois disso, converter é com você, no app). Cada item aparece em items com status \"queued\" e o id na fila.\r\n\
+- Predefinicao que nao existe, ou nenhum arquivo encontrado: o .json vai para failed\\ e o status.json fica com state \"failed\"\r\n\
+  e error \"preset-not-found\" ou \"source-missing\" (nada entra na fila).\r\n\
+- Sem \"start\" (ou \"start\": true): igual a antes, renderiza sozinho.\r\n\r\n\
+Abrir arquivos pelo app: mec-encoder.exe \"arquivo\" \"pasta\" ... entra na fila com a predefinição padrao, sem converter\r\n\
+(com o app já aberto, os caminhos vao para a janela aberta).\r\n\r\n\
 Linha de comando (sem abrir o app): bin\\mec.exe convert <arquivos ou pastas> --preset RAW   (mec.exe help)\r\n";
 
 fn write_status(app: &AppHandle, name: &str, status: &Value) {
@@ -181,6 +199,34 @@ fn jobs_tick(app: &AppHandle) {
             _ => vec![],
         };
         let missing: Vec<&PathBuf> = files.iter().filter(|f| !f.exists()).collect();
+        // "start": false = só enfileirar: os itens entram na fila parados e o pedido termina aí (vai para queued\)
+        if job.get("start").and_then(|v| v.as_bool()) == Some(false) {
+            let fail = |error: &str, message: String| {
+                let _ = std::fs::create_dir_all(dir.join("failed"));
+                let _ = std::fs::rename(&p, dir.join("failed").join(&fname));
+                write_status(app, &name, &json!({ "job": name, "state": "failed", "start": false, "error": error, "message": message,
+                    "items": missing.iter().map(|f| json!({ "file": f, "status": "error", "error": "source-missing" })).collect::<Vec<_>>() }));
+                log(app, &format!("job | {name} | queue only | failed: {error}"));
+            };
+            let asked = job.get("preset").and_then(|v| v.as_str()).map(|s| s.trim().to_lowercase()).filter(|s| !s.is_empty());
+            if let Some(a) = &asked {
+                let presets = store::load_presets(app).presets;
+                if !presets.iter().any(|x| x.id.to_lowercase() == *a || x.name.trim().to_lowercase() == *a) {
+                    fail("preset-not-found", format!("preset \"{}\" does not exist", job["preset"].as_str().unwrap_or_default()));
+                    continue;
+                }
+            }
+            if files.len() == missing.len() { fail("source-missing", "none of the files exist".into()); continue; }
+            let _ = std::fs::create_dir_all(dir.join("queued"));
+            let _ = std::fs::rename(&p, dir.join("queued").join(&fname));
+            write_status(app, &name, &json!({ "job": name, "state": "queued", "start": false,
+                "items": missing.iter().map(|f| json!({ "file": f, "status": "error", "error": "source-missing" })).collect::<Vec<_>>() }));
+            log(app, &format!("job | {name} | queue only | {} file(s)", files.len()));
+            let origin = json!({ "tag": format!("job-{name}"), "job": name, "start": false, "auto": false,
+                                 "preset": job.get("preset").cloned().unwrap_or(Value::Null), "options": job, "missing": missing });
+            add_paths(app.clone(), files.iter().filter(|f| f.exists()).cloned().collect(), Some(origin));
+            continue;
+        }
         let _ = std::fs::create_dir_all(dir.join("running"));
         let _ = std::fs::rename(&p, dir.join("running").join(&fname));
         write_status(app, &name, &json!({ "job": name, "state": "queued", "items": missing.iter().map(|f| json!({ "file": f, "status": "error", "error": "source-missing" })).collect::<Vec<_>>() }));
@@ -202,7 +248,10 @@ fn job_status(app: AppHandle, name: String, status: Value, finished: bool) {
         let ok = status.get("state").and_then(|s| s.as_str()) == Some("done");
         let to = dir.join(if ok { "done" } else { "failed" });
         let _ = std::fs::create_dir_all(&to);
-        let _ = std::fs::rename(dir.join("running").join(format!("{name}.json")), to.join(format!("{name}.json")));
+        // sai de running\ (renderizou) ou de queued\ ("start": false sem nenhum arquivo legível)
+        for from in ["running", "queued"] {
+            if std::fs::rename(dir.join(from).join(format!("{name}.json")), to.join(format!("{name}.json"))).is_ok() { break; }
+        }
     }
 }
 
@@ -942,8 +991,25 @@ fn notify(app: AppHandle, title: String, body: String) {
 }
 
 #[tauri::command]
-fn ready(app: AppHandle) {
+fn ready(app: AppHandle, state: State<'_, AppState>) {
     if let Some(w) = app.get_webview_window("main") { let _ = w.show(); let _ = w.set_focus(); }
+    if !state.ui_ready.swap(true, Ordering::SeqCst) {
+        // a tela abriu: entra o que veio pela linha de comando antes dela
+        let paths = std::mem::take(&mut *state.cli_paths.lock().unwrap());
+        if !paths.is_empty() { add_cli(&app, paths); }
+    }
+}
+
+/// mec-encoder.exe "arquivo" "pasta" ...: só os caminhos que existem (o resto da linha, como opções do sistema, fica de fora).
+fn cli_args(args: Vec<std::ffi::OsString>) -> Vec<PathBuf> {
+    args.into_iter().map(PathBuf::from).filter(|p| !p.as_os_str().to_string_lossy().starts_with('-') && p.exists()).collect()
+}
+
+/// Caminhos da linha de comando: entram na fila com a predefinição padrão, sem converter.
+fn add_cli(app: &AppHandle, paths: Vec<PathBuf>) {
+    log(app, &format!("cli | {} path(s)", paths.len()));
+    let tag = format!("cli-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis()));
+    add_paths(app.clone(), paths, Some(json!({ "tag": tag, "cli": true })));
 }
 
 // ======================================================================
@@ -975,8 +1041,14 @@ async fn install_update(app: AppHandle, state: State<'_, AppState>) -> Result<()
 fn main() {
     update::cleanup_old();
     tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
             if let Some(w) = app.get_webview_window("main") { let _ = w.unminimize(); let _ = w.show(); let _ = w.set_focus(); }
+            // segunda chamada (mec-encoder.exe "arquivo"): os caminhos vão para a janela que já está aberta
+            let base = PathBuf::from(&cwd);
+            let paths = cli_args(args.into_iter().skip(1).map(|a| { let p = PathBuf::from(&a); if p.is_relative() { base.join(p) } else { p }.into_os_string() }).collect());
+            if paths.is_empty() { return; }
+            let state = app.state::<AppState>();
+            if state.ui_ready.load(Ordering::SeqCst) { add_cli(app, paths); } else { state.cli_paths.lock().unwrap().extend(paths); }
         }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
@@ -1008,6 +1080,8 @@ fn main() {
                 proxy_children: Arc::new(Mutex::new(HashMap::new())),
                 downloads: Arc::new(downloader::Downloads::default()),
                 viewer: Arc::new(viewer::Viewer::default()),
+                ui_ready: AtomicBool::new(false),
+                cli_paths: Mutex::new(cli_args(std::env::args_os().skip(1).collect())),
             });
             downloader::clean_work(&handle);
             clean_partial(&handle);

@@ -4283,6 +4283,25 @@
   // fim da leitura de uma pasta vigiada ou tarefa: renderiza sozinho
   function originDone(p) {
     const o = p.origin; const ids = S.batches[o.tag] || []; delete S.batches[o.tag];
+    if (o.job && o.start === false) {
+      // só enfileirar: os itens ficam parados com a predefinição e as opções do pedido; o .status.json fica "queued"
+      const qs = ids.map(itemOf).filter(Boolean);
+      const items = qs.map((q) => ({ id: q.id, file: q.path, status: 'queued', preset: (q.cfg && q.cfg.name) || null, cuts: cutsOf(q), join: !!q.cutJoin }))
+        .concat((o.missing || []).map((f) => ({ file: f, status: 'error', error: 'source-missing' })),
+          (p.errors || []).map((x) => ({ file: x.path || x.file, status: 'error', error: 'corrupt', message: x.error })));
+      const st = { job: o.job, state: qs.length ? 'queued' : 'failed', start: false, preset: (qs[0] && qs[0].cfg && qs[0].cfg.name) || null,
+        queued: new Date().toISOString(), updated: new Date().toISOString(), items };
+      if (REAL) inv('job_status', { name: o.job, status: st, finished: !qs.length }).catch(() => {});
+      toast(L.jobQueued(o.job, qs.length), !!qs.length);
+      renderAll(true, ids);
+      return;
+    }
+    if (o.cli) {
+      const errs = (p.errors || []).length;
+      toast(ids.length ? L.added(ids.length) + (errs ? ' · ' + L.unreadable(errs) : '') : errs ? L.unreadable(errs) : L.noVideosFound, !!ids.length);
+      renderAll(true, ids);
+      return;
+    }
     if (o.job) {
       const bad = o.preset && !findPreset(o.preset);
       S.jobs[o.job] = { name: o.job, ids, t0: Date.now(), missing: (o.missing || []).map((f) => ({ file: f, status: 'error', error: 'source-missing' })),
@@ -4438,7 +4457,8 @@
       const pid = asked ? asked.id : p.info.isImage ? defaultImageId() : audioOnly ? defaultAudioId() : presetOf(S.set.defaultPreset) ? S.set.defaultPreset : S.presets[0].id;
       const q = { id: p.id, path: p.path, file: p.file, dir: p.dir, src: mapSrc(p.info), preset: pid, cfg: clone(presetOf(pid)), status: 'ready', thumb: null };
       if (o) {
-        q.job = o.job || null; q.watch = o.watch || null;
+        // "start": false: o item fica na fila por conta do usuário (o pedido termina ao entrar; não acompanha depois)
+        q.job = o.start === false ? null : o.job || null; q.watch = o.watch || null;
         if (o.options) applyJobOptions(q, o.options);
         (S.batches[o.tag] = S.batches[o.tag] || []).push(q.id);
       }

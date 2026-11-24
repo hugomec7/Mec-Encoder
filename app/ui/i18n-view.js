@@ -270,3 +270,19 @@
     it: 'Togli dalle cartelle recenti', ru: 'Убрать из недавних папок', ja: '最近のフォルダから外す', ko: '최근 폴더에서 빼기', zh: '从最近文件夹中移除' };
   Object.entries(T).forEach(([lang, v]) => { const L = window.MEC_I18N[lang]; if (L) L.lsRecentRm = v; });
 })();
+// Pasta de tarefas: "start": false (só enfileirar)
+(() => {
+  const T = {
+    en: (n, k) => `Job "${n}": ${k} file${k === 1 ? '' : 's'} added to the queue, waiting for you to convert`,
+    pt: (n, k) => `Tarefa "${n}": ${k} arquivo${k === 1 ? '' : 's'} na fila, esperando você converter`,
+    es: (n, k) => `Tarea "${n}": ${k} archivo${k === 1 ? '' : 's'} en la cola, esperando que conviertas`,
+    fr: (n, k) => `Tâche « ${n} » : ${k} fichier${k === 1 ? '' : 's'} dans la file, en attente de conversion`,
+    de: (n, k) => `Auftrag „${n}“: ${k} Datei${k === 1 ? '' : 'en'} in der Warteschlange, wartet auf Konvertieren`,
+    it: (n, k) => `Attività "${n}": ${k} file in coda, in attesa che tu converta`,
+    ru: (n, k) => `Задание «${n}»: файлов в очереди: ${k}, ждут конвертации`,
+    ja: (n, k) => `ジョブ「${n}」: ${k} 件をキューに追加（変換待ち）`,
+    ko: (n, k) => `작업 "${n}": ${k}개 대기열에 추가됨 (변환 대기)`,
+    zh: (n, k) => `任务“${n}”：${k} 个文件已加入队列，等待转换`,
+  };
+  Object.entries(T).forEach(([lang, v]) => { const L = window.MEC_I18N[lang]; if (L) L.jobQueued = v; });
+})();
