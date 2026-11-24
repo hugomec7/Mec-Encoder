@@ -1,6 +1,19 @@
 // Gerado por docs/release-notes/make_news.py — não edite à mão.
 window.MEC_NEWS = [
  {
+  "version": "0.3.12",
+  "en": [
+   "**Tasks folder: queue without converting.** A new optional field `\"start\": false` in the job `.json` puts the files in the app's queue with the chosen preset and leaves them waiting for you to click Convert. Nothing renders on its own. The options (`outputFolder`, `keepTree`, `suffix`, `subfolder`, `trim`, `join`, `deleteSource`) are kept in each item, and the items survive closing and opening the app. The job `.json` goes to `queued\\` and `<name>.status.json` stays with `state: \"queued\"`. A preset that doesn't exist sends the job to `failed\\` with `error: \"preset-not-found\"`. Jobs without `\"start\"` work as before. Details in `jobs\\README.txt`.",
+   "**Jobs placed while the app is closed** are picked up as soon as it opens, after the window is ready.",
+   "**Open files from the command line**: `mec-encoder.exe \"file\" \"folder\"` adds them to the queue with the default preset, without converting. With the app already open, the paths go to the open window and it comes to the front."
+  ],
+  "pt": [
+   "**Pasta de tarefas: enfileirar sem converter.** Um campo novo e opcional, `\"start\": false`, no `.json` do pedido coloca os arquivos na fila do app com a predefinição pedida e deixa parados, esperando você clicar em Converter. Nada renderiza sozinho. As opções (`outputFolder`, `keepTree`, `suffix`, `subfolder`, `trim`, `join`, `deleteSource`) ficam guardadas em cada item, e os itens continuam na fila depois de fechar e abrir o app. O `.json` do pedido vai para `queued\\` e o `<nome>.status.json` fica com `state: \"queued\"`. Predefinição que não existe manda o pedido para `failed\\` com `error: \"preset-not-found\"`. Pedidos sem `\"start\"` funcionam como antes. Detalhes no `jobs\\README.txt`.",
+   "**Pedidos colocados com o app fechado** são pegos assim que ele abre, depois que a janela fica pronta.",
+   "**Abrir arquivos pela linha de comando**: `mec-encoder.exe \"arquivo\" \"pasta\"` coloca na fila com a predefinição padrão, sem converter. Com o app já aberto, os caminhos vão para a janela aberta e ela vem para a frente."
+  ]
+ },
+ {
   "version": "0.3.11",
   "en": [
    "**Support for new sites in Download.** When a site isn't recognized, Mec Encoder now looks for the video on the page itself. With one video it downloads right away; with several, the list opens so you can choose.",
@@ -87,25 +100,6 @@ window.MEC_NEWS = [
    "**Exportar salva ali mesmo no Cortador**: não passa mais pela fila do Converter nem mostra preset. O vídeo fica exatamente como o original, só sem os trechos que você cortou (e recortado, se usou o crop). O andamento aparece no próprio botão (clique para cancelar) e no fim dá para tocar ou mostrar na pasta.",
    "**\"Ir para o Conversor\"** no lugar do botão \"Converter\" do Cortador, para não parecer que converte na hora.",
    "**Baixar como GIF**: botão GIF novo ao lado de Áudio (e opção GIF em \"Baixar...\", com trecho se quiser). Baixa só a imagem e entrega um .gif com o ajuste do preset GIF do Converter. O \"GIF\" do X, que na verdade é vídeo, agora vem como GIF de verdade. Os vídeos já baixados têm um botão GIF na linha."
-  ]
- },
- {
-  "version": "0.3.4",
-  "en": [
-   "**New player, like a video editor**: clicking or dragging on the timeline, the arrow keys and play no longer open FFmpeg each time. A player engine keeps the video open, reads it on the graphics card (GPU) when it can, and keeps the frames around the playhead ready in memory, so nearby frames show instantly. Works in the Cutter and in Convert (both sides of Compare).",
-   "**Play through the engine**: picture and sound together, already without the cut parts and with no stutter between cuts; speed keeps the pitch of the voice. **J** plays backward (again: 2×, 4×), **L** forward (2×, 4×), **K** pauses. If the engine fails on a file, the old player takes over.",
-   "**Preview quality like Premiere**: menu next to the speed with Paused and Playing, each in Automatic, Full, 1/2, 1/4 or 1/8.",
-   "**Frame memory** in Settings (1 to 8 GB of RAM) and an option to show the player timings on the video.",
-   "**Exact frame on cuts**: Export and GIF parts now start on the exact frame even right before a keyframe (in some HEVC videos the cut could start 1–3 frames late). The preview also shows the right frame there.",
-   "**Download**: finished downloads keep the link: **Copy link** or **Download again** (choose quality, video or audio only)."
-  ],
-  "pt": [
-   "**Player novo, como de editor de vídeo**: clicar ou arrastar na linha do tempo, as setas e o play não abrem mais o FFmpeg a cada vez. Um motor de reprodução fica com o vídeo aberto, lê na placa de vídeo quando dá e guarda na memória os quadros em volta da agulha, então os quadros perto aparecem na hora. Vale no Cortador e no Converter (os dois lados do Comparar).",
-   "**Play pelo motor**: imagem e som juntos, já sem os trechos cortados e sem engasgo entre os cortes; a velocidade mantém o tom da voz. **J** toca para trás (de novo: 2×, 4×), **L** para frente (2×, 4×), **K** pausa. Se o motor falhar num arquivo, o player antigo assume.",
-   "**Qualidade do preview como no Premiere**: menu ao lado da velocidade com Pausado e Tocando, cada um em Automática, Completa, 1/2, 1/4 ou 1/8.",
-   "**Memória de quadros** nas Configurações (1 a 8 GB de RAM) e opção de mostrar os tempos do player no vídeo.",
-   "**Quadro exato nos cortes**: Exportar e os trechos do GIF agora começam no quadro exato mesmo logo antes de um quadro-chave (em alguns vídeos HEVC o corte podia começar 1 a 3 quadros depois). A prévia também mostra o quadro certo ali.",
-   "**Baixar**: os downloads concluídos guardam o link: **Copiar link** ou **Baixar de novo** (escolher qualidade, vídeo ou só áudio)."
   ]
  }
 ];
