@@ -15,7 +15,9 @@
   const host = document.createElement('mec-encoder-float');
   host.style.cssText = 'all:initial;position:fixed;top:0;left:0;width:0;height:0;z-index:2147483647';
   const root = host.attachShadow({ mode: 'closed' });
-  root.innerHTML = `<style>
+  // montado elemento por elemento, sem HTML em texto
+  const style = document.createElement('style');
+  style.textContent = `
     .btn{position:fixed;display:none;align-items:center;justify-content:center;width:${SIZE}px;height:${SIZE}px;padding:0;border:0;border-radius:50%;
       cursor:pointer;background:rgba(23,24,27,.82);color:#fff;box-shadow:0 2px 8px rgba(0,0,0,.35);touch-action:none;transition:background .15s}
     .btn:hover{background:#1f6feb}.btn.ok{background:#2f9e44}.btn.err{background:#e03131}.btn.drag{cursor:grabbing;background:#1f6feb;transition:none}
@@ -24,11 +26,15 @@
       box-shadow:0 6px 24px rgba(0,0,0,.45);font:13px/18px system-ui,"Segoe UI",sans-serif}
     .menu button{all:unset;box-sizing:border-box;display:block;width:100%;padding:8px 14px;cursor:pointer}
     .menu button:first-child{font-weight:600}.menu button:hover{background:#2a2d33}
-    .menu .hint{padding:6px 14px 4px;font-size:11px;color:#7d8088;border-top:1px solid #2a2c31;margin-top:4px}
-  </style>
-  <button class="btn"><svg viewBox="0 0 24 24"><path d="M12 3v11.17l-3.59-3.58L7 12l5 5 5-5-1.41-1.41L13 14.17V3h-2zM5 19v2h14v-2H5z"/></svg></button>
-  <div class="menu"></div>`;
-  const btn = root.querySelector('.btn'); const menu = root.querySelector('.menu');
+    .menu .hint{padding:6px 14px 4px;font-size:11px;color:#7d8088;border-top:1px solid #2a2c31;margin-top:4px}`;
+  const NS = 'http://www.w3.org/2000/svg';
+  const btn = document.createElement('button'); btn.className = 'btn';
+  const svg = document.createElementNS(NS, 'svg'); svg.setAttribute('viewBox', '0 0 24 24');
+  const path = document.createElementNS(NS, 'path');
+  path.setAttribute('d', 'M12 3v11.17l-3.59-3.58L7 12l5 5 5-5-1.41-1.41L13 14.17V3h-2zM5 19v2h14v-2H5z');
+  svg.append(path); btn.append(svg);
+  const menu = document.createElement('div'); menu.className = 'menu';
+  root.append(style, btn, menu);
   btn.title = t('xTitle'); btn.setAttribute('aria-label', t('xTitle'));
   [['video', 'btnQuick'], ['audio', 'btnAudio'], ['gif', 'GIF']].forEach(([kind, key]) => {
     const b = document.createElement('button'); b.textContent = key === 'GIF' ? 'GIF' : t(key);
