@@ -1,6 +1,6 @@
 [package]
 name = "mec-link"
-version = "0.3.13-teste.3"
+version = "0.3.13"
 edition = "2021"
 description = "Mec Encoder: ponte entre a extensão do navegador e o app (native messaging)"
 license = "MIT"
