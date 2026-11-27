@@ -1,0 +1,13 @@
+{
+  "addons": {
+    "mec-encoder@hugomec": {
+      "updates": [
+        {
+          "version": "1.3.0",
+          "update_link": "https://github.com/hugomec7/Mec-Encoder/releases/download/v0.3.13/MecEncoder-Firefox-1.3.0.xpi",
+          "applications": { "gecko": { "strict_min_version": "128.0" } }
+        }
+      ]
+    }
+  }
+}

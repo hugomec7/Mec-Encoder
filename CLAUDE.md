@@ -74,7 +74,14 @@ responda em português, direto, sem jargão.
 - Com `--mec-link` o app abre minimizado e não rouba o foco; com ele já aberto, o link vai para a aba Baixar sem trazer
   a janela para a frente (evento `ext-link`, pendentes via `ext_take`).
 - Instalar para teste: Firefox › `about:debugging` › Este Firefox › Carregar extensão temporária › `manifest.json`.
-  Para ficar instalada de vez, precisa ser assinada no addons.mozilla.org (pode ser "unlisted").
+- Versão de verdade (instalada de vez): assinada no addons.mozilla.org como "On your own" (unlisted), pelo Hugo
+  (conta dele). Fluxo de cada versão nova da extensão:
+  1. Subir `version` no `manifest.json` e gerar o zip em `D:\hugo\Projetos\Apps\MecEncoder\Extensoes\`.
+  2. O Hugo envia o zip no AMO e baixa o `.xpi` assinado (salvar na mesma pasta Extensoes).
+  3. Anexar o `.xpi` ao release do app (`gh release upload vX.Y.Z MecEncoder-Firefox-A.B.C.xpi`) e pôr a versão
+     nova no topo de `browser/firefox-updates.json` (no main). O Firefox atualiza sozinho por esse arquivo
+     (`update_url` no manifest; **nunca mudar esse endereço**, senão quem já instalou para de receber).
+- `data_collection_permissions: none`: a extensão só manda o link para o app no próprio PC, nada vai para a internet.
 
 ## Como o Hugo gosta de trabalhar
 
