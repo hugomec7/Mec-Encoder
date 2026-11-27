@@ -1,5 +1,17 @@
 # Changelog · Novidades
 
+## 0.3.14
+
+**English**
+- **Installing the Firefox extension is clear now.** The **Install extension** button is in three places: the News window (the whole highlight card installs), the Download tab card and Settings › Firefox extension, now with the Firefox icon and a line explaining what happens. Clicking opens the signed extension in Firefox (even if your default browser is another one), and Firefox asks to add it.
+- **Fixed: "Connected" without the extension.** The app now reads Firefox's own list of extensions to know if Mec Encoder's extension is installed and enabled. It shows **Installed ✓** only when it really is, and updates by itself when you come back to the app after installing or removing it.
+- Without Firefox on the computer, the button becomes **Get Firefox** (official Mozilla page).
+
+**Português**
+- **Instalar a extensão do Firefox ficou claro.** O botão **Instalar extensão** está em três lugares: na janela de Novidades (o card de destaque inteiro instala), no cartão da aba Baixar e em Configurações › Extensão do Firefox, agora com o ícone do Firefox e uma linha explicando o que acontece. O clique abre a extensão assinada no Firefox (mesmo que o seu navegador padrão seja outro), e o Firefox pergunta se pode adicionar.
+- **Corrigido: "Conectada" sem a extensão.** O app agora lê a lista de extensões do próprio Firefox para saber se a extensão do Mec Encoder está instalada e ativa. Ele mostra **Instalada ✓** só quando está mesmo, e atualiza sozinho quando você volta para o app depois de instalar ou tirar a extensão.
+- Sem Firefox no computador, o botão vira **Baixar o Firefox** (página oficial da Mozilla).
+
 ## 0.3.13
 
 **English**

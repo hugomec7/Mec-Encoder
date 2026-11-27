@@ -1,6 +1,41 @@
 // Gerado por docs/release-notes/make_news.py — não edite à mão.
 window.MEC_NEWS = [
  {
+  "version": "0.3.14",
+  "en": [
+   "**Installing the Firefox extension is clear now.** The **Install extension** button is in three places: the News window (the whole highlight card installs), the Download tab card and Settings › Firefox extension, now with the Firefox icon and a line explaining what happens. Clicking opens the signed extension in Firefox (even if your default browser is another one), and Firefox asks to add it.",
+   "**Fixed: \"Connected\" without the extension.** The app now reads Firefox's own list of extensions to know if Mec Encoder's extension is installed and enabled. It shows **Installed ✓** only when it really is, and updates by itself when you come back to the app after installing or removing it.",
+   "Without Firefox on the computer, the button becomes **Get Firefox** (official Mozilla page)."
+  ],
+  "pt": [
+   "**Instalar a extensão do Firefox ficou claro.** O botão **Instalar extensão** está em três lugares: na janela de Novidades (o card de destaque inteiro instala), no cartão da aba Baixar e em Configurações › Extensão do Firefox, agora com o ícone do Firefox e uma linha explicando o que acontece. O clique abre a extensão assinada no Firefox (mesmo que o seu navegador padrão seja outro), e o Firefox pergunta se pode adicionar.",
+   "**Corrigido: \"Conectada\" sem a extensão.** O app agora lê a lista de extensões do próprio Firefox para saber se a extensão do Mec Encoder está instalada e ativa. Ele mostra **Instalada ✓** só quando está mesmo, e atualiza sozinho quando você volta para o app depois de instalar ou tirar a extensão.",
+   "Sem Firefox no computador, o botão vira **Baixar o Firefox** (página oficial da Mozilla)."
+  ],
+  "hl": {
+   "en": {
+    "title": "Installing the Firefox extension is easier",
+    "text": "Click Install extension here, in Settings or in the Download tab: Firefox opens and asks to add it.",
+    "action": "firefox"
+   },
+   "pt": {
+    "title": "Ficou fácil instalar a extensão do Firefox",
+    "text": "Clique em Instalar extensão aqui, nas Configurações ou na aba Baixar: o Firefox abre e pergunta se pode adicionar.",
+    "action": "firefox"
+   }
+  },
+  "app": {
+   "en": [
+    "Settings › **Firefox extension** shows the Firefox icon and whether the extension is installed.",
+    "Fixed: the app said \"Connected\" even without the extension installed."
+   ],
+   "pt": [
+    "Configurações › **Extensão do Firefox** mostra o ícone do Firefox e se a extensão está instalada.",
+    "Corrigido: o app dizia \"Conectada\" mesmo sem a extensão instalada."
+   ]
+  }
+ },
+ {
   "version": "0.3.13",
   "en": [
    "**Firefox extension.** Download videos without leaving the browser. Copy the video link (on X: Share › Copy link) and click the Mec Encoder icon: a menu shows the link and the options **Quick download**, **Audio only**, **GIF** and **Choose quality…**. It also works by right-clicking a link, a video or the page. Install it from the Download tab (**Install extension**) or from Options.",
@@ -117,17 +152,6 @@ window.MEC_NEWS = [
   ],
   "pt": [
    "**Correção: \"Apagar o original\" voltou a funcionar.** Desde a 0.3.4 o player novo deixava o vídeo aberto para a prévia, e o Windows não manda para a Lixeira um arquivo aberto, então o original ficava no lugar sem nenhum aviso. Agora a prévia solta o arquivo antes de apagar, tenta de novo por alguns segundos se outro programa estiver segurando, e se mesmo assim não der, aparece um aviso (o arquivo novo é sempre salvo)."
-  ]
- },
- {
-  "version": "0.3.6",
-  "en": [
-   "**Link list** in Download: paste several links at once and each video shows up with its name, thumbnail, site and length before downloading (a playlist or profile becomes one row per video; links with an error are left out). Choose a folder just for this list, for example Memes, without changing the usual download folder; folders you used before stay as shortcuts. The same options as \"Download…\": Video (max quality, 1080, 720 or 480, web ready), Audio, GIF or Thumbnail, plus subtitles and thumbnail. Each download in the list shows the folder it goes to.",
-   "**Fix**: in Convert, the aspect ratio mode showed \"Crop\" instead of its usual name since 0.3.5."
-  ],
-  "pt": [
-   "**Lista de links** no Baixar: cole vários links de uma vez e cada vídeo aparece com nome, miniatura, site e duração antes de baixar (playlist ou perfil vira uma linha por vídeo; link com erro fica de fora). Escolha uma pasta só para essa lista, por exemplo Memes, sem mudar a pasta de sempre do Baixar; as pastas usadas antes ficam como atalho. As mesmas opções do \"Baixar...\": Vídeo (qualidade máxima, 1080, 720 ou 480, pronto para web), Áudio, GIF ou Miniatura, além de legenda e miniatura junto. Cada download da lista mostra a pasta para onde vai.",
-   "**Correção**: no Converter, o modo de proporção mostrava \"Crop\" no lugar de \"Cortar\" desde a 0.3.5."
   ]
  }
 ];
