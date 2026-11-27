@@ -1028,13 +1028,19 @@ fn ext_arg<S: AsRef<std::ffi::OsStr>>(args: &[S]) -> Option<Value> {
     let urls: Vec<String> = v["urls"].as_array()?.iter().filter_map(|u| u.as_str())
         .filter(|u| u.starts_with("http://") || u.starts_with("https://")).take(20).map(String::from).collect();
     if urls.is_empty() { return None; }
-    let kind = match v["kind"].as_str() { Some("audio") => "audio", Some("gif") => "gif", _ => "video" };
+    // "pick" = Escolher qualidade: a única que traz a janela para a frente (precisa escolher na tela)
+    let kind = match v["kind"].as_str() { Some("audio") => "audio", Some("gif") => "gif", Some("pick") => "pick", _ => "video" };
     Some(json!({ "urls": urls, "kind": kind }))
 }
+
+fn ext_wants_window(v: &Value) -> bool { v["kind"] == "pick" }
 
 /// Pedido da extensão: vai para a aba Baixar (ou espera a tela carregar). A janela não vem para a frente.
 fn add_ext(app: &AppHandle, v: Value) {
     log(app, &format!("browser | {} link(s)", v["urls"].as_array().map_or(0, |a| a.len())));
+    if ext_wants_window(&v) {
+        if let Some(w) = app.get_webview_window("main") { let _ = w.unminimize(); let _ = w.show(); let _ = w.set_focus(); }
+    }
     let state = app.state::<AppState>();
     let mut l = state.ext_links.lock().unwrap();
     if state.ext_ready.load(Ordering::SeqCst) { let _ = app.emit("ext-link", v); } else { l.push(v); }
@@ -1165,7 +1171,7 @@ fn main() {
                 viewer: Arc::new(viewer::Viewer::default()),
                 ui_ready: AtomicBool::new(false),
                 cli_paths: Mutex::new(if ext.is_some() { Vec::new() } else { cli_args(args) }),
-                quiet: AtomicBool::new(ext.is_some()),
+                quiet: AtomicBool::new(ext.as_ref().map_or(false, |v| !ext_wants_window(v))),
                 ext_links: Mutex::new(ext.into_iter().collect()),
                 ext_ready: AtomicBool::new(false),
             });

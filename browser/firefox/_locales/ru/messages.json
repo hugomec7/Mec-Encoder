@@ -40,5 +40,47 @@
   },
   "help3": {
     "message": "Затем снова нажмите кнопку Mec Encoder."
+  },
+  "popupCopied": {
+    "message": "Скопированная ссылка"
+  },
+  "popupPage": {
+    "message": "Эта страница"
+  },
+  "btnQuick": {
+    "message": "Быстрая загрузка"
+  },
+  "btnQuickSub": {
+    "message": "видео"
+  },
+  "btnAudio": {
+    "message": "Только аудио"
+  },
+  "btnPick": {
+    "message": "Выбрать качество…"
+  },
+  "btnPickSub": {
+    "message": "откроет приложение"
+  },
+  "usePage": {
+    "message": "Использовать эту страницу вместо ссылки"
+  },
+  "useClip": {
+    "message": "Использовать скопированную ссылку"
+  },
+  "sent": {
+    "message": "Отправлено ✓"
+  },
+  "xTitle": {
+    "message": "Скачать через Mec Encoder"
+  },
+  "floatToggle": {
+    "message": "Кнопка поверх видео"
+  },
+  "floatSub": {
+    "message": "Любой сайт · по умолчанию выключено"
+  },
+  "floatReload": {
+    "message": "Включено: обновите страницу"
   }
 }

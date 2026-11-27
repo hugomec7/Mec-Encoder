@@ -40,5 +40,47 @@
   },
   "help3": {
     "message": "그런 다음 Mec Encoder 버튼을 다시 클릭하세요."
+  },
+  "popupCopied": {
+    "message": "복사한 링크"
+  },
+  "popupPage": {
+    "message": "이 페이지"
+  },
+  "btnQuick": {
+    "message": "빠른 다운로드"
+  },
+  "btnQuickSub": {
+    "message": "동영상"
+  },
+  "btnAudio": {
+    "message": "오디오만"
+  },
+  "btnPick": {
+    "message": "화질 선택…"
+  },
+  "btnPickSub": {
+    "message": "앱이 열립니다"
+  },
+  "usePage": {
+    "message": "복사한 링크 대신 이 페이지 사용"
+  },
+  "useClip": {
+    "message": "복사한 링크 사용"
+  },
+  "sent": {
+    "message": "보냄 ✓"
+  },
+  "xTitle": {
+    "message": "Mec Encoder로 다운로드"
+  },
+  "floatToggle": {
+    "message": "동영상 위 버튼"
+  },
+  "floatSub": {
+    "message": "모든 사이트 · 기본값은 꺼짐"
+  },
+  "floatReload": {
+    "message": "켜짐: 페이지를 새로고침하세요"
   }
 }

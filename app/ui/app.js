@@ -2940,6 +2940,12 @@
   /* Extensão do navegador (mec-link.exe): igual ao Baixar rápido, sem trazer a janela para a frente.
      O mesmo link já na lista (baixando ou baixado) não entra de novo. */
   async function dlFromBrowser(p) {
+    // "Escolher qualidade…" do menu da extensão: abre a aba Baixar com a janela de qualidade
+    if (p && p.kind === 'pick') {
+      if (S.view !== 'dl') setView('dl'); else if (!DL.entered) await dlEnter();
+      dlPickOpen((p.urls || []).join('\n'), 'video');
+      return;
+    }
     const kind = ['audio', 'gif'].includes(p && p.kind) ? p.kind : 'video';
     const urls = ((p && p.urls) || []).filter((u) => !DL.list.some((it) => it.url === u && it.status !== 'err'));
     if (!urls.length) { toast(L.dlFromBrowserDup); return; }

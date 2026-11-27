@@ -24,27 +24,50 @@ fn main() {
 
 fn handle(msg: &Value) -> Value {
     let s = |k: &str| msg.get(k).and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
-    let kind = match s("kind").as_str() { "audio" => "audio", "gif" => "gif", _ => "video" };
-    if s("action") == "ping" { return json!({ "ok": true, "version": env!("CARGO_PKG_VERSION") }); }
+    // "pick" = Escolher qualidade (o app abre a janela de qualidade com o link)
+    let kind = match s("kind").as_str() { "audio" => "audio", "gif" => "gif", "pick" => "pick", _ => "video" };
+    let page = s("page");
+    match s("action").as_str() {
+        "ping" => return json!({ "ok": true, "version": env!("CARGO_PKG_VERSION") }),
+        // o menu da extensão abriu: só diz qual link seria usado (não envia e não marca o link copiado)
+        "peek" => {
+            let (urls, from) = pick(&s("link"), &page, false);
+            return json!({ "ok": !urls.is_empty(), "urls": urls, "from": from,
+                           "page": if page_has_video(&page) { page.as_str() } else { "" } });
+        }
+        _ => {}
+    }
 
-    let (urls, from) = pick(&s("link"), &s("page"));
+    let (urls, from) = pick(&s("link"), &page, true);
     if urls.is_empty() { return json!({ "ok": false, "error": "no-link" }); }
+    // o menu mandou o link copiado que ele mostrou: marca como enviado (o próximo clique não repete)
+    if msg.get("clip").and_then(|v| v.as_bool()).unwrap_or(false) { mark_clip(); }
     match launch(&json!({ "urls": urls, "kind": kind }).to_string()) {
         Ok(()) => json!({ "ok": true, "urls": urls, "from": from }),
         Err(e) => json!({ "ok": false, "error": e }),
     }
 }
 
-/// Escolhe o(s) link(s): botão direito > link copiado ainda não enviado > página de vídeo.
-fn pick(link: &str, page: &str) -> (Vec<String>, &'static str) {
+fn last_clip_file() -> PathBuf { data_dir().join("browser").join("last-clip.txt") }
+
+/// Guarda o link copiado atual como "já enviado".
+fn mark_clip() {
+    let clip = links(&clipboard_text().unwrap_or_default());
+    if clip.is_empty() { return; }
+    let f = last_clip_file();
+    let _ = std::fs::create_dir_all(f.parent().unwrap());
+    let _ = std::fs::write(&f, clip.join("\n"));
+}
+
+/// Escolhe o(s) link(s): link pedido (botão direito, botão do X, menu) > link copiado ainda não enviado > página de vídeo.
+/// `commit`: marca o link copiado como enviado (falso quando o menu só está mostrando).
+fn pick(link: &str, page: &str, commit: bool) -> (Vec<String>, &'static str) {
     if is_web(link) { return (vec![link.to_string()], "link"); }
     let clip = links(&clipboard_text().unwrap_or_default());
     if !clip.is_empty() {
-        let last_file = data_dir().join("browser").join("last-clip.txt");
         let key = clip.join("\n");
-        if std::fs::read_to_string(&last_file).map_or(true, |t| t != key) {
-            let _ = std::fs::create_dir_all(last_file.parent().unwrap());
-            let _ = std::fs::write(&last_file, &key);
+        if std::fs::read_to_string(last_clip_file()).map_or(true, |t| t != key) {
+            if commit { mark_clip(); }
             return (clip, "clipboard");
         }
     }

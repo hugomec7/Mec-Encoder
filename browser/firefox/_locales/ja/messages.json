@@ -40,5 +40,47 @@
   },
   "help3": {
     "message": "その後、もう一度 Mec Encoder ボタンをクリックしてください。"
+  },
+  "popupCopied": {
+    "message": "コピーしたリンク"
+  },
+  "popupPage": {
+    "message": "このページ"
+  },
+  "btnQuick": {
+    "message": "クイックダウンロード"
+  },
+  "btnQuickSub": {
+    "message": "動画"
+  },
+  "btnAudio": {
+    "message": "音声のみ"
+  },
+  "btnPick": {
+    "message": "画質を選ぶ…"
+  },
+  "btnPickSub": {
+    "message": "アプリが開きます"
+  },
+  "usePage": {
+    "message": "コピーしたリンクの代わりにこのページを使う"
+  },
+  "useClip": {
+    "message": "コピーしたリンクを使う"
+  },
+  "sent": {
+    "message": "送信しました ✓"
+  },
+  "xTitle": {
+    "message": "Mec Encoder でダウンロード"
+  },
+  "floatToggle": {
+    "message": "動画の上にボタン"
+  },
+  "floatSub": {
+    "message": "すべてのサイト · 初期設定はオフ"
+  },
+  "floatReload": {
+    "message": "オン：ページを再読み込みしてください"
   }
 }

@@ -40,5 +40,47 @@
   },
   "help3": {
     "message": "Then click the Mec Encoder button again."
+  },
+  "popupCopied": {
+    "message": "Copied link"
+  },
+  "popupPage": {
+    "message": "This page"
+  },
+  "btnQuick": {
+    "message": "Quick download"
+  },
+  "btnQuickSub": {
+    "message": "video"
+  },
+  "btnAudio": {
+    "message": "Audio only"
+  },
+  "btnPick": {
+    "message": "Choose quality…"
+  },
+  "btnPickSub": {
+    "message": "opens the app"
+  },
+  "usePage": {
+    "message": "Use this page instead of the copied link"
+  },
+  "useClip": {
+    "message": "Use the copied link"
+  },
+  "sent": {
+    "message": "Sent ✓"
+  },
+  "xTitle": {
+    "message": "Download with Mec Encoder"
+  },
+  "floatToggle": {
+    "message": "Button on videos"
+  },
+  "floatSub": {
+    "message": "Any site · off by default"
+  },
+  "floatReload": {
+    "message": "On: reload the page"
   }
 }

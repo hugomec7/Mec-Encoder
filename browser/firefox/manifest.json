@@ -2,16 +2,27 @@
   "manifest_version": 3,
   "name": "__MSG_extName__",
   "description": "__MSG_extDesc__",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "default_locale": "en",
   "homepage_url": "https://github.com/hugomec7/Mec-Encoder",
   "icons": { "32": "icons/32.png", "48": "icons/48.png", "96": "icons/96.png", "128": "icons/128.png" },
   "action": {
     "default_title": "__MSG_actionTitle__",
+    "default_popup": "popup.html",
     "default_icon": { "16": "icons/16.png", "32": "icons/32.png", "48": "icons/48.png" }
   },
   "background": { "scripts": ["background.js"] },
-  "permissions": ["nativeMessaging", "contextMenus", "activeTab"],
+  "permissions": ["nativeMessaging", "contextMenus", "activeTab", "scripting", "storage"],
+  "host_permissions": ["https://x.com/*", "https://twitter.com/*", "https://mobile.x.com/*", "https://mobile.twitter.com/*"],
+  "optional_host_permissions": ["<all_urls>"],
+  "content_scripts": [
+    {
+      "matches": ["https://x.com/*", "https://twitter.com/*", "https://mobile.x.com/*", "https://mobile.twitter.com/*"],
+      "js": ["content/x.js"],
+      "css": ["content/x.css"],
+      "run_at": "document_idle"
+    }
+  ],
   "browser_specific_settings": {
     "gecko": { "id": "mec-encoder@hugomec", "strict_min_version": "128.0" }
   }

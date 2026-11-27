@@ -40,5 +40,47 @@
   },
   "help3": {
     "message": "然后再次点击 Mec Encoder 按钮。"
+  },
+  "popupCopied": {
+    "message": "已复制的链接"
+  },
+  "popupPage": {
+    "message": "此页面"
+  },
+  "btnQuick": {
+    "message": "快速下载"
+  },
+  "btnQuickSub": {
+    "message": "视频"
+  },
+  "btnAudio": {
+    "message": "仅音频"
+  },
+  "btnPick": {
+    "message": "选择画质…"
+  },
+  "btnPickSub": {
+    "message": "会打开应用"
+  },
+  "usePage": {
+    "message": "使用此页面而不是已复制的链接"
+  },
+  "useClip": {
+    "message": "使用已复制的链接"
+  },
+  "sent": {
+    "message": "已发送 ✓"
+  },
+  "xTitle": {
+    "message": "用 Mec Encoder 下载"
+  },
+  "floatToggle": {
+    "message": "视频上的按钮"
+  },
+  "floatSub": {
+    "message": "任何网站 · 默认关闭"
+  },
+  "floatReload": {
+    "message": "已开启：请刷新页面"
   }
 }

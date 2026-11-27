@@ -40,5 +40,47 @@
   },
   "help3": {
     "message": "Poi clicca di nuovo sul pulsante di Mec Encoder."
+  },
+  "popupCopied": {
+    "message": "Link copiato"
+  },
+  "popupPage": {
+    "message": "Questa pagina"
+  },
+  "btnQuick": {
+    "message": "Download rapido"
+  },
+  "btnQuickSub": {
+    "message": "video"
+  },
+  "btnAudio": {
+    "message": "Solo audio"
+  },
+  "btnPick": {
+    "message": "Scegli qualità…"
+  },
+  "btnPickSub": {
+    "message": "apre l’app"
+  },
+  "usePage": {
+    "message": "Usa questa pagina invece del link copiato"
+  },
+  "useClip": {
+    "message": "Usa il link copiato"
+  },
+  "sent": {
+    "message": "Inviato ✓"
+  },
+  "xTitle": {
+    "message": "Scarica con Mec Encoder"
+  },
+  "floatToggle": {
+    "message": "Pulsante sui video"
+  },
+  "floatSub": {
+    "message": "Qualsiasi sito · disattivato di default"
+  },
+  "floatReload": {
+    "message": "Attivo: ricarica la pagina"
   }
 }
