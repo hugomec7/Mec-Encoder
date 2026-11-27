@@ -303,3 +303,21 @@
   };
   Object.entries(T).forEach(([lang, v]) => { const L = window.MEC_I18N[lang]; if (L) { L.dlFromBrowser = v[0]; L.dlFromBrowserDup = v[1]; } });
 })();
+
+// Extensão do Firefox (cartão do Baixar, Opções) e janela de Novidades, nos 10 idiomas.
+(() => {
+  const K = ['fxTitle', 'fxSub', 'fxInstall', 'fxLater', 'fxConnected', 'fxOptTitle', 'fxOptSub', 'fxOpened', 'fxMissing', 'newsNew', 'newsMore'];
+  const T = {
+    en: ['Download straight from Firefox', 'Copy the video link and click the extension, without opening the app. It can also put a button on top of videos.', 'Install extension', 'Not now', 'Connected', 'Firefox extension', 'Download videos straight from the browser.', 'Firefox opened: confirm the install there', 'Firefox not found', 'New', 'See every change on GitHub'],
+    pt: ['Baixe direto do Firefox', 'Copie o link do vídeo e clique na extensão, sem abrir o app. Também põe um botão em cima dos vídeos.', 'Instalar extensão', 'Agora não', 'Conectada', 'Extensão do Firefox', 'Baixa vídeos direto do navegador.', 'O Firefox abriu: confirme a instalação lá', 'Firefox não encontrado', 'Novidade', 'Ver todas as mudanças no GitHub'],
+    es: ['Descarga directo desde Firefox', 'Copia el enlace del vídeo y haz clic en la extensión, sin abrir la app. También pone un botón sobre los vídeos.', 'Instalar extensión', 'Ahora no', 'Conectada', 'Extensión de Firefox', 'Descarga vídeos directo desde el navegador.', 'Firefox se abrió: confirma la instalación allí', 'No se encontró Firefox', 'Novedad', 'Ver todos los cambios en GitHub'],
+    fr: ['Téléchargez directement depuis Firefox', 'Copiez le lien de la vidéo et cliquez sur l’extension, sans ouvrir l’app. Elle peut aussi mettre un bouton sur les vidéos.', 'Installer l’extension', 'Plus tard', 'Connectée', 'Extension Firefox', 'Télécharge les vidéos directement depuis le navigateur.', 'Firefox s’est ouvert : confirmez l’installation', 'Firefox introuvable', 'Nouveau', 'Voir tous les changements sur GitHub'],
+    de: ['Direkt aus Firefox herunterladen', 'Videolink kopieren und auf die Erweiterung klicken, ohne die App zu öffnen. Sie kann auch einen Button auf Videos setzen.', 'Erweiterung installieren', 'Nicht jetzt', 'Verbunden', 'Firefox-Erweiterung', 'Lädt Videos direkt aus dem Browser.', 'Firefox wurde geöffnet: bestätige dort die Installation', 'Firefox nicht gefunden', 'Neu', 'Alle Änderungen auf GitHub ansehen'],
+    it: ['Scarica direttamente da Firefox', 'Copia il link del video e clicca sull’estensione, senza aprire l’app. Può anche mettere un pulsante sui video.', 'Installa estensione', 'Non ora', 'Collegata', 'Estensione di Firefox', 'Scarica i video direttamente dal browser.', 'Firefox si è aperto: conferma lì l’installazione', 'Firefox non trovato', 'Novità', 'Vedi tutte le modifiche su GitHub'],
+    ru: ['Скачивайте прямо из Firefox', 'Скопируйте ссылку на видео и нажмите на расширение, не открывая приложение. Оно также может добавить кнопку поверх видео.', 'Установить расширение', 'Не сейчас', 'Подключено', 'Расширение для Firefox', 'Скачивает видео прямо из браузера.', 'Firefox открыт: подтвердите установку там', 'Firefox не найден', 'Новое', 'Все изменения на GitHub'],
+    ja: ['Firefox から直接ダウンロード', '動画のリンクをコピーして拡張機能をクリックするだけ。アプリを開く必要はありません。動画の上にボタンも表示できます。', '拡張機能をインストール', '後で', '接続済み', 'Firefox 拡張機能', 'ブラウザーから直接動画をダウンロードします。', 'Firefox が開きました：そちらでインストールを確認してください', 'Firefox が見つかりません', '新機能', 'すべての変更を GitHub で見る'],
+    ko: ['Firefox에서 바로 다운로드', '동영상 링크를 복사하고 확장 프로그램을 클릭하세요. 앱을 열 필요가 없습니다. 동영상 위에 버튼도 표시할 수 있습니다.', '확장 프로그램 설치', '나중에', '연결됨', 'Firefox 확장 프로그램', '브라우저에서 바로 동영상을 다운로드합니다.', 'Firefox가 열렸습니다: 거기서 설치를 확인하세요', 'Firefox를 찾을 수 없습니다', '새 기능', 'GitHub에서 모든 변경 사항 보기'],
+    zh: ['直接从 Firefox 下载', '复制视频链接并点击扩展即可，无需打开应用。还可以在视频上显示按钮。', '安装扩展', '以后再说', '已连接', 'Firefox 扩展', '直接从浏览器下载视频。', 'Firefox 已打开：请在那里确认安装', '找不到 Firefox', '新功能', '在 GitHub 上查看全部更改'],
+  };
+  Object.entries(T).forEach(([lang, v]) => { const L = window.MEC_I18N[lang]; if (L) K.forEach((k, i) => { L[k] = v[i]; }); });
+})();

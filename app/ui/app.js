@@ -2632,6 +2632,10 @@
         ${row(L.jobsFolder, `<button class="field pick" id="bJobs">${L.open}</button>`, L.jobsSub)}
         ${row(L.cliTitle, `<button class="field pick" id="bCli">${L.copyPath}</button>`, `<code>mec convert &lt;${esc(L.cliFiles)}&gt; -p RAW</code>`)}
       </div>
+      ${FX.installed ? `<div class="sec-label">${esc(L.fxOptTitle)}</div>
+      <div class="group">
+        ${row(L.fxOptTitle, FX.connected ? `<span class="field">${esc(L.fxConnected)} ✓</span>` : `<button class="field pick" id="bFxOpt">${esc(L.fxInstall)}</button>`, esc(L.fxOptSub))}
+      </div>` : ''}
       <div class="sec-label">${L.shortcuts}</div>
       <div class="group">
         ${row(L.shortcutsEdit, `<button class="field pick" id="bKeysPage">${L.edit}<span class="chev-r">›</span></button>`, kf(L.keysSummary))}
@@ -2670,6 +2674,7 @@
       else { showPrev(0); toast(L.previewsCleared, true); }
     };
     $('#bKeysPage').onclick = () => { S.sheetPage = 'keys'; renderSheet(); $('#sheetScroll').scrollTop = 0; };
+    if ($('#bFxOpt')) $('#bFxOpt').onclick = fxInstall;
     $('#bJobs').onclick = () => (REAL ? inv('open_jobs_dir').catch((e) => toast(String(e))) : toast('%APPDATA%\\com.hugomec.mecencoder\\jobs'));
     $('#bCli').onclick = async () => {
       let path = 'C:\\Program Files\\Mec Encoder\\bin\\mec.exe';
@@ -2886,7 +2891,7 @@
 
   // primeira vez na aba: confere o yt-dlp e o Deno; se faltar, baixa os dois sozinho
   async function dlEnter() {
-    dlRenderSide(); dlRender(); dlClipRead();
+    dlRenderSide(); dlRender(); dlClipRead(); dlRenderFx();
     if (DL.entered) return; DL.entered = true;
     dlLoadAccounts();
     if (!REAL) { DL.tools = { ytdlp: '2026.11.03', deno: true }; dlRenderSide(); return; }
@@ -4360,18 +4365,59 @@
     saveSettings(); sendWatch(); renderSheet();
   }
 
-  /* ---------- novidades (notas da versão, iguais às do GitHub) ---------- */
+  /* ---------- novidades: só a versão em uso, curta, com a novidade principal em destaque.
+     O texto completo fica no GitHub (link no rodapé). Gerado de docs/release-notes por make_news.py. ---------- */
   const md = (t) => esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+  const newsOf = (ver) => { const N = window.MEC_NEWS || []; const base = String(ver || '').split('-')[0]; return N.find((v) => v.version === base) || N[0]; };
+  const NEWS_IC = { firefox: () => FX_ICON, star: () => ICONS.star };
   function openNews(on) {
     if (on) {
-      const lang = S.set.lang;
+      const lang = S.set.lang === 'pt' ? 'pt' : 'en';
+      const v = newsOf(S.version);
       $('#lNews').textContent = L.news; $('#bNewsDone').textContent = L.done;
-      $('#newsBody').innerHTML = (window.MEC_NEWS || []).map((v) => `<section class="news-v ${v.version === S.version ? '' : 'old'}"><h3>${esc(v.version)}${v.version === S.version ? `<small>${L.thisVersion}</small>` : ''}</h3>
-        <ul>${(v[lang] && v[lang].length ? v[lang] : v.en).map((li) => `<li>${md(li)}</li>`).join('')}</ul></section>`).join('');
+      if (!v) { $('#newsBody').textContent = ''; root.classList.toggle('news-open', true); return; }
+      const hl = v.hl && (v.hl[lang] || v.hl.en);
+      const items = (v.app && (v.app[lang] || v.app.en)) || v[lang] || v.en || [];
+      const fxBtn = hl && hl.action === 'firefox' && FX.installed && !FX.connected;
+      $('#newsBody').innerHTML = `${hl ? `<div class="news-hl"><div class="news-hl-ic">${(NEWS_IC[hl.action] || NEWS_IC.star)()}</div>
+          <div><small>${esc(L.newsNew)}</small><h3>${md(hl.title)}</h3><p>${md(hl.text)}</p>
+          ${fxBtn ? `<button class="btn" id="bNewsFx">${esc(L.fxInstall)}</button>` : ''}</div></div>` : ''}
+        ${items.length ? `<ul class="news-list">${items.map((li) => `<li>${md(li)}</li>`).join('')}</ul>` : ''}
+        <div class="news-foot"><span>Mec Encoder ${esc(v.version)}</span><a id="bNewsAll">${esc(L.newsMore)} ↗</a></div>`;
+      const url = `${REPO_URL}/releases/tag/v${v.version}`;
+      $('#bNewsAll').onclick = () => { if (REAL) inv('open_url', { url }).catch(() => {}); else window.open(url, '_blank'); };
+      if (fxBtn) $('#bNewsFx').onclick = fxInstall;
       $('#newsBody').scrollTop = 0;
     }
     root.classList.toggle('news-open', !!on);
   }
+
+  /* ---------- extensão do Firefox: cartão na aba Baixar e linha em Opções ----------
+     Aparece se o Firefox está instalado e a extensão ainda não falou com o app (o mec-link.exe deixa um sinal). */
+  const FX = { installed: false, connected: false };
+  const FX_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h4v2.5a1.5 1.5 0 0 0 3 0V4h4v4h-2.5a1.5 1.5 0 0 0 0 3H20v4h-4v-2.5a1.5 1.5 0 0 0-3 0V15H9v-4H6.5a1.5 1.5 0 0 1 0-3H9z"/></svg>';
+  async function fxRefresh() {
+    if (REAL) { try { Object.assign(FX, await inv('firefox_info')); } catch {} }
+    else Object.assign(FX, { installed: true, connected: qs.get('fx') === 'on' });
+    dlRenderFx();
+    if (root.classList.contains('news-open')) openNews(true);   // o botão "Instalar extensão" das Novidades
+  }
+  function dlRenderFx() {
+    const el = $('#dlFx'); if (!el) return;
+    el.hidden = !(FX.installed && !FX.connected && !S.set.fxHide);
+    if (el.hidden) return;
+    el.innerHTML = `<div class="dk-fx-t">${FX_ICON}${esc(L.fxTitle)}</div><p>${esc(L.fxSub)}</p>
+      <div class="dk-fx-b"><button class="dk-btn dk-pri" id="bFxInstall">${esc(L.fxInstall)}</button><button class="link" id="bFxLater">${esc(L.fxLater)}</button></div>`;
+    $('#bFxInstall').onclick = fxInstall;
+    $('#bFxLater').onclick = () => { S.set.fxHide = true; saveSettings(); dlRenderFx(); };
+  }
+  async function fxInstall() {
+    if (!REAL) { toast(L.fxOpened, true); return; }
+    try { await inv('firefox_install'); toast(L.fxOpened, true); }
+    catch (e) { toast(String(e).includes('firefox-missing') ? L.fxMissing : String(e)); }
+  }
+  // depois de instalar no Firefox e usar a primeira vez, o cartão some ao voltar para o app
+  window.addEventListener('focus', () => { if (FX.installed && !FX.connected) fxRefresh(); });
   $('#bNewsDone').onclick = () => openNews(false);
   $('#newsBg').onclick = () => openNews(false);
 
@@ -4433,6 +4479,7 @@
       if (st.settings && typeof st.settings === 'object') Object.assign(S.set, st.settings); // primeira vez: idioma do Windows e tema Estúdio (padrões acima)
       if (!presetOf(S.set.defaultPreset) && S.presets[0]) S.set.defaultPreset = S.presets[0].id;
       S.engine = Object.assign(S.engine, st.engine); S.version = st.version;
+      fxRefresh();
       viewCache();
       S.audioDefaults = st.audioDefaults || []; S.imageDefaults = st.imageDefaults || []; S.cameraPreset = st.cameraPreset; S.firstRun = !!st.firstRun;
       // Novidades: abre sozinha uma vez depois de atualizar (não na primeira instalação)
@@ -4547,6 +4594,7 @@
     if (qs.get('fold')) S.set.foldPresets = true;
     if (qs.get('update')) { S.update = { version: '0.2.12' }; setTimeout(renderUpdCard, 0); }
     S.version = ((window.MEC_NEWS || [])[0] || {}).version || S.version;
+    fxRefresh();
     if (qs.get('trim')) { const [a, b] = qs.get('trim').split(',').map(Number); const q = selItem(); if (q) q.cuts = [[a, b]]; }
     if (qs.get('cuts')) { const q = selItem(); if (q) { q.cuts = qs.get('cuts').split(';').map((x) => x.split(',').map(Number)); q.cutSel = +(qs.get('cutsel') || 0); q.cutJoin = !!qs.get('join'); } }
     if (qs.get('after')) S.after = qs.get('after');

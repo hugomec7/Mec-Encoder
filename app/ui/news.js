@@ -1,6 +1,49 @@
 // Gerado por docs/release-notes/make_news.py — não edite à mão.
 window.MEC_NEWS = [
  {
+  "version": "0.3.13",
+  "en": [
+   "**Firefox extension.** Download videos without leaving the browser. Copy the video link (on X: Share › Copy link) and click the Mec Encoder icon: a menu shows the link and the options **Quick download**, **Audio only**, **GIF** and **Choose quality…**. It also works by right-clicking a link, a video or the page. Install it from the Download tab (**Install extension**) or from Options.",
+   "**Button on top of videos (optional).** In the extension menu › Advanced, turn on \"Button on videos\": a small round icon appears over any video on any site, with the same menu. Drag it to move it (the spot is saved per site), choose the default position (top or bottom; left, center or right) and list the sites where it shouldn't appear. Off by default; Firefox asks for permission to access all sites only when you turn it on.",
+   "**Doesn't interrupt you.** Downloads sent from the browser go to the Download tab without bringing the window to the front. With the app closed, it opens minimized. The same link isn't downloaded twice.",
+   "**How it connects.** The new `mec-link.exe` (in the `bin` folder) is the bridge between Firefox and the app (Firefox \"native messaging\"). The app sets it up by itself every time it opens. Nothing goes to the internet: the link goes from the browser to the app on your own computer.",
+   "**News window**: shorter, only with the version you are using, and the main new feature highlighted. The full notes stay here on GitHub.",
+   "Test versions now have \"teste\" in the name (for example `0.3.13-teste.1`) and are updated to the final version."
+  ],
+  "pt": [
+   "**Extensão para o Firefox.** Baixe vídeos sem sair do navegador. Copie o link do vídeo (no X: Compartilhar › Copiar link) e clique no ícone do Mec Encoder: um menu mostra o link e as opções **Baixar rápido**, **Só o áudio**, **GIF** e **Escolher qualidade…**. Também funciona com o botão direito num link, num vídeo ou na página. Instale pela aba Baixar (**Instalar extensão**) ou pelas Opções.",
+   "**Botão em cima dos vídeos (opcional).** No menu da extensão › Avançado, ligue \"Botão em cima dos vídeos\": aparece um ícone redondo pequeno sobre qualquer vídeo de qualquer site, com o mesmo menu. Arraste para mudar o lugar (fica salvo por site), escolha a posição padrão (em cima ou embaixo; à esquerda, no centro ou à direita) e liste os sites onde ele não deve aparecer. Vem desligado; o Firefox pede a permissão de acessar todos os sites só quando você liga.",
+   "**Não atrapalha.** Os downloads mandados pelo navegador vão para a aba Baixar sem trazer a janela para a frente. Com o app fechado, ele abre minimizado. O mesmo link não é baixado duas vezes.",
+   "**Como conecta.** O novo `mec-link.exe` (na pasta `bin`) é a ponte entre o Firefox e o app (\"native messaging\" do Firefox). O app configura sozinho toda vez que abre. Nada vai para a internet: o link sai do navegador e vai para o app no seu próprio computador.",
+   "**Janela de Novidades**: mais curta, só com a versão que você está usando e a novidade principal em destaque. As notas completas continuam aqui no GitHub.",
+   "Versões de teste agora têm \"teste\" no nome (por exemplo `0.3.13-teste.1`) e recebem a atualização para a versão final."
+  ],
+  "hl": {
+   "en": {
+    "title": "Firefox extension",
+    "text": "Copy the video link, click the extension and it downloads on its own, without opening the app. It can also put a button on top of any video.",
+    "action": "firefox"
+   },
+   "pt": {
+    "title": "Extensão para o Firefox",
+    "text": "Copie o link do vídeo, clique na extensão e ele baixa sozinho, sem abrir o app. Também pode pôr um botão em cima de qualquer vídeo.",
+    "action": "firefox"
+   }
+  },
+  "app": {
+   "en": [
+    "Downloads sent from the browser don't interrupt you: the app opens minimized and doesn't come to the front.",
+    "**Choose quality…** in the extension opens the app straight in the quality window.",
+    "Shorter **News** window, with just this version."
+   ],
+   "pt": [
+    "Os downloads mandados pelo navegador não atrapalham: o app abre minimizado e não vem para a frente.",
+    "**Escolher qualidade…** na extensão abre o app direto na janela de qualidade.",
+    "Janela de **Novidades** mais curta, só com esta versão."
+   ]
+  }
+ },
+ {
   "version": "0.3.12",
   "en": [
    "**Tasks folder: queue without converting.** A new optional field `\"start\": false` in the job `.json` puts the files in the app's queue with the chosen preset and leaves them waiting for you to click Convert. Nothing renders on its own. The options (`outputFolder`, `keepTree`, `suffix`, `subfolder`, `trim`, `join`, `deleteSource`) are kept in each item, and the items survive closing and opening the app. The job `.json` goes to `queued\\` and `<name>.status.json` stays with `state: \"queued\"`. A preset that doesn't exist sends the job to `failed\\` with `error: \"preset-not-found\"`. Jobs without `\"start\"` work as before. Details in `jobs\\README.txt`.",
@@ -85,21 +128,6 @@ window.MEC_NEWS = [
   "pt": [
    "**Lista de links** no Baixar: cole vários links de uma vez e cada vídeo aparece com nome, miniatura, site e duração antes de baixar (playlist ou perfil vira uma linha por vídeo; link com erro fica de fora). Escolha uma pasta só para essa lista, por exemplo Memes, sem mudar a pasta de sempre do Baixar; as pastas usadas antes ficam como atalho. As mesmas opções do \"Baixar...\": Vídeo (qualidade máxima, 1080, 720 ou 480, pronto para web), Áudio, GIF ou Miniatura, além de legenda e miniatura junto. Cada download da lista mostra a pasta para onde vai.",
    "**Correção**: no Converter, o modo de proporção mostrava \"Crop\" no lugar de \"Cortar\" desde a 0.3.5."
-  ]
- },
- {
-  "version": "0.3.5",
-  "en": [
-   "**Crop in the Cutter**, like Premiere's Crop: press **C** (or the Crop button) and drag the box to keep only part of the picture, for example just the video of a meme, without the black bars and the text. 8 handles, drag inside to move, drag outside to draw a new box; ratio Free, Original, 9:16, 16:9, 1:1 or 4:5; or type how many pixels to remove from each side. The video comes out at the crop size, in Export and in Convert, and the preview and play already show the result.",
-   "**Export saves right in the Cutter**: it no longer goes through the Convert queue nor shows a preset. The video stays exactly like the original, only without the parts you cut (and cropped, if you cropped). Progress shows in the button itself (click to cancel), and when it finishes you can play it or show it in the folder.",
-   "**\"Go to Convert\"** replaces the \"Convert\" button in the Cutter, so it doesn't look like it converts right away.",
-   "**Download as GIF**: new GIF button next to Audio (and a GIF option in \"Download…\", with a part of the video if you want). It downloads only the picture and delivers a .gif with the settings of the GIF preset from Convert. The \"GIF\" on X, which is actually a video, now comes as a real GIF. Videos you already downloaded have a GIF button in their row."
-  ],
-  "pt": [
-   "**Crop no Cortador**, como o Corte do Premiere: aperte **C** (ou o botão Crop) e arraste o retângulo para ficar só com uma parte da imagem, por exemplo só o vídeo de um meme, sem as bordas pretas e o texto. 8 alças, arrastar dentro move, arrastar fora desenha um novo; proporção Livre, Original, 9:16, 16:9, 1:1 ou 4:5; ou digite quantos pixels tirar de cada lado. O vídeo sai no tamanho do recorte, no Exportar e no Converter, e a prévia e o play já mostram o resultado.",
-   "**Exportar salva ali mesmo no Cortador**: não passa mais pela fila do Converter nem mostra preset. O vídeo fica exatamente como o original, só sem os trechos que você cortou (e recortado, se usou o crop). O andamento aparece no próprio botão (clique para cancelar) e no fim dá para tocar ou mostrar na pasta.",
-   "**\"Ir para o Conversor\"** no lugar do botão \"Converter\" do Cortador, para não parecer que converte na hora.",
-   "**Baixar como GIF**: botão GIF novo ao lado de Áudio (e opção GIF em \"Baixar...\", com trecho se quiser). Baixa só a imagem e entrega um .gif com o ajuste do preset GIF do Converter. O \"GIF\" do X, que na verdade é vídeo, agora vem como GIF de verdade. Os vídeos já baixados têm um botão GIF na linha."
   ]
  }
 ];

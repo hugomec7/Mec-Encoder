@@ -79,8 +79,15 @@ responda em português, direto, sem jargão.
   1. Subir `version` no `manifest.json` e gerar o zip em `D:\hugo\Projetos\Apps\MecEncoder\Extensoes\`.
   2. O Hugo envia o zip no AMO e baixa o `.xpi` assinado (salvar na mesma pasta Extensoes).
   3. Anexar o `.xpi` ao release do app (`gh release upload vX.Y.Z MecEncoder-Firefox-A.B.C.xpi`) e pôr a versão
-     nova no topo de `browser/firefox-updates.json` (no main). O Firefox atualiza sozinho por esse arquivo
+     nova **no fim** da lista de `browser/firefox-updates.json` (no main). O Firefox atualiza sozinho por esse arquivo
      (`update_url` no manifest; **nunca mudar esse endereço**, senão quem já instalou para de receber).
+  4. Em **todo** release do app, anexar também o `.xpi` mais novo com o nome fixo `MecEncoder-Firefox.xpi`
+     (reserva do botão "Instalar extensão" se o GitHub não responder o `firefox-updates.json`).
+- Botão "Instalar extensão" (cartão da aba Baixar, Opções e Novidades): `firefox_install` em `main.rs` lê o último
+  `update_link` do `firefox-updates.json` e abre no `firefox.exe` (não no navegador padrão). O cartão some quando
+  o `mec-link.exe` já foi chamado alguma vez (`browser\seen.txt`).
+- Novidades: só a versão em uso. O texto curto vem do bloco `<!-- app ... -->` no topo de
+  `docs/release-notes/X.Y.Z.md` (`!` = novidade em destaque, com ação opcional `firefox`; `-` = item). Veja `make_news.py`.
 - `data_collection_permissions: none`: a extensão só manda o link para o app no próprio PC, nada vai para a internet.
 
 ## Como o Hugo gosta de trabalhar

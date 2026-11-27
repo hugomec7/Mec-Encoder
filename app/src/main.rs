@@ -1046,6 +1046,57 @@ fn add_ext(app: &AppHandle, v: Value) {
     if state.ext_ready.load(Ordering::SeqCst) { let _ = app.emit("ext-link", v); } else { l.push(v); }
 }
 
+/// Cartão "Baixe direto do Firefox" (aba Baixar e Opções): o Firefox está instalado? A extensão já falou com o app?
+/// (o mec-link.exe grava browser\seen.txt toda vez que a extensão o chama)
+#[tauri::command]
+fn firefox_info(app: AppHandle) -> Value {
+    json!({ "installed": firefox_exe().is_some(), "connected": store::dir(&app).join("browser").join("seen.txt").exists() })
+}
+
+/// firefox.exe pelo registro (App Paths) ou pelas pastas padrão.
+fn firefox_exe() -> Option<PathBuf> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const NO_WINDOW: u32 = 0x0800_0000;
+        for root in ["HKCU", "HKLM"] {
+            let key = format!(r"{root}\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\firefox.exe");
+            let out = std::process::Command::new("reg").args(["query", &key, "/ve"]).creation_flags(NO_WINDOW).output();
+            if let Ok(o) = out {
+                let text = String::from_utf8_lossy(&o.stdout).to_string();
+                if let Some(p) = text.lines().find_map(|l| l.split("REG_SZ").nth(1)).map(|s| PathBuf::from(s.trim().trim_matches('"'))) {
+                    if p.is_file() { return Some(p); }
+                }
+            }
+        }
+        for base in [std::env::var_os("ProgramFiles"), std::env::var_os("ProgramFiles(x86)"), std::env::var_os("LOCALAPPDATA")].into_iter().flatten() {
+            let p = PathBuf::from(base).join("Mozilla Firefox").join("firefox.exe");
+            if p.is_file() { return Some(p); }
+        }
+    }
+    None
+}
+
+/// Link do .xpi assinado mais novo: o mesmo arquivo que o Firefox usa para atualizar a extensão.
+const FIREFOX_UPDATES: &str = "https://raw.githubusercontent.com/hugomec7/Mec-Encoder/main/browser/firefox-updates.json";
+const FIREFOX_XPI_FALLBACK: &str = "https://github.com/hugomec7/Mec-Encoder/releases/latest/download/MecEncoder-Firefox.xpi";
+fn firefox_xpi_url() -> String {
+    ureq::get(FIREFOX_UPDATES).timeout(Duration::from_secs(10)).call().ok()
+        .and_then(|r| r.into_string().ok())
+        .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+        .and_then(|v| v["addons"][FIREFOX_EXT_ID]["updates"].as_array()
+            .and_then(|a| a.iter().filter_map(|u| u["update_link"].as_str()).last().map(String::from)))
+        .unwrap_or_else(|| FIREFOX_XPI_FALLBACK.to_string())
+}
+
+/// "Instalar extensão": abre o .xpi no Firefox (mesmo que o navegador padrão seja outro). O Firefox pergunta se pode instalar.
+#[tauri::command]
+async fn firefox_install() -> Result<(), String> {
+    let exe = firefox_exe().ok_or("firefox-missing")?;
+    let url = tauri::async_runtime::spawn_blocking(firefox_xpi_url).await.map_err(|e| e.to_string())?;
+    std::process::Command::new(exe).arg(url).spawn().map(|_| ()).map_err(|e| e.to_string())
+}
+
 /// Extensão do Firefox: grava o manifesto do mec-link.exe e a chave do registro (HKCU) que diz ao Firefox onde ele está.
 /// Toda vez que o app abre (vale para MSI e portátil; se a pasta mudar, corrige sozinho).
 /// Docs: https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/Native_manifests
@@ -1226,7 +1277,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             render_cancel, pick, add, pick_dir, save_queue, restore_queue, power, set_watch, job_status, open_jobs_dir, automation_info, forget, duplicate, preview, waveform, render, stop, get_state, save_presets, save_settings,
-            default_presets, view_frame, view_play, view_cache, view_note, play_file, play_live, play_stop, play_proxy, previews_size, previews_clear, previews_prune, import_enc, export_presets, import_presets, reveal, open_data_dir, open_log, open_url, notify, ready, ext_take, check_update, install_update,
+            default_presets, view_frame, view_play, view_cache, view_note, play_file, play_live, play_stop, play_proxy, previews_size, previews_clear, previews_prune, import_enc, export_presets, import_presets, reveal, open_data_dir, open_log, open_url, notify, ready, ext_take, firefox_info, firefox_install, check_update, install_update,
             downloader::dl_status, downloader::dl_install, downloader::dl_update, downloader::dl_start, downloader::dl_cancel, downloader::dl_open_dir, downloader::dl_clipboard, downloader::dl_play, downloader::dl_rename, downloader::dl_accounts, downloader::dl_login, downloader::dl_logout, downloader::dl_info
         ])
         .build(tauri::generate_context!())

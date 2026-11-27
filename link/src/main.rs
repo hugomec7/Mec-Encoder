@@ -23,6 +23,9 @@ fn main() {
 }
 
 fn handle(msg: &Value) -> Value {
+    // sinal para o app: a extensão está instalada e conectada (o app esconde o cartão "Instalar extensão")
+    let seen = data_dir().join("browser").join("seen.txt");
+    if !seen.exists() { let _ = std::fs::create_dir_all(seen.parent().unwrap()); let _ = std::fs::write(&seen, env!("CARGO_PKG_VERSION")); }
     let s = |k: &str| msg.get(k).and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
     // "pick" = Escolher qualidade (o app abre a janela de qualidade com o link)
     let kind = match s("kind").as_str() { "audio" => "audio", "gif" => "gif", "pick" => "pick", _ => "video" };
