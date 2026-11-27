@@ -58,9 +58,13 @@ responda em português, direto, sem jargão.
 
 ## Extensão do navegador (por enquanto só Firefox)
 
-- `browser/firefox/`: extensão MV3 (id `mec-encoder@hugomec`). Clique no ícone = Baixar rápido do link copiado
-  (se ainda não foi enviado) ou da página aberta (se for de um vídeo). Botão direito: vídeo, só o áudio ou GIF.
-  Textos em `_locales/` (10 idiomas).
+- `browser/firefox/`: extensão MV3 (id `mec-encoder@hugomec`). Textos em `_locales/` (10 idiomas).
+  - Clique no ícone: menu (`popup.*`) com o link que vai (copiado ainda não enviado, ou a página de vídeo) e
+    Baixar rápido / Só o áudio / GIF / Escolher qualidade (abre o app na janela de qualidade).
+  - X: `content/x.js` põe um botão com menu nos posts com vídeo (seletores no topo do arquivo; o X muda o site).
+  - Chave "Botão em cima dos vídeos" (`content/float.js`): desligada por padrão; ao ligar pede `<all_urls>` e
+    registra o script com `scripting.registerContentScripts` (não roda no X).
+  - Botão direito num link, vídeo ou página: Mec Encoder › vídeo, só o áudio ou GIF.
 - `link/` (crate `mec-link`, vira `bin\mec-link.exe`): host de native messaging. Escolhe o link, responde à extensão
   e chama `mec-encoder.exe --mec-link {"urls":[...],"kind":"video"}`. Não herda o canal do navegador
   (senão o Firefox espera o app fechar) e sai do "job" do Firefox (`CREATE_BREAKAWAY_FROM_JOB`).
