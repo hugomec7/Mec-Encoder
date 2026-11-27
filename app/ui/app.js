@@ -2632,10 +2632,13 @@
         ${row(L.jobsFolder, `<button class="field pick" id="bJobs">${L.open}</button>`, L.jobsSub)}
         ${row(L.cliTitle, `<button class="field pick" id="bCli">${L.copyPath}</button>`, `<code>mec convert &lt;${esc(L.cliFiles)}&gt; -p RAW</code>`)}
       </div>
-      ${FX.installed ? `<div class="sec-label">${esc(L.fxOptTitle)}</div>
+      <div class="sec-label">${esc(L.fxOptTitle)}</div>
       <div class="group">
-        ${row(L.fxOptTitle, FX.connected ? `<span class="field">${esc(L.fxConnected)} ✓</span>` : `<button class="field pick" id="bFxOpt">${esc(L.fxInstall)}</button>`, esc(L.fxOptSub))}
-      </div>` : ''}
+        ${row(`<span class="fx-row">${FX_ICON}<span>${esc(L.fxOptTitle)}</span></span>`,
+          FX.connected ? `<span class="fx-ok">${esc(L.fxConnected)} ✓</span>`
+            : `<button class="btn small" id="bFxOpt">${esc(FX.installed ? L.fxInstall : L.fxGetFirefox)}</button>`,
+          esc(FX.connected ? L.fxOptSub : FX.installed ? L.fxOptHow : L.fxMissing))}
+      </div>
       <div class="sec-label">${L.shortcuts}</div>
       <div class="group">
         ${row(L.shortcutsEdit, `<button class="field pick" id="bKeysPage">${L.edit}<span class="chev-r">›</span></button>`, kf(L.keysSummary))}
@@ -4378,29 +4381,37 @@
       if (!v) { $('#newsBody').textContent = ''; root.classList.toggle('news-open', true); return; }
       const hl = v.hl && (v.hl[lang] || v.hl.en);
       const items = (v.app && (v.app[lang] || v.app.en)) || v[lang] || v.en || [];
-      const fxBtn = hl && hl.action === 'firefox' && FX.installed && !FX.connected;
-      $('#newsBody').innerHTML = `${hl ? `<div class="news-hl"><div class="news-hl-ic">${(NEWS_IC[hl.action] || NEWS_IC.star)()}</div>
-          <div><small>${esc(L.newsNew)}</small><h3>${md(hl.title)}</h3><p>${md(hl.text)}</p>
-          ${fxBtn ? `<button class="btn" id="bNewsFx">${esc(L.fxInstall)}</button>` : ''}</div></div>` : ''}
+      // novidade da extensão: o card inteiro instala (ou manda baixar o Firefox); instalada = selo "Instalada ✓"
+      const fx = hl && hl.action === 'firefox';
+      const fxAct = fx && !FX.connected;
+      const fxBtn = !fx ? '' : FX.connected ? `<span class="news-hl-ok">${esc(L.fxConnected)} ✓</span>`
+        : `<button class="btn" id="bNewsFx">${esc(FX.installed ? L.fxInstall : L.fxGetFirefox)}</button>`;
+      $('#newsBody').innerHTML = `${hl ? `<div class="news-hl${fxAct ? ' act' : ''}" id="newsHl"><div class="news-hl-ic${fx ? ' fx' : ''}">${(NEWS_IC[hl.action] || NEWS_IC.star)()}</div>
+          <div><small>${esc(L.newsNew)}</small><h3>${md(hl.title)}</h3><p>${md(hl.text)}</p>${fxBtn}</div></div>` : ''}
         ${items.length ? `<ul class="news-list">${items.map((li) => `<li>${md(li)}</li>`).join('')}</ul>` : ''}
         <div class="news-foot"><span>Mec Encoder ${esc(v.version)}</span><a id="bNewsAll">${esc(L.newsMore)} ↗</a></div>`;
       const url = `${REPO_URL}/releases/tag/v${v.version}`;
       $('#bNewsAll').onclick = () => { if (REAL) inv('open_url', { url }).catch(() => {}); else window.open(url, '_blank'); };
-      if (fxBtn) $('#bNewsFx').onclick = fxInstall;
+      if (fxAct) $('#newsHl').onclick = fxInstall;
       $('#newsBody').scrollTop = 0;
     }
     root.classList.toggle('news-open', !!on);
   }
 
-  /* ---------- extensão do Firefox: cartão na aba Baixar e linha em Opções ----------
-     Aparece se o Firefox está instalado e a extensão ainda não falou com o app (o mec-link.exe deixa um sinal). */
+  /* ---------- extensão do Firefox: cartão na aba Baixar, linha em Opções e card das Novidades ----------
+     FX.installed = o Firefox existe no PC; FX.connected = a extensão está instalada e ativa num perfil do Firefox
+     (o app lê a lista de extensões do próprio Firefox). */
   const FX = { installed: false, connected: false };
-  const FX_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h4v2.5a1.5 1.5 0 0 0 3 0V4h4v4h-2.5a1.5 1.5 0 0 0 0 3H20v4h-4v-2.5a1.5 1.5 0 0 0-3 0V15H9v-4H6.5a1.5 1.5 0 0 1 0-3H9z"/></svg>';
+  // ícone do Firefox (desenho simplificado: globo roxo com a raposa laranja)
+  const FX_ICON = '<svg class="fx-logo" viewBox="0 0 24 24"><defs><linearGradient id="fxg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffd567"/><stop offset=".45" stop-color="#ff7139"/><stop offset="1" stop-color="#e31587"/></linearGradient></defs><circle cx="12" cy="12.4" r="8.6" fill="#7542e5"/><path fill="url(#fxg)" d="M20.9 8.6c-.5-1.2-1.4-2.4-2.1-2.8.6 1.1.9 2.3 1 3.4-1-2.6-2.8-3.6-4.2-5.9l-.2-.4v-.2c-2 1.2-2.7 3.3-2.8 4.4-.8.1-1.6.3-2.3.7l-.2.2.2-.1c.7-.3 1.5-.5 2.3-.6 3.4-.3 5.9 2.2 5.9 2.2s-1.3-1-3.7-1c2.4 1.4 3.2 5.5 1.3 7.8-1.5 1.8-4.1 2.3-6.2 1.3-2.4-1.2-3.3-3.9-2.6-6 .4-1.1 1.2-1.9 2-2.4-1.5 0-2.6.7-3.4 1.6-.1-.6-.1-1.3.1-1.9-.6.3-1.1.8-1.6 1.3-.4-.5-.4-2.1-.3-2.4l-.1.1C2.8 8 2.3 9.4 2.3 10.4v.1A9.8 9.8 0 0 0 12 21.8 9.8 9.8 0 0 0 21.6 13.7c.3-1.8.1-3.6-.7-5.1z"/></svg>';
   async function fxRefresh() {
+    const before = `${FX.installed}${FX.connected}`;
     if (REAL) { try { Object.assign(FX, await inv('firefox_info')); } catch {} }
-    else Object.assign(FX, { installed: true, connected: qs.get('fx') === 'on' });
+    else Object.assign(FX, { installed: qs.get('fx') !== 'none', connected: qs.get('fx') === 'on' });
+    if (before === `${FX.installed}${FX.connected}`) return;
     dlRenderFx();
-    if (root.classList.contains('news-open')) openNews(true);   // o botão "Instalar extensão" das Novidades
+    if (root.classList.contains('news-open')) openNews(true);   // botão do card das Novidades
+    renderSheetIfOpen();                                         // linha das Opções
   }
   function dlRenderFx() {
     const el = $('#dlFx'); if (!el) return;
@@ -4411,13 +4422,16 @@
     $('#bFxInstall').onclick = fxInstall;
     $('#bFxLater').onclick = () => { S.set.fxHide = true; saveSettings(); dlRenderFx(); };
   }
+  const FX_GET = 'https://www.mozilla.org/firefox/new/';
   async function fxInstall() {
+    // sem Firefox no PC: abre a página oficial para baixar o Firefox
+    if (!FX.installed) { if (REAL) inv('open_url', { url: FX_GET }).catch(() => {}); else window.open(FX_GET, '_blank'); return; }
     if (!REAL) { toast(L.fxOpened, true); return; }
     try { await inv('firefox_install'); toast(L.fxOpened, true); }
     catch (e) { toast(String(e).includes('firefox-missing') ? L.fxMissing : String(e)); }
   }
-  // depois de instalar no Firefox e usar a primeira vez, o cartão some ao voltar para o app
-  window.addEventListener('focus', () => { if (FX.installed && !FX.connected) fxRefresh(); });
+  // instalou ou tirou a extensão no Firefox: ao voltar para o app, cartão, Opções e Novidades se atualizam
+  window.addEventListener('focus', () => { fxRefresh(); });
   $('#bNewsDone').onclick = () => openNews(false);
   $('#newsBg').onclick = () => openNews(false);
 

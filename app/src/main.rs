@@ -1046,11 +1046,22 @@ fn add_ext(app: &AppHandle, v: Value) {
     if state.ext_ready.load(Ordering::SeqCst) { let _ = app.emit("ext-link", v); } else { l.push(v); }
 }
 
-/// Cartão "Baixe direto do Firefox" (aba Baixar e Opções): o Firefox está instalado? A extensão já falou com o app?
-/// (o mec-link.exe grava browser\seen.txt toda vez que a extensão o chama)
+/// Cartão "Baixe direto do Firefox" (aba Baixar, Opções e Novidades): o Firefox está instalado?
+/// A extensão está instalada e ativa em algum perfil? (lista do próprio Firefox: Profiles\*\extensions.json)
 #[tauri::command]
-fn firefox_info(app: AppHandle) -> Value {
-    json!({ "installed": firefox_exe().is_some(), "connected": store::dir(&app).join("browser").join("seen.txt").exists() })
+fn firefox_info() -> Value {
+    json!({ "installed": firefox_exe().is_some(), "connected": firefox_has_extension() })
+}
+
+fn firefox_has_extension() -> bool {
+    let Some(appdata) = std::env::var_os("APPDATA") else { return false };
+    let profiles = PathBuf::from(appdata).join("Mozilla").join("Firefox").join("Profiles");
+    std::fs::read_dir(profiles).into_iter().flatten().flatten().any(|p| {
+        std::fs::read_to_string(p.path().join("extensions.json")).ok()
+            .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+            .and_then(|v| v["addons"].as_array().map(|a| a.iter().any(|x| x["id"] == FIREFOX_EXT_ID && x["active"] == true)))
+            .unwrap_or(false)
+    })
 }
 
 /// firefox.exe pelo registro (App Paths) ou pelas pastas padrão.

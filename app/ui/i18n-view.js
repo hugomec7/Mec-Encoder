@@ -321,3 +321,21 @@
   };
   Object.entries(T).forEach(([lang, v]) => { const L = window.MEC_I18N[lang]; if (L) K.forEach((k, i) => { L[k] = v[i]; }); });
 })();
+
+// Extensão do Firefox: estados (Instalada / Instalar / Baixar o Firefox), nos 10 idiomas.
+(() => {
+  const K = ['fxConnected', 'fxGetFirefox', 'fxOptHow', 'fxMissing'];
+  const T = {
+    en: ['Installed', 'Get Firefox', 'Click Install: Firefox opens and asks to add the extension.', 'Firefox isn’t installed on this computer'],
+    pt: ['Instalada', 'Baixar o Firefox', 'Clique em Instalar: o Firefox abre e pergunta se pode adicionar a extensão.', 'O Firefox não está instalado neste PC'],
+    es: ['Instalada', 'Descargar Firefox', 'Haz clic en Instalar: Firefox se abre y pregunta si puede añadir la extensión.', 'Firefox no está instalado en este equipo'],
+    fr: ['Installée', 'Télécharger Firefox', 'Cliquez sur Installer : Firefox s’ouvre et demande d’ajouter l’extension.', 'Firefox n’est pas installé sur cet ordinateur'],
+    de: ['Installiert', 'Firefox herunterladen', 'Klicke auf Installieren: Firefox öffnet sich und fragt, ob die Erweiterung hinzugefügt werden soll.', 'Firefox ist auf diesem Computer nicht installiert'],
+    it: ['Installata', 'Scarica Firefox', 'Clicca su Installa: Firefox si apre e chiede di aggiungere l’estensione.', 'Firefox non è installato su questo computer'],
+    ru: ['Установлено', 'Скачать Firefox', 'Нажмите «Установить»: откроется Firefox и спросит, добавить ли расширение.', 'Firefox не установлен на этом компьютере'],
+    ja: ['インストール済み', 'Firefox をダウンロード', '「インストール」をクリックすると Firefox が開き、拡張機能の追加を確認します。', 'このコンピューターに Firefox がインストールされていません'],
+    ko: ['설치됨', 'Firefox 다운로드', '설치를 클릭하면 Firefox가 열리고 확장 프로그램을 추가할지 묻습니다.', '이 컴퓨터에 Firefox가 설치되어 있지 않습니다'],
+    zh: ['已安装', '下载 Firefox', '点击“安装”：Firefox 会打开并询问是否添加扩展。', '此电脑未安装 Firefox'],
+  };
+  Object.entries(T).forEach(([lang, v]) => { const L = window.MEC_I18N[lang]; if (L) K.forEach((k, i) => { L[k] = v[i]; }); });
+})();
