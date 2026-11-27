@@ -95,9 +95,6 @@
   "posHint": {
     "message": "拖动图标即可在该网站上改变位置。"
   },
-  "posReset": {
-    "message": "清除已保存的位置"
-  },
   "blocked": {
     "message": "不显示按钮的网站"
   },
@@ -115,5 +112,8 @@
   },
   "blockedRemove": {
     "message": "移除"
+  },
+  "posHint2": {
+    "message": "拖动图标可在网站上改变位置。在这里选择会应用到所有网站。"
   }
 }

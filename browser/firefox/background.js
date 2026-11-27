@@ -1,6 +1,6 @@
 /* Mec Encoder para Firefox: o meio de campo entre o navegador e o app.
    - Clique no ícone: abre o menu (popup.html), que pergunta aqui qual link seria usado ("peek") e manda baixar ("send").
-   - Botão nos posts do X (content/x.js): manda o link do post ("send").
+   - Botão em cima dos vídeos (content/float.js, opcional): manda o link da página ou do post do X ("send").
    - Botão direito num link, vídeo ou página: Mec Encoder › Baixar vídeo / só o áudio / GIF.
    Quem decide o link e abre o app é o mec-link.exe (native messaging, host "com.hugomec.mecencoder"). */
 const HOST = 'com.hugomec.mecencoder';

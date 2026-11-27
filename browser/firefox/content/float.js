@@ -44,7 +44,8 @@
   // posição em frações do vídeo (0 = esquerda/topo, 1 = direita/baixo): a salva do site ou o canto padrão
   function frac() {
     const p = S.floatPos[site]; if (p) return p;
-    return { x: S.floatCorner.endsWith('left') ? 0 : 1, y: S.floatCorner.startsWith('bottom') ? 1 : 0 };
+    const c = S.floatCorner;   // top-left, top-center, top-right, bottom-left, bottom-center, bottom-right
+    return { x: c.endsWith('left') ? 0 : c.endsWith('center') ? 0.5 : 1, y: c.startsWith('bottom') ? 1 : 0 };
   }
   function moveTo(left, top) {
     btn.style.left = `${Math.max(2, Math.min(innerWidth - SIZE - 2, left))}px`;

@@ -95,9 +95,6 @@
   "posHint": {
     "message": "Faites glisser l’icône pour la déplacer sur un site."
   },
-  "posReset": {
-    "message": "Effacer les positions enregistrées"
-  },
   "blocked": {
     "message": "Sites sans le bouton"
   },
@@ -115,5 +112,8 @@
   },
   "blockedRemove": {
     "message": "Retirer"
+  },
+  "posHint2": {
+    "message": "Faites glisser l’icône pour la déplacer sur un site. Choisir ici vaut pour tous les sites."
   }
 }

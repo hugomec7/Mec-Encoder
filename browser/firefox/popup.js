@@ -65,8 +65,6 @@ function renderAdv(on) {
   if (on !== undefined) $('#float').checked = !!on;
   $('#floatOpts').classList.toggle('off', !$('#float').checked);
   $$('.corners button').forEach((b) => b.classList.toggle('on', b.dataset.corner === O.floatCorner));
-  const n = Object.keys(O.floatPos || {}).length;
-  $('#posReset').hidden = !n; $('#posReset').textContent = `${t('posReset')} (${n})`;
   const here = tab && siteOf(tab.url);
   $('#blkThis').hidden = !here || O.floatBlocked.includes(here);
   $('#blkThis').textContent = `+ ${t('blockedThis')} (${here})`;
@@ -100,8 +98,8 @@ fl.addEventListener('change', async () => {
   renderAdv(on);
   $('#floatHint').textContent = on ? t('floatReload') : t('floatSub');
 });
-$$('.corners button').forEach((b) => b.addEventListener('click', () => save({ floatCorner: b.dataset.corner }).then(() => renderAdv())));
-$('#posReset').addEventListener('click', () => save({ floatPos: {} }).then(() => renderAdv()));
+// posição padrão nova vale para todos os sites (substitui o que foi arrastado em cada um)
+$$('.corners button').forEach((b) => b.addEventListener('click', () => save({ floatCorner: b.dataset.corner, floatPos: {} }).then(() => renderAdv())));
 $('#blkAdd').addEventListener('click', () => { addBlocked(cleanSite($('#blkInput').value)); $('#blkInput').value = ''; });
 $('#blkInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#blkAdd').click(); });
 $('#blkInput').placeholder = t('blockedPh');

@@ -95,9 +95,6 @@
   "posHint": {
     "message": "Arrastra el icono para moverlo en un sitio."
   },
-  "posReset": {
-    "message": "Borrar posiciones guardadas"
-  },
   "blocked": {
     "message": "Sitios sin el botón"
   },
@@ -115,5 +112,8 @@
   },
   "blockedRemove": {
     "message": "Quitar"
+  },
+  "posHint2": {
+    "message": "Arrastra el icono para moverlo en un sitio. Elegir aquí vale para todos los sitios."
   }
 }

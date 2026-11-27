@@ -95,9 +95,6 @@
   "posHint": {
     "message": "Trascina l’icona per spostarla su un sito."
   },
-  "posReset": {
-    "message": "Cancella posizioni salvate"
-  },
   "blocked": {
     "message": "Siti senza il pulsante"
   },
@@ -115,5 +112,8 @@
   },
   "blockedRemove": {
     "message": "Rimuovi"
+  },
+  "posHint2": {
+    "message": "Trascina l’icona per spostarla su un sito. La scelta qui vale per tutti i siti."
   }
 }

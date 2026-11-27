@@ -95,9 +95,6 @@
   "posHint": {
     "message": "Drag the icon to move it on a site."
   },
-  "posReset": {
-    "message": "Reset saved positions"
-  },
   "blocked": {
     "message": "Sites without the button"
   },
@@ -115,5 +112,8 @@
   },
   "blockedRemove": {
     "message": "Remove"
+  },
+  "posHint2": {
+    "message": "Drag the icon to move it on a site. Choosing here applies to every site."
   }
 }

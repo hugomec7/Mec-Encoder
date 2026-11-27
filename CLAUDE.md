@@ -61,9 +61,10 @@ responda em português, direto, sem jargão.
 - `browser/firefox/`: extensão MV3 (id `mec-encoder@hugomec`). Textos em `_locales/` (10 idiomas).
   - Clique no ícone: menu (`popup.*`) com o link que vai (copiado ainda não enviado, ou a página de vídeo) e
     Baixar rápido / Só o áudio / GIF / Escolher qualidade (abre o app na janela de qualidade).
-  - X: `content/x.js` põe um botão com menu nos posts com vídeo (seletores no topo do arquivo; o X muda o site).
-  - Chave "Botão em cima dos vídeos" (`content/float.js`): desligada por padrão; ao ligar pede `<all_urls>` e
-    registra o script com `scripting.registerContentScripts` (não roda no X).
+  - Aba Avançado: chave "Botão em cima dos vídeos" (`content/float.js`), desligada por padrão; ao ligar pede
+    `<all_urls>` e registra o script com `scripting.registerContentScripts`. Ícone redondo, arrastável (posição
+    salva por site), posição padrão em 6 lugares (escolher uma apaga as arrastadas) e lista "Sites sem o botão".
+    No X ele manda o link do post. O Hugo preferiu esse botão ao da fileira do curtir do X (removido).
   - Botão direito num link, vídeo ou página: Mec Encoder › vídeo, só o áudio ou GIF.
 - `link/` (crate `mec-link`, vira `bin\mec-link.exe`): host de native messaging. Escolhe o link, responde à extensão
   e chama `mec-encoder.exe --mec-link {"urls":[...],"kind":"video"}`. Não herda o canal do navegador

@@ -95,9 +95,6 @@
   "posHint": {
     "message": "Arraste o ícone para mudar o lugar dele num site."
   },
-  "posReset": {
-    "message": "Apagar posições salvas"
-  },
   "blocked": {
     "message": "Sites sem o botão"
   },
@@ -115,5 +112,8 @@
   },
   "blockedRemove": {
     "message": "Tirar da lista"
+  },
+  "posHint2": {
+    "message": "Arraste o ícone para mudar o lugar dele num site. Escolher aqui vale para todos os sites."
   }
 }

@@ -95,9 +95,6 @@
   "posHint": {
     "message": "Zieh das Symbol, um es auf einer Website zu verschieben."
   },
-  "posReset": {
-    "message": "Gespeicherte Positionen löschen"
-  },
   "blocked": {
     "message": "Websites ohne Button"
   },
@@ -115,5 +112,8 @@
   },
   "blockedRemove": {
     "message": "Entfernen"
+  },
+  "posHint2": {
+    "message": "Zieh das Symbol, um es auf einer Website zu verschieben. Die Auswahl hier gilt für alle Websites."
   }
 }
