@@ -37,6 +37,8 @@ jobs:
         run: cargo test -p mec-core --features serde
       - name: Command line (mec)
         run: cargo test -p mec-cli
+      - name: Browser bridge (mec-link)
+        run: cargo test -p mec-link
 
   windows:
     name: Windows x64 (MSI + portable)
@@ -98,8 +100,8 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          cargo build --release -p mec-cli 2>&1 | tee build.log
-          cp target/release/mec.exe app/bin/
+          cargo build --release -p mec-cli -p mec-link 2>&1 | tee build.log
+          cp target/release/mec.exe target/release/mec-link.exe app/bin/
           app/bin/mec.exe version
           app/bin/mec.exe engine
 

@@ -1,0 +1,44 @@
+{
+  "extName": {
+    "message": "Mec Encoder"
+  },
+  "extDesc": {
+    "message": "動画のリンクを Mec Encoder に送り、ワンクリックでダウンロード（クイックダウンロード）。"
+  },
+  "actionTitle": {
+    "message": "Mec Encoder でダウンロード（コピーしたリンクまたはこのページ）"
+  },
+  "menuRoot": {
+    "message": "Mec Encoder"
+  },
+  "menuVideo": {
+    "message": "動画をダウンロード"
+  },
+  "menuAudio": {
+    "message": "音声のみダウンロード"
+  },
+  "menuGif": {
+    "message": "GIF としてダウンロード"
+  },
+  "okTitle": {
+    "message": "Mec Encoder に送信しました"
+  },
+  "noLink": {
+    "message": "先に動画のリンクをコピー（共有 › リンクをコピー）してから、もう一度クリックしてください"
+  },
+  "noApp": {
+    "message": "Mec Encoder が見つかりません。アプリを一度開いてから、もう一度お試しください"
+  },
+  "helpTitle": {
+    "message": "Mec Encoder を接続"
+  },
+  "help1": {
+    "message": "このコンピューターに Mec Encoder 0.3.13 以降がインストールされている必要があります。"
+  },
+  "help2": {
+    "message": "アプリを一度開くと、自動で Firefox に接続されます。"
+  },
+  "help3": {
+    "message": "その後、もう一度 Mec Encoder ボタンをクリックしてください。"
+  }
+}

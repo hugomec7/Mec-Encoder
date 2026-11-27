@@ -286,3 +286,20 @@
   };
   Object.entries(T).forEach(([lang, v]) => { const L = window.MEC_I18N[lang]; if (L) L.jobQueued = v; });
 })();
+
+// Extensão do navegador: aviso quando o link chega (e quando já estava na lista), nos 10 idiomas.
+(() => {
+  const T = {
+    en: [(n) => n === 1 ? 'Received from the browser: downloading' : `Received from the browser: ${n} links`, 'This link is already in the list'],
+    pt: [(n) => n === 1 ? 'Recebido do navegador: baixando' : `Recebido do navegador: ${n} links`, 'Esse link já está na lista'],
+    es: [(n) => n === 1 ? 'Recibido del navegador: descargando' : `Recibido del navegador: ${n} enlaces`, 'Ese enlace ya está en la lista'],
+    fr: [(n) => n === 1 ? 'Reçu du navigateur : téléchargement' : `Reçu du navigateur : ${n} liens`, 'Ce lien est déjà dans la liste'],
+    de: [(n) => n === 1 ? 'Vom Browser empfangen: wird geladen' : `Vom Browser empfangen: ${n} Links`, 'Dieser Link ist schon in der Liste'],
+    it: [(n) => n === 1 ? 'Ricevuto dal browser: download in corso' : `Ricevuti dal browser: ${n} link`, 'Questo link è già nell’elenco'],
+    ru: [(n) => n === 1 ? 'Получено из браузера: загрузка' : `Получено из браузера: ссылок — ${n}`, 'Эта ссылка уже в списке'],
+    ja: [(n) => n === 1 ? 'ブラウザーから受信：ダウンロード中' : `ブラウザーから受信：${n} 件のリンク`, 'このリンクはすでにリストにあります'],
+    ko: [(n) => n === 1 ? '브라우저에서 받음: 다운로드 중' : `브라우저에서 받음: 링크 ${n}개`, '이 링크는 이미 목록에 있습니다'],
+    zh: [(n) => n === 1 ? '已从浏览器接收：正在下载' : `已从浏览器接收：${n} 个链接`, '该链接已在列表中'],
+  };
+  Object.entries(T).forEach(([lang, v]) => { const L = window.MEC_I18N[lang]; if (L) { L.dlFromBrowser = v[0]; L.dlFromBrowserDup = v[1]; } });
+})();

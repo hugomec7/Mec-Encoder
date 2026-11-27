@@ -52,6 +52,21 @@ responda em português, direto, sem jargão.
 - Linha de comando: `mec-encoder.exe "arquivo" "pasta"` coloca os caminhos na fila sem converter. Com o app já aberto,
   os caminhos vão para a janela aberta (plugin single-instance).
 
+## Extensão do navegador (por enquanto só Firefox)
+
+- `browser/firefox/`: extensão MV3 (id `mec-encoder@hugomec`). Clique no ícone = Baixar rápido do link copiado
+  (se ainda não foi enviado) ou da página aberta (se for de um vídeo). Botão direito: vídeo, só o áudio ou GIF.
+  Textos em `_locales/` (10 idiomas).
+- `link/` (crate `mec-link`, vira `bin\mec-link.exe`): host de native messaging. Escolhe o link, responde à extensão
+  e chama `mec-encoder.exe --mec-link {"urls":[...],"kind":"video"}`. Não herda o canal do navegador
+  (senão o Firefox espera o app fechar) e sai do "job" do Firefox (`CREATE_BREAKAWAY_FROM_JOB`).
+- O app, ao abrir, grava `%APPDATA%\com.hugomec.mecencoder\browser\firefox.json`, `app.txt` (caminho do exe) e a chave
+  `HKCU\Software\Mozilla\NativeMessagingHosts\com.hugomec.mecencoder` (`register_browser` em `main.rs`).
+- Com `--mec-link` o app abre minimizado e não rouba o foco; com ele já aberto, o link vai para a aba Baixar sem trazer
+  a janela para a frente (evento `ext-link`, pendentes via `ext_take`).
+- Instalar para teste: Firefox › `about:debugging` › Este Firefox › Carregar extensão temporária › `manifest.json`.
+  Para ficar instalada de vez, precisa ser assinada no addons.mozilla.org (pode ser "unlisted").
+
 ## Como o Hugo gosta de trabalhar
 
 - Na dúvida, pesquise em fontes oficiais antes e avise. Nada de achismo.

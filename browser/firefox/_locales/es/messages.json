@@ -1,0 +1,44 @@
+{
+  "extName": {
+    "message": "Mec Encoder"
+  },
+  "extDesc": {
+    "message": "Envía el enlace del vídeo a Mec Encoder y descárgalo con un clic (Descarga rápida)."
+  },
+  "actionTitle": {
+    "message": "Descargar con Mec Encoder (enlace copiado o esta página)"
+  },
+  "menuRoot": {
+    "message": "Mec Encoder"
+  },
+  "menuVideo": {
+    "message": "Descargar vídeo"
+  },
+  "menuAudio": {
+    "message": "Descargar solo el audio"
+  },
+  "menuGif": {
+    "message": "Descargar como GIF"
+  },
+  "okTitle": {
+    "message": "Enviado a Mec Encoder"
+  },
+  "noLink": {
+    "message": "Copia primero el enlace del vídeo (Compartir › Copiar enlace) y vuelve a hacer clic"
+  },
+  "noApp": {
+    "message": "No se encontró Mec Encoder. Abre la app una vez y vuelve a intentarlo"
+  },
+  "helpTitle": {
+    "message": "Conectar Mec Encoder"
+  },
+  "help1": {
+    "message": "Mec Encoder 0.3.13 o posterior debe estar instalado en este equipo."
+  },
+  "help2": {
+    "message": "Abre la app una vez: se conecta a Firefox sola."
+  },
+  "help3": {
+    "message": "Luego vuelve a hacer clic en el botón de Mec Encoder."
+  }
+}

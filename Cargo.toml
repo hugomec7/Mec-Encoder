@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["core", "app", "cli"]
+members = ["core", "app", "cli", "link"]
 
 [profile.release]
 opt-level = 3

@@ -1,0 +1,44 @@
+{
+  "extName": {
+    "message": "Mec Encoder"
+  },
+  "extDesc": {
+    "message": "동영상 링크를 Mec Encoder로 보내 한 번의 클릭으로 다운로드합니다(빠른 다운로드)."
+  },
+  "actionTitle": {
+    "message": "Mec Encoder로 다운로드(복사한 링크 또는 이 페이지)"
+  },
+  "menuRoot": {
+    "message": "Mec Encoder"
+  },
+  "menuVideo": {
+    "message": "동영상 다운로드"
+  },
+  "menuAudio": {
+    "message": "오디오만 다운로드"
+  },
+  "menuGif": {
+    "message": "GIF로 다운로드"
+  },
+  "okTitle": {
+    "message": "Mec Encoder로 보냄"
+  },
+  "noLink": {
+    "message": "먼저 동영상 링크를 복사(공유 › 링크 복사)한 뒤 다시 클릭하세요"
+  },
+  "noApp": {
+    "message": "Mec Encoder를 찾을 수 없습니다. 앱을 한 번 연 뒤 다시 시도하세요"
+  },
+  "helpTitle": {
+    "message": "Mec Encoder 연결"
+  },
+  "help1": {
+    "message": "이 컴퓨터에 Mec Encoder 0.3.13 이상이 설치되어 있어야 합니다."
+  },
+  "help2": {
+    "message": "앱을 한 번 열면 Firefox에 자동으로 연결됩니다."
+  },
+  "help3": {
+    "message": "그런 다음 Mec Encoder 버튼을 다시 클릭하세요."
+  }
+}

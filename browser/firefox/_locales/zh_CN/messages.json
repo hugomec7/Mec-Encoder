@@ -1,0 +1,44 @@
+{
+  "extName": {
+    "message": "Mec Encoder"
+  },
+  "extDesc": {
+    "message": "把视频链接发送到 Mec Encoder，一键下载（快速下载）。"
+  },
+  "actionTitle": {
+    "message": "用 Mec Encoder 下载（已复制的链接或此页面）"
+  },
+  "menuRoot": {
+    "message": "Mec Encoder"
+  },
+  "menuVideo": {
+    "message": "下载视频"
+  },
+  "menuAudio": {
+    "message": "仅下载音频"
+  },
+  "menuGif": {
+    "message": "下载为 GIF"
+  },
+  "okTitle": {
+    "message": "已发送到 Mec Encoder"
+  },
+  "noLink": {
+    "message": "请先复制视频链接（分享 › 复制链接），然后再点一次"
+  },
+  "noApp": {
+    "message": "找不到 Mec Encoder。请先打开一次应用，然后重试"
+  },
+  "helpTitle": {
+    "message": "连接 Mec Encoder"
+  },
+  "help1": {
+    "message": "此电脑上需要安装 Mec Encoder 0.3.13 或更高版本。"
+  },
+  "help2": {
+    "message": "打开一次应用，它会自动连接到 Firefox。"
+  },
+  "help3": {
+    "message": "然后再次点击 Mec Encoder 按钮。"
+  }
+}

@@ -2937,6 +2937,18 @@
     if (list) { dlPickOpen(list, kind); return; }
     dlAdd(DL.clip, kind);
   }
+  /* Extensão do navegador (mec-link.exe): igual ao Baixar rápido, sem trazer a janela para a frente.
+     O mesmo link já na lista (baixando ou baixado) não entra de novo. */
+  async function dlFromBrowser(p) {
+    const kind = ['audio', 'gif'].includes(p && p.kind) ? p.kind : 'video';
+    const urls = ((p && p.urls) || []).filter((u) => !DL.list.some((it) => it.url === u && it.status !== 'err'));
+    if (!urls.length) { toast(L.dlFromBrowserDup); return; }
+    if (!DL.entered) await dlEnter();   // confere o yt-dlp sem trocar de aba
+    const list = urls.find(dlIsList);
+    if (list) { dlPickOpen(list, kind); return; }
+    dlAdd(urls, kind);
+    toast(L.dlFromBrowser(urls.length), true);
+  }
   function dlIsList(u) {
     let x; try { x = new URL(u); } catch { return false; }
     const h = x.hostname.replace(/^(www|m|mobile)\./, ''); const parts = x.pathname.split('/').filter(Boolean);
@@ -4510,6 +4522,9 @@
       dlPatch(it);
     });
     on('dl-login', dlLoginDone);
+    // links da extensão do navegador: escuta primeiro, depois pega os que chegaram antes da tela abrir
+    TA.event.listen('ext-link', (e) => dlFromBrowser(e.payload))
+      .then(() => inv('ext_take')).then((l) => (l || []).forEach(dlFromBrowser)).catch(() => {});
     on('dl-setup', (p) => { if (DL.setup && !DL.setup.err) { DL.setup = { item: p.item, done: p.done, total: p.total }; dlRender(); } });
     on('update-progress', (p) => { if (p.total) { S.updating = Math.round(p.done / p.total * 100); renderUpdateBtn(); renderUpdCard(); } });
     setTimeout(() => { if (autoUpd()) checkUpdate(false); prunePreviews(); }, 4000);

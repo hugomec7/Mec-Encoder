@@ -1,0 +1,44 @@
+{
+  "extName": {
+    "message": "Mec Encoder"
+  },
+  "extDesc": {
+    "message": "Отправляет ссылку на видео в Mec Encoder и скачивает в один клик (Быстрая загрузка)."
+  },
+  "actionTitle": {
+    "message": "Скачать через Mec Encoder (скопированная ссылка или эта страница)"
+  },
+  "menuRoot": {
+    "message": "Mec Encoder"
+  },
+  "menuVideo": {
+    "message": "Скачать видео"
+  },
+  "menuAudio": {
+    "message": "Скачать только аудио"
+  },
+  "menuGif": {
+    "message": "Скачать как GIF"
+  },
+  "okTitle": {
+    "message": "Отправлено в Mec Encoder"
+  },
+  "noLink": {
+    "message": "Сначала скопируйте ссылку на видео (Поделиться › Копировать ссылку) и нажмите ещё раз"
+  },
+  "noApp": {
+    "message": "Mec Encoder не найден. Откройте приложение один раз и попробуйте снова"
+  },
+  "helpTitle": {
+    "message": "Подключить Mec Encoder"
+  },
+  "help1": {
+    "message": "На этом компьютере должен быть установлен Mec Encoder 0.3.13 или новее."
+  },
+  "help2": {
+    "message": "Откройте приложение один раз: оно само подключится к Firefox."
+  },
+  "help3": {
+    "message": "Затем снова нажмите кнопку Mec Encoder."
+  }
+}

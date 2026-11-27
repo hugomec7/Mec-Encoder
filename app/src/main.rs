@@ -68,6 +68,12 @@ pub struct AppState {
     ui_ready: AtomicBool,
     /// Arquivos/pastas da linha de comando que chegaram antes da tela carregar.
     cli_paths: Mutex<Vec<PathBuf>>,
+    /// Links da extensão do navegador (mec-link.exe) que chegaram antes da tela carregar.
+    ext_links: Mutex<Vec<Value>>,
+    /// A tela já pegou os links pendentes (`ext_take`): os próximos vão direto por evento.
+    ext_ready: AtomicBool,
+    /// Aberto pela extensão do navegador: começa minimizado, sem tirar o foco do navegador.
+    quiet: AtomicBool,
     /// Motor de quadros do player (mecview), aberto no primeiro quadro pedido.
     viewer: Arc<viewer::Viewer>,
 }
@@ -992,11 +998,84 @@ fn notify(app: AppHandle, title: String, body: String) {
 
 #[tauri::command]
 fn ready(app: AppHandle, state: State<'_, AppState>) {
-    if let Some(w) = app.get_webview_window("main") { let _ = w.show(); let _ = w.set_focus(); }
+    show_main(&app, state.quiet.load(Ordering::SeqCst));
     if !state.ui_ready.swap(true, Ordering::SeqCst) {
         // a tela abriu: entra o que veio pela linha de comando antes dela
         let paths = std::mem::take(&mut *state.cli_paths.lock().unwrap());
         if !paths.is_empty() { add_cli(&app, paths); }
+    }
+}
+
+/// A tela já escuta "ext-link": entrega o que chegou antes e daqui em diante manda direto.
+#[tauri::command]
+fn ext_take(state: State<'_, AppState>) -> Vec<Value> {
+    let mut l = state.ext_links.lock().unwrap();
+    state.ext_ready.store(true, Ordering::SeqCst);
+    std::mem::take(&mut *l)
+}
+
+/// Mostra a janela. Aberta pela extensão do navegador: minimizada, sem tirar o foco de quem está no navegador.
+fn show_main(app: &AppHandle, quiet: bool) {
+    let Some(w) = app.get_webview_window("main") else { return };
+    if w.is_visible().unwrap_or(false) { return; }
+    if quiet { let _ = w.minimize(); let _ = w.show(); let _ = w.minimize(); } else { let _ = w.show(); let _ = w.set_focus(); }
+}
+
+/// `--mec-link {"urls":[...],"kind":"video"}`: pedido da extensão do navegador, entregue pelo mec-link.exe.
+fn ext_arg<S: AsRef<std::ffi::OsStr>>(args: &[S]) -> Option<Value> {
+    let i = args.iter().position(|a| a.as_ref() == "--mec-link")?;
+    let v: Value = serde_json::from_str(&args.get(i + 1)?.as_ref().to_string_lossy()).ok()?;
+    let urls: Vec<String> = v["urls"].as_array()?.iter().filter_map(|u| u.as_str())
+        .filter(|u| u.starts_with("http://") || u.starts_with("https://")).take(20).map(String::from).collect();
+    if urls.is_empty() { return None; }
+    let kind = match v["kind"].as_str() { Some("audio") => "audio", Some("gif") => "gif", _ => "video" };
+    Some(json!({ "urls": urls, "kind": kind }))
+}
+
+/// Pedido da extensão: vai para a aba Baixar (ou espera a tela carregar). A janela não vem para a frente.
+fn add_ext(app: &AppHandle, v: Value) {
+    log(app, &format!("browser | {} link(s)", v["urls"].as_array().map_or(0, |a| a.len())));
+    let state = app.state::<AppState>();
+    let mut l = state.ext_links.lock().unwrap();
+    if state.ext_ready.load(Ordering::SeqCst) { let _ = app.emit("ext-link", v); } else { l.push(v); }
+}
+
+/// Extensão do Firefox: grava o manifesto do mec-link.exe e a chave do registro (HKCU) que diz ao Firefox onde ele está.
+/// Toda vez que o app abre (vale para MSI e portátil; se a pasta mudar, corrige sozinho).
+/// Docs: https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/Native_manifests
+const BROWSER_HOST: &str = "com.hugomec.mecencoder";
+const FIREFOX_EXT_ID: &str = "mec-encoder@hugomec";
+fn register_browser(app: &AppHandle) {
+    let dir = store::dir(app).join("browser");
+    let _ = std::fs::create_dir_all(&dir);
+    if let Ok(exe) = std::env::current_exe() { let _ = std::fs::write(dir.join("app.txt"), exe.to_string_lossy().as_bytes()); }
+    let Some(link) = tool_dirs(app).into_iter().map(|d| d.join("mec-link.exe")).find(|p| p.is_file()) else {
+        log(app, "browser | mec-link.exe not found");
+        return;
+    };
+    let manifest = json!({
+        "name": BROWSER_HOST,
+        "description": "Mec Encoder",
+        "path": link.to_string_lossy(),
+        "type": "stdio",
+        "allowed_extensions": [FIREFOX_EXT_ID],
+    });
+    let file = dir.join("firefox.json");
+    let text = serde_json::to_string_pretty(&manifest).unwrap_or_default();
+    if std::fs::read_to_string(&file).ok().as_deref() != Some(text.as_str()) { let _ = std::fs::write(&file, &text); }
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const NO_WINDOW: u32 = 0x0800_0000;
+        let key = format!(r"HKCU\Software\Mozilla\NativeMessagingHosts\{BROWSER_HOST}");
+        let val = file.to_string_lossy().to_string();
+        let now = std::process::Command::new("reg").args(["query", &key, "/ve"]).creation_flags(NO_WINDOW).output();
+        let same = now.map_or(false, |o| String::from_utf8_lossy(&o.stdout).contains(&val));
+        if !same {
+            let ok = std::process::Command::new("reg").args(["add", &key, "/ve", "/t", "REG_SZ", "/d", &val, "/f"])
+                .creation_flags(NO_WINDOW).stdout(Stdio::null()).stderr(Stdio::null()).status().map_or(false, |s| s.success());
+            log(app, &format!("browser | firefox host {}", if ok { "registered" } else { "NOT registered" }));
+        }
     }
 }
 
@@ -1042,6 +1121,8 @@ fn main() {
     update::cleanup_old();
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
+            // link da extensão do navegador: entra no Baixar sem trazer a janela para a frente
+            if let Some(v) = ext_arg(&args) { add_ext(app, v); return; }
             if let Some(w) = app.get_webview_window("main") { let _ = w.unminimize(); let _ = w.show(); let _ = w.set_focus(); }
             // segunda chamada (mec-encoder.exe "arquivo"): os caminhos vão para a janela que já está aberta
             let base = PathBuf::from(&cwd);
@@ -1055,6 +1136,8 @@ fn main() {
         .setup(|app| {
             let handle = app.handle().clone();
             let dirs = tool_dirs(&handle);
+            let args: Vec<std::ffi::OsString> = std::env::args_os().skip(1).collect();
+            let ext = ext_arg(&args);
             let engine = Arc::new(Engine {
                 ffmpeg: tools::find("ffmpeg", &dirs),
                 ffprobe: tools::find("ffprobe", &dirs),
@@ -1081,8 +1164,12 @@ fn main() {
                 downloads: Arc::new(downloader::Downloads::default()),
                 viewer: Arc::new(viewer::Viewer::default()),
                 ui_ready: AtomicBool::new(false),
-                cli_paths: Mutex::new(cli_args(std::env::args_os().skip(1).collect())),
+                cli_paths: Mutex::new(if ext.is_some() { Vec::new() } else { cli_args(args) }),
+                quiet: AtomicBool::new(ext.is_some()),
+                ext_links: Mutex::new(ext.into_iter().collect()),
+                ext_ready: AtomicBool::new(false),
             });
+            register_browser(&handle);
             downloader::clean_work(&handle);
             clean_partial(&handle);
             // prévias que ficaram pela metade
@@ -1113,7 +1200,7 @@ fn main() {
             let h3 = handle.clone();
             std::thread::spawn(move || {
                 std::thread::sleep(Duration::from_millis(2500));
-                if let Some(w) = h3.get_webview_window("main") { if !w.is_visible().unwrap_or(true) { let _ = w.show(); } }
+                show_main(&h3, h3.state::<AppState>().quiet.load(Ordering::SeqCst));
             });
             Ok(())
         })
@@ -1133,7 +1220,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             render_cancel, pick, add, pick_dir, save_queue, restore_queue, power, set_watch, job_status, open_jobs_dir, automation_info, forget, duplicate, preview, waveform, render, stop, get_state, save_presets, save_settings,
-            default_presets, view_frame, view_play, view_cache, view_note, play_file, play_live, play_stop, play_proxy, previews_size, previews_clear, previews_prune, import_enc, export_presets, import_presets, reveal, open_data_dir, open_log, open_url, notify, ready, check_update, install_update,
+            default_presets, view_frame, view_play, view_cache, view_note, play_file, play_live, play_stop, play_proxy, previews_size, previews_clear, previews_prune, import_enc, export_presets, import_presets, reveal, open_data_dir, open_log, open_url, notify, ready, ext_take, check_update, install_update,
             downloader::dl_status, downloader::dl_install, downloader::dl_update, downloader::dl_start, downloader::dl_cancel, downloader::dl_open_dir, downloader::dl_clipboard, downloader::dl_play, downloader::dl_rename, downloader::dl_accounts, downloader::dl_login, downloader::dl_logout, downloader::dl_info
         ])
         .build(tauri::generate_context!())
