@@ -82,5 +82,38 @@
   },
   "floatReload": {
     "message": "Ligado: recarregue a página"
+  },
+  "tabMain": {
+    "message": "Baixar"
+  },
+  "tabAdvanced": {
+    "message": "Avançado"
+  },
+  "posDefault": {
+    "message": "Posição padrão do botão"
+  },
+  "posHint": {
+    "message": "Arraste o ícone para mudar o lugar dele num site."
+  },
+  "posReset": {
+    "message": "Apagar posições salvas"
+  },
+  "blocked": {
+    "message": "Sites sem o botão"
+  },
+  "blockedAdd": {
+    "message": "Adicionar"
+  },
+  "blockedThis": {
+    "message": "Adicionar este site"
+  },
+  "blockedPh": {
+    "message": "exemplo.com"
+  },
+  "blockedEmpty": {
+    "message": "Nenhum site na lista"
+  },
+  "blockedRemove": {
+    "message": "Tirar da lista"
   }
 }

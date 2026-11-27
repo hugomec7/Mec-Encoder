@@ -82,5 +82,38 @@
   },
   "floatReload": {
     "message": "オン：ページを再読み込みしてください"
+  },
+  "tabMain": {
+    "message": "ダウンロード"
+  },
+  "tabAdvanced": {
+    "message": "詳細設定"
+  },
+  "posDefault": {
+    "message": "ボタンの初期位置"
+  },
+  "posHint": {
+    "message": "アイコンをドラッグするとサイトごとに位置を変えられます。"
+  },
+  "posReset": {
+    "message": "保存した位置をリセット"
+  },
+  "blocked": {
+    "message": "ボタンを出さないサイト"
+  },
+  "blockedAdd": {
+    "message": "追加"
+  },
+  "blockedThis": {
+    "message": "このサイトを追加"
+  },
+  "blockedPh": {
+    "message": "example.com"
+  },
+  "blockedEmpty": {
+    "message": "リストにサイトはありません"
+  },
+  "blockedRemove": {
+    "message": "削除"
   }
 }

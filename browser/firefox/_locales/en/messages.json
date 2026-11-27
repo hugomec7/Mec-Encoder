@@ -82,5 +82,38 @@
   },
   "floatReload": {
     "message": "On: reload the page"
+  },
+  "tabMain": {
+    "message": "Download"
+  },
+  "tabAdvanced": {
+    "message": "Advanced"
+  },
+  "posDefault": {
+    "message": "Default button position"
+  },
+  "posHint": {
+    "message": "Drag the icon to move it on a site."
+  },
+  "posReset": {
+    "message": "Reset saved positions"
+  },
+  "blocked": {
+    "message": "Sites without the button"
+  },
+  "blockedAdd": {
+    "message": "Add"
+  },
+  "blockedThis": {
+    "message": "Add this site"
+  },
+  "blockedPh": {
+    "message": "example.com"
+  },
+  "blockedEmpty": {
+    "message": "No sites in the list"
+  },
+  "blockedRemove": {
+    "message": "Remove"
   }
 }

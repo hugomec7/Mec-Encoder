@@ -82,5 +82,38 @@
   },
   "floatReload": {
     "message": "Attivo: ricarica la pagina"
+  },
+  "tabMain": {
+    "message": "Scarica"
+  },
+  "tabAdvanced": {
+    "message": "Avanzate"
+  },
+  "posDefault": {
+    "message": "Posizione predefinita del pulsante"
+  },
+  "posHint": {
+    "message": "Trascina l’icona per spostarla su un sito."
+  },
+  "posReset": {
+    "message": "Cancella posizioni salvate"
+  },
+  "blocked": {
+    "message": "Siti senza il pulsante"
+  },
+  "blockedAdd": {
+    "message": "Aggiungi"
+  },
+  "blockedThis": {
+    "message": "Aggiungi questo sito"
+  },
+  "blockedPh": {
+    "message": "esempio.com"
+  },
+  "blockedEmpty": {
+    "message": "Nessun sito nell’elenco"
+  },
+  "blockedRemove": {
+    "message": "Rimuovi"
   }
 }

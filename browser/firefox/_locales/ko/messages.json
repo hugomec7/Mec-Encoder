@@ -82,5 +82,38 @@
   },
   "floatReload": {
     "message": "켜짐: 페이지를 새로고침하세요"
+  },
+  "tabMain": {
+    "message": "다운로드"
+  },
+  "tabAdvanced": {
+    "message": "고급"
+  },
+  "posDefault": {
+    "message": "버튼 기본 위치"
+  },
+  "posHint": {
+    "message": "아이콘을 끌어 사이트별로 위치를 바꿀 수 있습니다."
+  },
+  "posReset": {
+    "message": "저장된 위치 초기화"
+  },
+  "blocked": {
+    "message": "버튼을 표시하지 않을 사이트"
+  },
+  "blockedAdd": {
+    "message": "추가"
+  },
+  "blockedThis": {
+    "message": "이 사이트 추가"
+  },
+  "blockedPh": {
+    "message": "example.com"
+  },
+  "blockedEmpty": {
+    "message": "목록에 사이트가 없습니다"
+  },
+  "blockedRemove": {
+    "message": "제거"
   }
 }

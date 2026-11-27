@@ -35,20 +35,24 @@ async function send(msg, tabId) {
   return r;
 }
 
-/* Botão flutuante em cima de qualquer vídeo (chave no menu do ícone, desligado por padrão).
-   Ligado = permissão "todos os sites" + script registrado. No X não entra: lá tem o botão próprio. */
-const FLOAT = { id: 'mec-float', all: { origins: ['<all_urls>'] } };
+/* Botão em cima de qualquer vídeo (chave na aba Avançado do menu do ícone, desligado por padrão).
+   Ligado = permissão "todos os sites" + script registrado (vale no X também, com o link do post).
+   Sites da lista "Sites sem o botão" são conferidos pelo próprio script. */
+const FLOAT = { id: 'mec-float-2', all: { origins: ['<all_urls>'] } };
 async function floatState() {
   const { float = false } = await browser.storage.local.get('float');
   return float && await browser.permissions.contains(FLOAT.all);
 }
 async function floatSync() {
   const on = await floatState();
-  const reg = (await browser.scripting.getRegisteredContentScripts({ ids: [FLOAT.id] })).length > 0;
+  const regs = await browser.scripting.getRegisteredContentScripts();
+  // versões antigas do registro (mec-float sem o X) saem
+  const old = regs.filter((r) => r.id.startsWith('mec-float') && r.id !== FLOAT.id).map((r) => r.id);
+  if (old.length) await browser.scripting.unregisterContentScripts({ ids: old });
+  const reg = regs.some((r) => r.id === FLOAT.id);
   if (on && !reg) {
     await browser.scripting.registerContentScripts([{
       id: FLOAT.id, matches: ['<all_urls>'],
-      excludeMatches: ['https://x.com/*', 'https://twitter.com/*', 'https://mobile.x.com/*', 'https://mobile.twitter.com/*'],
       js: ['content/float.js'], allFrames: true, runAt: 'document_idle', persistAcrossSessions: true,
     }]);
   } else if (!on && reg) {

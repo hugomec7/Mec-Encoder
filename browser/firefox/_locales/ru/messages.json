@@ -82,5 +82,38 @@
   },
   "floatReload": {
     "message": "Включено: обновите страницу"
+  },
+  "tabMain": {
+    "message": "Скачать"
+  },
+  "tabAdvanced": {
+    "message": "Дополнительно"
+  },
+  "posDefault": {
+    "message": "Положение кнопки по умолчанию"
+  },
+  "posHint": {
+    "message": "Перетащите значок, чтобы переместить его на сайте."
+  },
+  "posReset": {
+    "message": "Сбросить сохранённые положения"
+  },
+  "blocked": {
+    "message": "Сайты без кнопки"
+  },
+  "blockedAdd": {
+    "message": "Добавить"
+  },
+  "blockedThis": {
+    "message": "Добавить этот сайт"
+  },
+  "blockedPh": {
+    "message": "example.com"
+  },
+  "blockedEmpty": {
+    "message": "Список пуст"
+  },
+  "blockedRemove": {
+    "message": "Убрать"
   }
 }

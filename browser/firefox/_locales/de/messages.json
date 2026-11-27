@@ -82,5 +82,38 @@
   },
   "floatReload": {
     "message": "An: Seite neu laden"
+  },
+  "tabMain": {
+    "message": "Herunterladen"
+  },
+  "tabAdvanced": {
+    "message": "Erweitert"
+  },
+  "posDefault": {
+    "message": "Standardposition des Buttons"
+  },
+  "posHint": {
+    "message": "Zieh das Symbol, um es auf einer Website zu verschieben."
+  },
+  "posReset": {
+    "message": "Gespeicherte Positionen löschen"
+  },
+  "blocked": {
+    "message": "Websites ohne Button"
+  },
+  "blockedAdd": {
+    "message": "Hinzufügen"
+  },
+  "blockedThis": {
+    "message": "Diese Website hinzufügen"
+  },
+  "blockedPh": {
+    "message": "beispiel.de"
+  },
+  "blockedEmpty": {
+    "message": "Keine Websites in der Liste"
+  },
+  "blockedRemove": {
+    "message": "Entfernen"
   }
 }
