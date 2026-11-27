@@ -1,0 +1,60 @@
+# Mec Encoder: guia para o Claude Code
+
+App do Hugo (hugomec7) para converter vídeos (proxy, H.265, NVENC), cortar, ver e baixar vídeos.
+Inspirado no Shutter Encoder, só com o que ele usa. Windows 10. O Hugo escreve e lê em português:
+responda em português, direto, sem jargão.
+
+## Estrutura
+
+- `core/`: motor em Rust (crate `mec-core`): presets, FFmpeg, cortes, downloads (`core/src/download.rs`).
+- `cli/`: linha de comando `mec.exe` (`bin\mec.exe convert ...`). **Não mudar o comportamento do `mec.exe convert`.**
+- `app/`: Tauri 2. O Rust fica em `app/src/` (`main.rs`, `downloader.rs`, `viewer.rs`, `store.rs`, `tools.rs`).
+  A interface é JS puro, sem framework: `app/ui/` (`index.html`, `app.js`, `i18n-view.js` com 10 idiomas, `news.js` gerado).
+- `app/viewer/`: player `mecview` em C (compilado contra as DLLs do FFmpeg).
+- `app/bin/`: ffmpeg, ffprobe, DLLs, mecview.exe e mec.exe. Vem do CI e não está no git.
+- Dados do usuário ficam em `%APPDATA%\com.hugomec.mecencoder` (`presets.json`, `queue.json`, `settings.json`, `jobs\`).
+
+## Branches e publicação
+
+- Trabalhe na branch `player`. O `main` só recebe por fast-forward: `git push origin player:main`.
+  Antes, confira com `git merge-base --is-ancestor origin/main HEAD`.
+- **Só publique (push para o main) quando o Hugo pedir** ("publicar", "publica").
+- Build de teste sem publicar: `gh workflow run build.yml --ref player`. O artefato se chama "MecEncoder-windows-x64"
+  (MSI + portátil). Mande ao Hugo o link da execução no GitHub Actions.
+- Para lançar a versão X.Y.Z:
+  1. Escreva `docs/release-notes/X.Y.Z.md` com **English** e **Português** (veja as anteriores).
+  2. Suba a versão em `app/Cargo.toml`, `cli/Cargo.toml` e `app/tauri.conf.json`.
+  3. Coloque as notas no topo do `CHANGELOG.md`, depois de `# Changelog · Novidades`, com o título `## X.Y.Z`.
+  4. Rode `python docs/release-notes/make_news.py` (gera `app/ui/news.js`).
+  5. Faça o commit, dê push no `player` e depois `git push origin player:main`. O CI cria o release `vX.Y.Z`
+     com MSI, portátil e `latest.json` (o app usa esse arquivo para avisar de atualização).
+  - Com `<!-- prerelease -->` nas notas, sai como pré-lançamento e o app não oferece a atualização.
+- Notas de release sobre sites adultos: não cite os sites. Escreva só "agora tem suporte a novos sites".
+
+## Compilar e testar
+
+- O CI (`.github/workflows/build.yml`) é a referência de como montar tudo no Windows: FFmpeg BtbN 8.0 GPL shared,
+  mecview com MinGW, `cargo build -p mec-cli`, `npx @tauri-apps/cli@2 build`.
+- Testes do motor: `cargo test -p mec-core --features serde` (precisa de ffmpeg no PATH) e `cargo test -p mec-cli`.
+- Para testar a interface sem o app, abra `app/ui/index.html?lang=pt&theme=studio` num navegador. Sem o Tauri,
+  ela entra em modo demonstração.
+- Para rodar o app de verdade em desenvolvimento: `app/bin` precisa ter ffmpeg, ffprobe, as DLLs e mecview.exe.
+  Dá para copiar da pasta `bin` de uma instalação portátil. Depois rode `cd app && npx @tauri-apps/cli@2 dev`.
+
+## Pasta de tarefas (automação, usada pelo MecDrive)
+
+- `%APPDATA%\com.hugomec.mecencoder\jobs\`: um `.json` com `files`, `preset` e opções (`outputFolder`, `keepTree`,
+  `suffix`, `subfolder`, `trim`, `join`, `deleteSource`). O README.txt completo é gerado pelo `JOBS_README` em `main.rs`.
+- Sem `"start"`: entra na fila e renderiza sozinho. O pedido vai para `running\` e depois para `done\` ou `failed\`.
+- `"start": false`: entra na fila parado. O pedido vai para `queued\` e o `status.json` fica com `state: "queued"`.
+  Se a predefinição não existir, vai para `failed\` com `preset-not-found`. Se nenhum arquivo for encontrado, `source-missing`.
+- Não mude o comportamento de pedidos sem `"start"`.
+- Linha de comando: `mec-encoder.exe "arquivo" "pasta"` coloca os caminhos na fila sem converter. Com o app já aberto,
+  os caminhos vão para a janela aberta (plugin single-instance).
+
+## Como o Hugo gosta de trabalhar
+
+- Na dúvida, pesquise em fontes oficiais antes e avise. Nada de achismo.
+- Ao controlar o PC dele: não abra o app de novo se já estiver aberto. Traga a janela com Alt+Tab ou pela barra de tarefas.
+- Para mudanças grandes de interface, mostre o design para ele aprovar antes de implementar.
+- Textos da interface: em todos os idiomas do `i18n-view.js`. Português com acentos.
