@@ -19,11 +19,15 @@ responda em português, direto, sem jargão.
 - Trabalhe na branch `player`. O `main` só recebe por fast-forward: `git push origin player:main`.
   Antes, confira com `git merge-base --is-ancestor origin/main HEAD`.
 - **Só publique (push para o main) quando o Hugo pedir** ("publicar", "publica").
+- **Versão de teste tem "teste" no nome:** `0.3.13-teste.1`, `0.3.13-teste.2`… nos 4 arquivos de versão
+  (`app/Cargo.toml`, `cli/Cargo.toml`, `link/Cargo.toml`, `app/tauri.conf.json`). A final é `0.3.13`.
+  O CI dá ao MSI o número `0.3.13.1` (só números) e, se uma versão de teste chegar ao main, sai como pré-lançamento.
+  O app trata `0.3.13-teste.N` como anterior à `0.3.13` (`update::newer`), então quem testou recebe a final.
 - Build de teste sem publicar: `gh workflow run build.yml --ref player`. O artefato se chama "MecEncoder-windows-x64"
   (MSI + portátil). Mande ao Hugo o link da execução no GitHub Actions.
 - Para lançar a versão X.Y.Z:
   1. Escreva `docs/release-notes/X.Y.Z.md` com **English** e **Português** (veja as anteriores).
-  2. Suba a versão em `app/Cargo.toml`, `cli/Cargo.toml` e `app/tauri.conf.json`.
+  2. Suba a versão (sem "-teste") em `app/Cargo.toml`, `cli/Cargo.toml`, `link/Cargo.toml` e `app/tauri.conf.json`.
   3. Coloque as notas no topo do `CHANGELOG.md`, depois de `# Changelog · Novidades`, com o título `## X.Y.Z`.
   4. Rode `python docs/release-notes/make_news.py` (gera `app/ui/news.js`).
   5. Faça o commit, dê push no `player` e depois `git push origin player:main`. O CI cria o release `vX.Y.Z`

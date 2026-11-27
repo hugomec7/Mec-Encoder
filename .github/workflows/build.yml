@@ -105,6 +105,20 @@ jobs:
           app/bin/mec.exe version
           app/bin/mec.exe engine
 
+      # Versão de teste ("0.3.13-teste.1"): o MSI só aceita números, então ele recebe "0.3.13.1"
+      # (o Windows substitui pela final 0.3.13 normalmente). A versão do app continua com "teste".
+      - name: Test version (MSI number)
+        shell: pwsh
+        run: |
+          $c = Get-Content app/tauri.conf.json -Raw | ConvertFrom-Json
+          if ($c.version -match '^(\d+\.\d+\.\d+)-\D*(\d+)$') {
+            $msi = "$($Matches[1]).$($Matches[2])"
+            $wix = $c.bundle.windows.wix
+            $wix | Add-Member -NotePropertyName version -NotePropertyValue $msi -Force
+            $c | ConvertTo-Json -Depth 20 | Set-Content -Encoding utf8 app/tauri.conf.json
+            echo "Versão de teste $($c.version) -> MSI $msi"
+          }
+
       - name: Build (Tauri)
         working-directory: app
         shell: bash
@@ -179,6 +193,8 @@ jobs:
           # então o app não oferece a atualização sozinho; quem quiser testar baixa pela página.
           PRE="--prerelease=false"; LATEST="--latest"
           if grep -q "<!-- prerelease -->" "$NOTES"; then PRE="--prerelease"; LATEST="--latest=false"; fi
+          # versão de teste (0.3.13-teste.1) nunca vira a versão oferecida pelo app
+          case "$VERSION" in *-*) PRE="--prerelease"; LATEST="--latest=false";; esac
           if gh release view "$TAG" -R "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
             gh release edit "$TAG" -R "$GITHUB_REPOSITORY" --notes-file "$NOTES" $PRE $LATEST > rel.log 2>&1 || fail
           else

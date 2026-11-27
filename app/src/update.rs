@@ -38,7 +38,13 @@ fn parse(v: &str) -> Vec<u64> {
     v.trim().trim_start_matches('v').split(['.', '-', '+']).take(3).map(|p| p.parse().unwrap_or(0)).collect()
 }
 
-pub fn newer(remote: &str, local: &str) -> bool { parse(remote) > parse(local) }
+/// Versão de teste ("0.3.13-teste.1") é anterior à final de mesmo número ("0.3.13"): quem testou recebe a final.
+pub fn newer(remote: &str, local: &str) -> bool {
+    let (r, l) = (parse(remote), parse(local));
+    r > l || (r == l && is_test(local) && !is_test(remote))
+}
+
+fn is_test(v: &str) -> bool { v.trim().trim_start_matches('v').contains('-') }
 
 /// Portátil = existe `portable.ini` ao lado do .exe.
 pub fn is_portable() -> bool {
@@ -155,4 +161,20 @@ fn extract_portable(zip_path: &Path, dir: &Path, exe: &Path) -> Result<(), Strin
         std::io::copy(&mut entry, &mut out).map_err(|e| e.to_string())?;
     }
     if got_exe { Ok(()) } else { Err("update package has no app".into()) }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::newer;
+
+    #[test]
+    fn versao_de_teste() {
+        assert!(newer("0.3.13", "0.3.12"));
+        assert!(!newer("0.3.12", "0.3.13"));
+        assert!(!newer("0.3.13", "0.3.13"));
+        assert!(newer("0.3.13", "0.3.13-teste.1"));      // teste -> final de mesmo número
+        assert!(!newer("0.3.13-teste.2", "0.3.13"));     // final não volta para teste
+        assert!(!newer("0.3.12", "0.3.13-teste.1"));
+        assert!(newer("v0.3.14", "0.3.13-teste.1"));
+    }
 }
